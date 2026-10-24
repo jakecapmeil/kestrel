@@ -308,6 +308,10 @@ async function api(request, env, url) {
     if (method === 'DELETE') {
       const { results } = await db.prepare('SELECT team_id FROM team_members WHERE user_id = ?').bind(user.id).all();
       for (const t of results) await removeMember(db, t.team_id, user.id);
+      // Teams this user started live on under their current owner (teams.created_by must point at a real user).
+      await db.prepare(
+        "UPDATE teams SET created_by = (SELECT user_id FROM team_members WHERE team_id = teams.id AND role = 'owner') WHERE created_by = ?"
+      ).bind(user.id).run();
       await db.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
       return json({ ok: true });
     }

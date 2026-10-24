@@ -89,11 +89,15 @@ async function boot() {
     render(html`${landingHero()}<div class="card auth"><h2>Almost ready</h2><p class="muted">Sign-in isn't connected on this server yet (SUPABASE_URL and SUPABASE_KEY in kestrel/wrangler.jsonc).</p></div>`);
     return;
   }
+  // A password-reset link lands on /?reset=1: show only the new-password form until it is saved.
+  const params = new URLSearchParams(location.search);
+  S.recovering = params.has('reset');
+  const fromLink = params.has('code');
   S.sb = createClient(S.cfg.supabaseUrl, S.cfg.supabaseKey, { auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true } });
   S.sb.auth.onAuthStateChange((event, session) => {
     const had = !!S.session;
     S.session = session;
-    if (event === 'PASSWORD_RECOVERY') { renderNewPassword(); return; }
+    if (S.recovering || event === 'PASSWORD_RECOVERY') { if (session) renderNewPassword(); return; }
     if (event === 'SIGNED_OUT') { S.me = null; showChrome(false); renderLanding(); return; }
     if (session && !had) setTimeout(afterSignIn, 0);
   });
@@ -103,8 +107,15 @@ async function boot() {
     history.replaceState(null, '', '/' + (location.hash || '#team'));
     if (err) toast(err, true);
   }
-  if (data.session) { S.session = data.session; await afterSignIn(); } else renderLanding();
   window.addEventListener('hashchange', route);
+  if (S.recovering) {
+    if (data.session) renderNewPassword();
+    else renderLanding('signin', 'That reset link has expired or was opened in another browser. Ask for a new one.');
+    return;
+  }
+  if (data.session) { S.session = data.session; await afterSignIn(); }
+  // A confirmation link opened in a different browser confirms the email but cannot sign in here.
+  else renderLanding('signin', fromLink ? 'Your email is confirmed. Sign in to continue.' : '');
 }
 
 // Supabase reports a session both from getSession and from its auth event; only the first call does the work.
@@ -212,7 +223,7 @@ function renderLanding(mode = 'signin', note = '') {
   if (forgot) forgot.onclick = () => attempt(async () => {
     const email = document.getElementById('em').value.trim();
     if (!email) throw new Error('Type your email first.');
-    const { error } = await S.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/' });
+    const { error } = await S.sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + '/?reset=1' });
     if (error) throw error;
     renderLanding('signin', 'Check your email for a link to set a new password.');
   });
@@ -243,6 +254,7 @@ function renderNewPassword() {
       const { error } = await S.sb.auth.updateUser({ password: form(e.target).password });
       if (error) throw error;
       toast('Password saved.');
+      S.recovering = false;
       S.me = null;
       await afterSignIn();
     }, e.submitter);
