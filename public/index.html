@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Kestrel</title>
+<meta name="description" content="Kestrel: open-source training for school running teams. Team calendar, training log, open-weight race-time models and an AI coach you power with any model.">
+<link rel="icon" href="/kestrel.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#team"><img src="/kestrel.svg" alt="" width="26" height="26"><span>Kestrel</span></a>
+  <button class="who" id="who" hidden></button>
+</header>
+
+<main id="app"><p class="muted center pad">Loading…</p></main>
+
+<nav class="tabs" id="tabs" hidden>
+  <a href="#team" data-tab="team"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Team</a>
+  <a href="#training" data-tab="training"><svg viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-7"/></svg>Training</a>
+  <a href="#races" data-tab="races"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="7"/><path d="M12 13V9m-2-6h4"/></svg>Race times</a>
+  <a href="#models" data-tab="models"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Models</a>
+  <a href="#coach" data-tab="coach"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg>Coach</a>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

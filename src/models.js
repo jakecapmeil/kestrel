@@ -1,0 +1,380 @@
+// Kestrel model engine. A model is a JSON file: { kestrel: 1, name, version, kind, task, license, description, trained_on, weights }.
+// Models are data, never code: each kind has one evaluator here, and uploads are checked by validateModel before they are stored.
+//
+// Kinds (and the task slot each fills):
+//   lite-trees      race      HawksPredict-Lite format: boosted trees over a log-seconds residual on a weighted-Riegel baseline.
+//   short-pairs     short     HawksPredict-Short format: log-log lines between event pairs, inverse-variance combined.
+//   marathon-trees  marathon  HawksPredict-Marathon format: boosted trees over 16 weeks of training features.
+//   riegel          race | short   t2 = t1 * (d2/d1)^exponent from the nearest PR, with a log-SD for the range.
+//
+// The evaluators are the Hawks ones (src/pacemodel.js, src/shortmodel.js, src/marathon.js) with the model passed in;
+// scripts/check-models.mjs proves they give the same numbers on the built-in files.
+
+import LITE from '../models/hawkspredict-lite.json' with { type: 'json' };
+import SHORT from '../models/hawkspredict-short.json' with { type: 'json' };
+import MARATHON from '../models/hawkspredict-marathon.json' with { type: 'json' };
+import RIEGEL from '../models/riegel.json' with { type: 'json' };
+
+export const BUILTIN = [LITE, SHORT, MARATHON, RIEGEL].map((m) => ({ ...m, id: `kestrel/${m.slug}`, builtin: true }));
+export const DEFAULTS = { race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon' };
+export const TASKS = {
+  race: 'Race times, 800 m and up (track, cross country, road)',
+  short: 'Sprints, 400-1000 m and steeplechase',
+  marathon: 'Marathon from your last 16 weeks of training',
+};
+export const KINDS = { 'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'] };
+export const LITE_FEATS = LITE.weights.feats;
+export const MARATHON_FEATS = MARATHON.weights.feats;
+
+const Z80 = 1.2816;
+const KM_PER_MI = 1.609344;
+
+// ---------- lite-trees ----------
+
+const K = 1.06;
+const REFS = [400, 800, 1500, 3000, 5000, 6000, 8000, 21097.5];
+const LREFS = REFS.map(Math.log);
+const SURF = { xc: 0, track: 1, indoor: 2, road: 3 };
+
+const bucketOf = (m) => {
+  let best = 0;
+  for (let i = 1; i < REFS.length; i++) if (Math.abs(LREFS[i] - Math.log(m)) < Math.abs(LREFS[best] - Math.log(m))) best = i;
+  return best;
+};
+
+export function liteFeatures(results, target) {
+  const f = {};
+  for (const k of LITE_FEATS) f[k] = NaN;
+  const lt = Math.log(target.m);
+  f.log_d = lt;
+  f.surf = SURF[target.surf] ?? 0;
+  f.male = target.male ? 1 : 0;
+  f.n_results = results.length;
+  if (!results.length) return f;
+  const bk = results.map((r) => bucketOf(r.m));
+  const buckets = [...new Set(bk)].sort((a, b) => a - b);
+  const preds = [];
+  const ws = [];
+  for (const b of buckets) {
+    const ref = REFS[b];
+    let adj = Infinity;
+    results.forEach((r, i) => { if (bk[i] === b) adj = Math.min(adj, r.sec * Math.pow(ref / r.m, K)); });
+    const p = Math.log(adj * Math.pow(target.m / ref, K));
+    f['p' + Math.trunc(ref)] = p;
+    preds.push(p);
+    ws.push(1 / (0.15 + Math.abs(Math.log(target.m / ref))));
+  }
+  let sw = 0;
+  let sp = 0;
+  let near = 0;
+  preds.forEach((p, i) => { sw += ws[i]; sp += p * ws[i]; if (ws[i] > ws[near]) near = i; });
+  f.base = sp / sw;
+  f.base_near = preds[near];
+  f.base_best = Math.min(...preds);
+  const xs = [];
+  const ys = [];
+  for (const b of buckets) {
+    let j = -1;
+    results.forEach((r, i) => { if (bk[i] === b && (j < 0 || r.sec < results[j].sec)) j = i; });
+    xs.push(Math.log(results[j].m));
+    ys.push(Math.log(results[j].sec));
+  }
+  f.n_buckets = xs.length;
+  if (xs.length >= 2) {
+    const span = Math.max(...xs) - Math.min(...xs);
+    f.span = span;
+    if (span >= 0.4) {
+      const xm = xs.reduce((a, b) => a + b, 0) / xs.length;
+      const ym = ys.reduce((a, b) => a + b, 0) / ys.length;
+      let sxy = 0;
+      let sxx = 0;
+      xs.forEach((x, i) => { sxy += (x - xm) * (ys[i] - ym); sxx += (x - xm) * (x - xm); });
+      const k = Math.min(Math.max(sxy / sxx, 0.95), 1.25);
+      f.k_ind = k;
+      let i = 0;
+      xs.forEach((x, n) => { if (Math.abs(x - lt) < Math.abs(xs[i] - lt)) i = n; });
+      f.base_slope = ys[i] + k * (lt - xs[i]);
+    }
+  }
+  let ns = 0;
+  let bs = Infinity;
+  for (const r of results) {
+    if (r.surf !== target.surf) continue;
+    ns++;
+    bs = Math.min(bs, Math.log(r.sec) + K * (lt - Math.log(r.m)));
+  }
+  f.n_samesurf = ns;
+  if (ns) f.best_samesurf = bs;
+  return f;
+}
+
+// Sum of the trees' leaves for feature vector x (feature lookup by index).
+function treesSum(w, x) {
+  let s = w.init;
+  for (const t of w.trees) {
+    let n = 0;
+    while (t.f[n] >= 0) {
+      const v = x[t.f[n]];
+      const left = Number.isNaN(v) ? t.mgl[n] === 1 : v <= t.t[n];
+      n = left ? t.l[n] : t.r[n];
+    }
+    s += t.v[n];
+  }
+  return s;
+}
+
+const distGroup = (m) => (m <= 1700 ? 0 : m <= 4100 ? 1 : m <= 7000 ? 2 : 3);
+
+function liteOne(w, results, target) {
+  const f = liteFeatures(results, target);
+  if (!Number.isFinite(f.base)) return null;
+  const logSec = f.base + treesSum(w, w.feats.map((k) => f[k]));
+  const key = `${Math.min(f.n_buckets || 0, 3)}|${distGroup(target.m)}`;
+  const [q10, q90] = w.interval[key] || w.interval['1|0'];
+  return { sec: Math.exp(logSec), lo: Math.exp(logSec + q10), hi: Math.exp(logSec + q90) };
+}
+
+// ---------- short-pairs ----------
+
+// A result of m metres as a short-model source (event key + seconds), or null.
+function shortSource(w, m, sec) {
+  if (Math.abs(m - 1600) / 1600 < 0.01 && w.events['1609']) return { ev: '1609', sec: sec * Math.pow(1609.344 / 1600, 1.06) };
+  if (Math.abs(m - 3200) / 3200 < 0.01 && w.events['3000']) return { ev: '3000', sec: sec * Math.pow(3000 / 3200, 1.06) };
+  for (const [ev, meters] of Object.entries(w.events)) {
+    if (ev.startsWith('S')) continue;
+    if (Math.abs(m - meters) / meters < 0.015) return { ev, sec };
+  }
+  return null;
+}
+
+function shortMu(w, pairs, sources, target, male) {
+  const tm = w.events[target];
+  const near = sources
+    .filter((s) => s.ev !== target && pairs.has(`${s.ev}>${target}`))
+    .sort((a, b) => Math.abs(Math.log(w.events[a.ev] / tm)) - Math.abs(Math.log(w.events[b.ev] / tm)))
+    .slice(0, 3);
+  if (!near.length) return null;
+  let sw = 0;
+  let sp = 0;
+  for (const s of near) {
+    const p = pairs.get(`${s.ev}>${target}`);
+    const wt = 1 / (p.sd * p.sd);
+    sw += wt;
+    sp += wt * (p.a + p.b * Math.log(s.sec) + p.c * male);
+  }
+  const first = near[0];
+  const srcSd = (first.extra || 0) * Math.abs(pairs.get(`${first.ev}>${target}`).b);
+  const sd = Math.sqrt((Math.sqrt(1 / sw) * w.infl) ** 2 + srcSd ** 2);
+  return { mu: sp / sw, sd };
+}
+
+function shortPredict(w, sources, target, sex) {
+  const pairs = new Map(w.pairs.map((p) => [`${p.s}>${p.t}`, p]));
+  const extra = w.extra_sd?.[target] || 0;
+  const one = (male) => shortMu(w, pairs, sources, target, male);
+  let mu;
+  let sd;
+  if (sex) {
+    const r = one(sex === 'm' ? 1 : 0);
+    if (!r) return null;
+    mu = r.mu;
+    sd = Math.sqrt(r.sd ** 2 + extra * extra);
+  } else {
+    // Sex not given: run both and average; the gap between them widens the range.
+    const a = one(0);
+    const b = one(1);
+    if (!a || !b) return null;
+    mu = (a.mu + b.mu) / 2;
+    sd = Math.sqrt(((a.sd + b.sd) / 2) ** 2 + ((a.mu - b.mu) / 2) ** 2 + extra * extra);
+  }
+  return { sec: Math.exp(mu), lo: Math.exp(mu - Z80 * sd), hi: Math.exp(mu + Z80 * sd) };
+}
+
+// Short-model key for a Kestrel event (null when the model has no such event).
+function shortKey(w, ev) {
+  if (ev.steeple) return w.events[ev.key] ? ev.key : null;
+  const s = shortSource(w, ev.m, 1);
+  return s && Math.abs(w.events[s.ev] - ev.m) / ev.m < 0.015 ? s.ev : null;
+}
+
+// ---------- marathon-trees ----------
+
+const median = (a) => {
+  const s = [...a].sort((x, y) => x - y);
+  const n = s.length;
+  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+};
+const quantile = (a, q) => {
+  const s = [...a].sort((x, y) => x - y);
+  const pos = (s.length - 1) * q;
+  const lo = Math.floor(pos);
+  return lo + 1 < s.length ? s[lo] + (s[lo + 1] - s[lo]) * (pos - lo) : s[lo];
+};
+
+// days: [{ off (days before today, 1..112), km, min }]
+export function marathonFeatures(days) {
+  const MARA = 42.195;
+  const run = days.filter((d) => d.km >= 1.0);
+  if (run.length < 15) return null;
+  const pace = run.map((d) => d.min / d.km);
+  const wk = new Array(16).fill(0);
+  for (const d of days) wk[Math.floor((d.off - 1) / 7)] += d.km;
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const eff = run.map((d, i) => d.km >= 8 && d.km <= 25 && pace[i] > 2.6 && pace[i] < 8);
+  const riegel = run.map((d) => d.min * Math.pow(MARA / d.km, 1.06));
+  const bestOf = (flags) => {
+    let best = Infinity;
+    run.forEach((d, i) => { if (flags(d, i) && riegel[i] < best) best = riegel[i]; });
+    return best === Infinity ? NaN : Math.log(best * 60);
+  };
+  const longIdx = run.map((d, i) => (d.km >= 16 ? i : -1)).filter((i) => i >= 0);
+  return {
+    wk_mean: sum(wk) / 16,
+    wk_max: Math.max(...wk),
+    wk_last6: sum(wk.slice(0, 6)) / 6,
+    longest: Math.max(...run.map((d) => d.km)),
+    long_n: run.filter((d) => d.km >= 25).length,
+    long16_n: longIdx.length,
+    runs_wk: run.length / 16,
+    weeks_active: wk.filter((x) => x > 0).length,
+    pace_med: median(pace),
+    pace_p10: quantile(pace, 0.1),
+    pace_long: longIdx.length ? median(longIdx.map((i) => pace[i])) : NaN,
+    best_riegel: bestOf((d, i) => eff[i]),
+    n_eff: eff.filter(Boolean).length,
+    best_recent: bestOf((d, i) => eff[i] && d.off <= 42),
+    vol_trend: (sum(wk.slice(0, 6)) / 6) / Math.max(sum(wk.slice(6)) / 10, 1.0),
+  };
+}
+
+const dayNumber = (key) => Math.floor(Date.parse(key + 'T12:00:00Z') / 86400000);
+
+// training: [{ date, miles, minutes }]
+export function marathonPredict(w, training, today) {
+  const t0 = dayNumber(today);
+  const byDay = new Map();
+  for (const d of training) {
+    if (!(d.miles > 0 && d.minutes > 0) || d.type === 'cross-train') continue;
+    const off = t0 - dayNumber(d.date);
+    if (off < 1 || off > 112) continue;
+    const e = byDay.get(off) || { off, km: 0, min: 0 };
+    e.km += d.miles * KM_PER_MI;
+    e.min += d.minutes;
+    byDay.set(off, e);
+  }
+  const f = marathonFeatures([...byDay.values()]);
+  if (!f) return null;
+  const g = Number.isNaN(f.best_riegel) ? 'g0' : f.wk_mean < 40 ? 'g1' : f.wk_mean < 70 ? 'g2' : 'g3';
+  const iv = w.interval[g] || w.interval.g1;
+  const mu = treesSum(w, w.feats.map((k) => f[k]));
+  return { sec: Math.exp(mu), lo: Math.exp(mu + iv[0]), hi: Math.exp(mu + iv[1]), run_days: [...byDay.values()].filter((d) => d.km >= 1).length };
+}
+
+// ---------- riegel ----------
+
+function riegelPredict(w, results, target) {
+  let best = null;
+  for (const r of results) {
+    const d = Math.abs(Math.log(target.m / r.m));
+    if (!best || d < best.d) best = { r, d };
+  }
+  if (!best) return null;
+  const mu = Math.log(best.r.sec) + w.exponent * Math.log(target.m / best.r.m);
+  const sd = w.sd * (1 + best.d);
+  return { sec: Math.exp(mu), lo: Math.exp(mu - Z80 * sd), hi: Math.exp(mu + Z80 * sd) };
+}
+
+// ---------- one entry point ----------
+
+// prs: [{ m, sec, surf, key }] the athlete's PRs; ev: an EVENTS entry; sex: '', 'f' or 'm'.
+export function predictEvent(model, prs, ev, sex) {
+  const w = model.weights;
+  const others = prs.filter((p) => p.key !== ev.key);
+  if (!others.length) return null;
+  if (model.kind === 'riegel') return riegelPredict(w, others, ev);
+  if (model.kind === 'lite-trees') {
+    const results = others.filter((p) => !p.steeple);
+    if (!results.length) return null;
+    if (sex) return liteOne(w, results, { m: ev.m, surf: ev.surf, male: sex === 'm' });
+    // Sex not given: geometric mean of both, the wider range.
+    const a = liteOne(w, results, { m: ev.m, surf: ev.surf, male: 0 });
+    const b = liteOne(w, results, { m: ev.m, surf: ev.surf, male: 1 });
+    if (!a || !b) return null;
+    return { sec: Math.sqrt(a.sec * b.sec), lo: Math.min(a.lo, b.lo), hi: Math.max(a.hi, b.hi) };
+  }
+  if (model.kind === 'short-pairs') {
+    const target = shortKey(w, ev);
+    if (!target) return null;
+    const sources = others.filter((p) => !p.steeple && p.surf !== 'xc' && p.surf !== 'road').map((p) => shortSource(w, p.m, p.sec)).filter(Boolean);
+    return shortPredict(w, sources, target, sex);
+  }
+  return null;
+}
+
+// ---------- upload validation ----------
+
+export class ModelError extends Error {}
+export const MAX_MODEL_BYTES = 1_000_000;
+
+const num = (x) => typeof x === 'number' && Number.isFinite(x);
+const int = (x, lo, hi) => Number.isInteger(x) && x >= lo && x < hi;
+const text = (x, max) => typeof x === 'string' && x.length <= max;
+
+function checkTrees(w, feats) {
+  if (!Array.isArray(w.feats) || w.feats.length !== feats.length || w.feats.some((f, i) => f !== feats[i])) {
+    throw new ModelError(`weights.feats must be exactly the built-in feature list: ${feats.join(', ')}`);
+  }
+  if (!num(w.init)) throw new ModelError('weights.init must be a number');
+  if (!Array.isArray(w.trees) || !w.trees.length || w.trees.length > 2000) throw new ModelError('weights.trees must be 1-2000 trees');
+  for (const [i, t] of w.trees.entries()) {
+    const n = t?.f?.length;
+    if (!int(n, 1, 4097)) throw new ModelError(`tree ${i}: 1-4096 nodes`);
+    for (const k of ['t', 'l', 'r', 'v', 'mgl']) if (!Array.isArray(t[k]) || t[k].length !== n) throw new ModelError(`tree ${i}: ${k} must have ${n} entries`);
+    for (let j = 0; j < n; j++) {
+      if (!int(t.f[j], -1, feats.length)) throw new ModelError(`tree ${i} node ${j}: bad feature index`);
+      if (!num(t.v[j]) || !num(t.t[j])) throw new ModelError(`tree ${i} node ${j}: values must be numbers`);
+      if (t.f[j] >= 0) {
+        // Children always come after their parent, so every walk ends.
+        if (!int(t.l[j], j + 1, n) || !int(t.r[j], j + 1, n)) throw new ModelError(`tree ${i} node ${j}: children must point forward`);
+        if (t.mgl[j] !== 0 && t.mgl[j] !== 1) throw new ModelError(`tree ${i} node ${j}: mgl must be 0 or 1`);
+      }
+    }
+  }
+  if (!w.interval || typeof w.interval !== 'object') throw new ModelError('weights.interval is required');
+  for (const [k, v] of Object.entries(w.interval)) {
+    if (!Array.isArray(v) || !num(v[0]) || !num(v[1]) || v[0] > 0 || v[1] < 0) throw new ModelError(`interval ${k}: [low offset <= 0, high offset >= 0]`);
+  }
+}
+
+// Returns the cleaned model (only known fields kept) or throws ModelError.
+export function validateModel(m) {
+  if (!m || typeof m !== 'object' || m.kestrel !== 1) throw new ModelError('Not a Kestrel model file (needs "kestrel": 1)');
+  if (!text(m.name, 60) || !m.name.trim()) throw new ModelError('name: 1-60 characters');
+  if (!KINDS[m.kind]) throw new ModelError(`kind must be one of: ${Object.keys(KINDS).join(', ')}`);
+  if (!KINDS[m.kind].includes(m.task)) throw new ModelError(`a ${m.kind} model can only be used for: ${KINDS[m.kind].join(', ')}`);
+  for (const k of ['version', 'license']) if (m[k] !== undefined && !text(m[k], 60)) throw new ModelError(`${k}: up to 60 characters`);
+  for (const k of ['description', 'trained_on']) if (m[k] !== undefined && !text(m[k], 2000)) throw new ModelError(`${k}: up to 2000 characters`);
+  const w = m.weights;
+  if (!w || typeof w !== 'object') throw new ModelError('weights is required');
+  if (m.kind === 'lite-trees') checkTrees(w, LITE_FEATS);
+  if (m.kind === 'marathon-trees') checkTrees(w, MARATHON_FEATS);
+  if (m.kind === 'riegel') {
+    if (!num(w.exponent) || w.exponent < 0.9 || w.exponent > 1.3) throw new ModelError('weights.exponent must be 0.9-1.3');
+    if (!num(w.sd) || w.sd <= 0 || w.sd > 0.5) throw new ModelError('weights.sd must be above 0 and at most 0.5');
+  }
+  if (m.kind === 'short-pairs') {
+    if (!num(w.infl) || w.infl <= 0 || w.infl > 5) throw new ModelError('weights.infl must be above 0 and at most 5');
+    if (!w.events || typeof w.events !== 'object' || Object.keys(w.events).length > 40) throw new ModelError('weights.events: up to 40 events');
+    for (const [k, v] of Object.entries(w.events)) if (!text(k, 10) || !num(v) || v <= 0 || v > 50000) throw new ModelError(`event ${k}: metres must be 1-50000`);
+    if (!Array.isArray(w.pairs) || !w.pairs.length || w.pairs.length > 2000) throw new ModelError('weights.pairs: 1-2000 pairs');
+    for (const p of w.pairs) {
+      if (!(p.s in w.events) || !(p.t in w.events)) throw new ModelError('every pair needs s and t from weights.events');
+      if (![p.a, p.b, p.c, p.sd].every(num) || p.sd <= 0) throw new ModelError(`pair ${p.s}>${p.t}: a, b, c, sd must be numbers, sd above 0`);
+    }
+    if (w.extra_sd !== undefined) for (const v of Object.values(w.extra_sd)) if (!num(v) || v < 0) throw new ModelError('extra_sd values must be numbers >= 0');
+  }
+  return {
+    kestrel: 1, name: m.name.trim(), version: m.version || '', kind: m.kind, task: m.task,
+    license: m.license || '', description: m.description || '', trained_on: m.trained_on || '', weights: w,
+  };
+}

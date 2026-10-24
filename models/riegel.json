@@ -1,0 +1,1 @@
+{"kestrel":1,"slug":"riegel","name":"Riegel","version":"1981","kind":"riegel","task":"race","license":"CC0-1.0","description":"The classic formula t2 = t1 x (d2/d1)^1.06 from your nearest PR. A simple baseline to compare against.","trained_on":"Riegel, P. S. (1981). Athletic records and human endurance. American Scientist 69(3).","weights":{"exponent":1.06,"sd":0.04}}

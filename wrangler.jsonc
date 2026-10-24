@@ -1,0 +1,34 @@
+{
+  "name": "kestrel",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-07",
+  // Only public/ is served as static files, so config and secrets never are.
+  "assets": {
+    "directory": "public",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kestrel_db",
+      "database_id": "56dacee0-a88e-43f0-aca5-3a31e48f6cdd",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  // Supabase project values. Both are public by design (the publishable key
+  // ships to every browser); sign-in itself is enforced by Supabase.
+  "vars": {
+    "SUPABASE_URL": "",
+    "SUPABASE_KEY": "",
+    // Kestrel AI default: free-tier Gemini calls per user per day.
+    "AI_DAILY_LIMIT": "40"
+  },
+  // Last-resort AI when there is no Gemini key or its quota is used up.
+  "ai": {
+    "binding": "AI"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
