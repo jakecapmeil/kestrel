@@ -3,7 +3,8 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import * as AI from '/ai.js';
 
-const SOURCE_URL = 'https://github.com/jakecapmeil/hawks/tree/main/kestrel';
+const REPO_URL = 'https://github.com/jakecapmeil/kestrel';
+const SOURCE_URL = `${REPO_URL}/blob/main`;
 const $app = document.getElementById('app');
 const S = { cfg: null, sb: null, session: null, me: null, teamId: null, tab: 'team', ai: AI.loadAi(), aiCtx: null, showPast: false, modelTask: 'race' };
 
@@ -31,7 +32,19 @@ function linkLabels(root) {
     l.htmlFor = field.id;
   });
 }
-const render = (r) => { $app.innerHTML = r.s; linkLabels($app); };
+const render = (r, { wide = false } = {}) => { $app.classList.toggle('wide', wide); $app.innerHTML = r.s; linkLabels($app); };
+
+// Red-pen marks over the printed layout (styles in style.css).
+const HAND = {
+  under: '<svg class="hand-under" viewBox="0 0 260 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 48 3, 112 11, 170 6 S 236 6, 257 4"/><path d="M14 11 C 80 8, 150 12, 250 8"/></svg>',
+  circle: '<svg class="hand-circle" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M34 9 C 86 0, 172 3, 193 23 C 206 41, 150 57, 94 56 C 38 55, 3 45, 6 29 C 9 14, 52 5, 124 8"/></svg>',
+  arrow: '<svg class="hand-arrow" viewBox="0 0 70 40" aria-hidden="true"><path d="M4 33 C 18 15, 38 8, 62 12"/><path d="M51 4 L63 12 L52 21"/></svg>',
+};
+// A page title with a hand-drawn underline.
+const title = (text) => html`<h1 class="title"><span class="u">${text}${raw(HAND.under)}</span></h1>`;
+const circled = (inner) => html`<span class="circled">${inner}${raw(HAND.circle)}</span>`;
+// A margin note in red pen, optionally with an arrow pointing left (flip: right).
+const note = (text, { arrow = false, flip = false } = {}) => html`<span class="note${flip ? ' flip' : ''}">${arrow && !flip ? raw(HAND.arrow) : ''}${text}${arrow && flip ? raw(HAND.arrow) : ''}</span>`;
 const store = {
   get: (k, d = null) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } },
@@ -86,7 +99,7 @@ async function boot() {
   if (m) { store.set('kestrel.join', m[1].toUpperCase()); history.replaceState(null, '', '/#team'); }
   S.cfg = await fetch('/api/config').then((r) => r.json());
   if (!S.cfg.supabaseUrl || !S.cfg.supabaseKey) {
-    render(html`${landingHero()}<div class="card auth"><h2>Almost ready</h2><p class="muted">Sign-in isn't connected on this server yet (SUPABASE_URL and SUPABASE_KEY in kestrel/wrangler.jsonc).</p></div>`);
+    render(html`<div class="landing">${landingHero()}<div class="auth"><h2>Almost ready</h2><p class="muted">Sign-in isn't connected on this server yet (SUPABASE_URL and SUPABASE_KEY in wrangler.jsonc).</p></div></div>`, { wide: true });
     return;
   }
   // A password-reset link lands on /?reset=1: show only the new-password form until it is saved.
@@ -183,37 +196,39 @@ function route() {
 
 function landingHero() {
   return html`<div class="hero">
-    <img src="/kestrel.svg" alt="">
-    <h1>Kestrel</h1>
-    <p>Open-source training for school running teams. A shared team calendar, your own training log, race-time predictions from open-weight models, and an AI coach you can power with any model.</p>
-    <div class="points">
-      <div><b>Your team</b>Anyone can start a school team and invite teammates with a code.</div>
-      <div><b>Open models</b>Download our race-time models, fine-tune them, or upload your own.</div>
-      <div><b>Any AI</b>Use Kestrel's free AI, your own API key, or a model running on your computer.</div>
-    </div>
+    <div class="kicker">Open-source training for school running teams</div>
+    <h1 class="display">Train together.<br>Race <span class="u">smarter.${raw(HAND.under)}</span></h1>
+    <p class="lede">A shared team calendar, your own training log, race-time predictions from open-weight models, and an AI coach you can power with any model.</p>
+    <ol class="points">
+      <li><span class="n">01</span><b>Your team</b>Anyone can start a school team and invite teammates with a code.</li>
+      <li><span class="n">02</span><b>Open models</b>Download the race-time models, fine-tune them, or upload your own.</li>
+      <li><span class="n">03</span><b>Any AI</b>Kestrel's free AI, your own API key, or a model running on your own computer.</li>
+    </ol>
   </div>`;
 }
 
-function renderLanding(mode = 'signin', note = '') {
+function renderLanding(mode = 'signin', message = '') {
   showChrome(false);
   const signup = mode === 'signup';
-  render(html`${landingHero()}
-  <div class="card auth">
+  render(html`<div class="landing">${landingHero()}
+  <div class="auth">
+    ${note('free & open source')}
+    <h2>${signup ? 'Create your account' : 'Sign in'}</h2>
     <button class="wide" id="google"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
     <div class="or">or with email</div>
     <form id="emailForm">
       <div class="field"><label for="em">Email</label><input id="em" name="email" type="email" autocomplete="email" required></div>
       <div class="field"><label for="pw">Password</label><input id="pw" name="password" type="password" minlength="8" autocomplete="${signup ? 'new-password' : 'current-password'}" required></div>
       ${signup ? html`<p class="muted small">We'll email you a link to confirm your address before you can sign in.</p>` : ''}
-      ${note ? html`<p class="small" style="color:var(--good)">${note}</p>` : ''}
+      ${message ? html`<p class="small" style="color:var(--good)">${message}</p>` : ''}
       <button class="primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
     </form>
     <div class="row spread" style="margin-top:10px">
       <button class="ghost" id="swap">${signup ? 'Have an account? Sign in' : 'New here? Create an account'}</button>
       ${signup ? '' : html`<button class="ghost" id="forgot">Forgot password?</button>`}
     </div>
-    <p class="muted small center" style="margin-top:8px">Kestrel is open source: <a href="${SOURCE_URL}" target="_blank" rel="noopener">read the code</a>.</p>
-  </div>`);
+    <p class="muted small" style="margin-top:10px">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>.</p>
+  </div></div>`, { wide: true });
   document.getElementById('google').onclick = (e) => attempt(async () => {
     const { error } = await S.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
     if (error) throw error;
@@ -245,7 +260,7 @@ function renderLanding(mode = 'signin', note = '') {
 
 function renderNewPassword() {
   showChrome(false);
-  render(html`<div class="card auth"><h2>Set a new password</h2>
+  render(html`<div class="auth" style="max-width:440px"><h2>Set a new password</h2>
     <form id="np"><div class="field"><label for="np1">New password</label><input id="np1" name="password" type="password" minlength="8" autocomplete="new-password" required></div>
     <button class="primary wide">Save password</button></form></div>`);
   document.getElementById('np').onsubmit = (e) => {
@@ -264,7 +279,7 @@ function renderNewPassword() {
 function renderOnboarding() {
   showChrome(false);
   const u = S.me.user;
-  render(html`<div class="card auth"><h2>Welcome to Kestrel</h2><p class="muted">A couple of things before you start.</p>
+  render(html`<div class="auth" style="max-width:480px;margin-top:12px"><h2>Welcome to Kestrel</h2><p class="muted">A couple of things before you start.</p>
     <form id="ob">
       <div class="field"><label for="obn">Your name (teammates see this)</label><input id="obn" name="name" value="${u.name}" maxlength="60" required></div>
       <div class="field"><label for="obs">Race-time models use sex if you give it (optional)</label>
@@ -320,7 +335,7 @@ function wireTeamStart() {
 
 async function viewTeam(opts = {}) {
   if (!S.me.teams.length || opts.adding) {
-    render(html`${S.me.teams.length ? html`<button class="ghost" id="back">← Back to my team</button>` : html`<h1>Your team</h1><p class="muted">Kestrel works around a team calendar. Start one or join yours.</p>`}${teamStartCards()}`);
+    render(html`${S.me.teams.length ? html`<button class="ghost" id="back">← Back to my team</button>` : html`${title('Your team')}<p class="lede" style="margin-bottom:22px">Kestrel works around a team calendar. Start one or join yours.</p>`}${teamStartCards()}`);
     wireTeamStart();
     const back = document.getElementById('back');
     if (back) back.onclick = () => viewTeam();
@@ -348,13 +363,14 @@ async function viewTeam(opts = {}) {
   for (const e of ev?.events || []) (days.get(e.date) || days.set(e.date, []).get(e.date)).push(e);
 
   render(html`
-  <section class="row spread">
-    ${S.me.teams.length > 1
-      ? html`<select id="teamPick" class="grow" style="max-width:340px">${S.me.teams.map((t) => html`<option value="${t.id}" ${t.id === S.teamId ? raw('selected') : ''}>${t.name}</option>`)}</select>`
-      : html`<div class="grow"><h1 style="margin:0">${team.name}</h1></div>`}
-    <button class="small" id="addTeam">+ Team</button>
-  </section>
-  ${team.school ? html`<p class="muted" style="margin-top:4px">${team.school}</p>` : ''}
+  <div class="kicker">${team.school || 'Team'}</div>
+  <div class="title-row">
+    ${title(team.name)}
+    <div class="row" style="margin-bottom:22px">
+      ${S.me.teams.length > 1 ? html`<select id="teamPick" aria-label="Switch team" style="width:auto;max-width:220px">${S.me.teams.map((t) => html`<option value="${t.id}" ${t.id === S.teamId ? raw('selected') : ''}>${t.name}</option>`)}</select>` : ''}
+      <button class="small" id="addTeam">+ Team</button>
+    </div>
+  </div>
 
   <section class="card">
     <div class="row spread"><h2>Calendar</h2><button class="small primary" id="addEvent">+ Event</button></div>
@@ -371,7 +387,7 @@ async function viewTeam(opts = {}) {
       <div class="row"><button class="primary">Save event</button><button type="button" id="cancelEvent">Cancel</button><button type="button" class="danger" id="delEvent" hidden>Delete</button></div>
     </form>
     ${days.size ? [...days.entries()].map(([d, list]) => html`
-      <div class="day-head">${d === today ? 'Today · ' : ''}${niceDate(d)}</div>
+      <div class="day-head">${niceDate(d)}${d === today ? note('today', { arrow: true }) : ''}</div>
       <ul class="list">${list.map((e) => {
         const mine = e.rsvps.find((r) => r.user_id === meId)?.status;
         const going = e.rsvps.filter((r) => r.status === 'going').map((r) => byId.get(r.user_id)).filter(Boolean);
@@ -382,12 +398,12 @@ async function viewTeam(opts = {}) {
             ${e.description ? html`<div class="small" style="white-space:pre-wrap;margin-top:4px">${e.description}</div>` : ''}
             ${going.length ? html`<div class="going">${going.map(dot)}<span class="muted small" style="margin-left:4px">${going.length} going</span></div>` : ''}
           </div>
-          <div class="row" style="justify-content:flex-end;align-content:flex-start">
-            <button class="small ${mine === 'going' ? 'primary' : ''}" data-rsvp="going">Going</button>
-            <button class="small ${mine === 'not_going' ? 'primary' : ''}" data-rsvp="not_going">Can't</button>
+          <div class="row rsvp" style="justify-content:flex-end;align-content:flex-start">
+            <button class="small ${mine === 'going' ? 'on' : ''}" data-rsvp="going" aria-pressed="${mine === 'going'}">Going</button>
+            <button class="small ${mine === 'not_going' ? 'on' : ''}" data-rsvp="not_going" aria-pressed="${mine === 'not_going'}">Can't</button>
             ${canEdit ? html`<button class="small ghost" data-edit>Edit</button>` : ''}
           </div></li>`;
-      })}</ul>`) : html`<p class="muted" style="margin-top:10px">Nothing on the calendar${S.showPast ? '' : ' coming up'}. Add practices and meets with “+ Event”.</p>`}
+      })}</ul>`) : html`<p class="muted" style="margin-top:14px">Nothing on the calendar${S.showPast ? '' : ' coming up'}. ${note('add practices & meets with + Event')}</p>`}
     <button class="ghost small" id="past" style="margin-top:8px">${S.showPast ? 'Hide past events' : 'Show past events'}</button>
   </section>
 
@@ -405,7 +421,7 @@ async function viewTeam(opts = {}) {
   <section class="card">
     <h2>Team</h2>
     <p class="muted small">Invite teammates with this code or link. Anyone with it can join, so share it only with your team.</p>
-    <div class="row" style="margin:8px 0 12px"><code style="font-size:18px;padding:6px 10px;letter-spacing:.12em">${team.invite_code}</code>
+    <div class="row" style="margin:16px 0 18px;gap:22px">${circled(html`<span class="invite">${team.invite_code}</span>`)}
       <button class="small" id="copyLink">Copy invite link</button>${owner ? html`<button class="small ghost" id="newCode">New code</button>` : ''}</div>
     <ul class="list">${team.members.map((m) => html`<li class="row">${dot(m)}<span class="grow">${m.name || 'Unnamed'}${m.id === meId ? ' (you)' : ''}</span>
       ${m.role === 'owner' ? html`<span class="chip">owner</span>` : ''}
@@ -503,7 +519,7 @@ async function viewTraining() {
   for (const d of days) (weeks.get(weekStart(d.date)) || weeks.set(weekStart(d.date), []).get(weekStart(d.date))).push(d);
   const pace = (d) => (d.miles > 0 && d.minutes > 0 ? (() => { const s = Math.round((d.minutes * 60) / d.miles); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}/mi`; })() : '');
   render(html`
-  <h1>Training</h1>
+  ${title('Training')}
   <section class="card">
     <h2>Log a day</h2>
     <form id="dayForm">
@@ -528,7 +544,7 @@ async function viewTraining() {
         <span class="grow small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.notes}</span>
         <span class="num small">${d.miles ? d.miles + ' mi' : ''} ${pace(d) ? html`<span class="muted">${pace(d)}</span>` : ''}</span>
         ${d.feel ? html`<span class="chip">${d.feel}/10</span>` : ''}</li>`)}</ul>`)
-      : html`<p class="muted">No days logged yet. Log miles and minutes and Kestrel can estimate a marathon from your training; the AI coach reads your log too.</p>`}
+      : html`<p class="muted">No days logged yet. Log miles and minutes and Kestrel can estimate a marathon from your training; the AI coach reads your log too.</p>${note('start with today ↑')}`}
   </section>
   <section class="card">
     <h2>Personal bests</h2>
@@ -584,18 +600,18 @@ async function viewRaces() {
   if (!p) return;
   const predicted = p.rows.filter((r) => r.time);
   render(html`
-  <h1>Race times</h1>
+  ${title('Race times')}
   <p class="muted">What your PRs say you could run now, with an 80% range: 8 times in 10 the real time lands inside it. For an event you have a PR in, the prediction comes from your other results.</p>
   <section class="card">
     ${predicted.length ? html`<div class="table-wrap"><table>
       <thead><tr><th>Event</th><th class="num">PR</th><th class="num">Predicted</th><th class="num">80% range</th></tr></thead>
-      <tbody>${p.rows.map((r) => html`<tr><td>${r.label}<div class="muted small">${r.model || ''}</div></td><td class="num mono">${r.pr || '–'}</td>
-        <td class="num mono"><b>${r.time || '–'}</b></td><td class="num mono muted">${r.lo ? `${r.lo}–${r.hi}` : ''}</td></tr>`)}</tbody></table></div>`
-      : html`<p>Add a PR or two on the <a href="#training">Training</a> tab and Kestrel will predict your other events.</p>`}
+      <tbody>${p.rows.map((r) => html`<tr><td>${r.label}<div class="model-name">${r.model || ''}</div></td><td class="num">${r.pr || "–"}</td>
+        <td class="num pred">${r.time || '–'}</td><td class="num muted">${r.lo ? `${r.lo}–${r.hi}` : ''}</td></tr>`)}</tbody></table></div>`
+      : html`<p>Add a PR or two on the <a href="#training">Training</a> tab and Kestrel will predict your other events.</p>${note('two PRs is plenty to start')}`}
   </section>
   <section class="card">
     <h2>Marathon</h2>
-    ${p.marathon.time ? html`<p style="font-size:28px;margin:4px 0" class="mono"><b>${p.marathon.time}</b></p><p class="muted">80% range ${p.marathon.lo}–${p.marathon.hi}, from ${p.marathon.run_days} running days in the last 16 weeks.</p>`
+    ${p.marathon.time ? html`<div class="big-time"><span class="u">${p.marathon.time}${raw(HAND.under)}</span></div><p class="muted">80% range ${p.marathon.lo}–${p.marathon.hi}, from ${p.marathon.run_days} running days in the last 16 weeks.</p>`
       : html`<p class="muted">${p.marathon.needs}</p>`}
     <p class="muted small">${p.marathon.model}</p>
   </section>
@@ -623,13 +639,13 @@ async function viewModels() {
   const inUse = S.me.models[task];
   const kinds = Object.entries(S.cfg.kinds).filter(([, tasks]) => tasks.includes(task)).map(([k]) => k);
   render(html`
-  <h1>Model hub</h1>
+  ${title('Model hub')}
   <p class="muted">Every model in Kestrel is open weights. Pick which one makes each prediction, download any of them, fine-tune them on your own data, or upload your own for everyone to try.</p>
-  <div class="seg" style="margin:12px 0">${Object.keys(S.cfg.tasks).map((t) => html`<button data-task="${t}" class="${t === task ? 'on' : ''}">${{ race: 'Race times', short: 'Sprints', marathon: 'Marathon' }[t]}</button>`)}</div>
+  <div class="seg" style="margin:18px 0 8px">${Object.keys(S.cfg.tasks).map((t) => html`<button data-task="${t}" class="${t === task ? 'on' : ''}">${{ race: 'Race times', short: 'Sprints', marathon: 'Marathon' }[t]}</button>`)}</div>
   <p class="small muted">${S.cfg.tasks[task]}</p>
-  <section class="card"><ul class="list">${r.models.map((m) => html`<li class="model">
-    <div><b>${m.name}</b> <span class="muted">${m.version}</span><div class="small muted">by ${m.owner}${m.visibility === 'private' ? ' · private' : ''}</div></div>
-    <div>${m.id === inUse ? html`<span class="chip good">✓ In use</span>` : ''}</div>
+  <section class="card"><h2>Models</h2><ul class="list">${r.models.map((m) => html`<li class="model">
+    <div><span class="name">${m.name}</span> <span class="muted">${m.version}</span><div class="small muted">by ${m.owner}${m.visibility === 'private' ? ' · private' : ''}</div></div>
+    <div>${m.id === inUse ? circled(note('in use')) : ''}</div>
     <div class="desc">${m.description}</div>
     <div class="row" style="grid-column:1/-1"><span class="chip">${KIND_HELP[m.kind] || m.kind}</span><span class="chip">${m.license || 'no licence given'}</span><span class="chip">${fmtSize(m.size)}</span></div>
     <div class="acts">
@@ -716,12 +732,12 @@ function viewCoach() {
   const msgs = store.get(chatKey(), []);
   const ideas = ['What could I run for a 5K right now?', 'Plan my week around our next meet.', 'Was last week too much mileage?', 'What paces should my easy runs be?'];
   render(html`
-  <div class="row spread"><h1 style="margin:0">Kestrel AI</h1>${msgs.length ? html`<button class="ghost small" id="clear">Clear chat</button>` : ''}</div>
+  <div class="title-row">${title('Kestrel AI')}${msgs.length ? html`<button class="ghost small" id="clear" style="margin-bottom:22px">Clear chat</button>` : ''}</div>
   <div class="power muted" style="margin:6px 0 14px">Powered by <b style="color:var(--ink)">${AI.describe(S.ai)}</b><button class="small" id="aiSettings">Change</button></div>
   <div class="chat" id="chat">
     ${msgs.length ? msgs.map((m) => html`<div class="msg ${m.role}">${m.content}</div>`)
       : html`<div class="muted">Ask about your training, race times or your team's schedule. Kestrel AI reads your log, PRs, predictions and team calendar.</div>
-        <div class="row">${ideas.map((q) => html`<button class="small" data-idea="${q}">${q}</button>`)}</div>`}
+        <div class="ideas">${ideas.map((q) => html`<button data-idea="${q}">${q}</button>`)}</div>`}
   </div>
   <form class="composer" id="ask"><textarea name="q" class="grow" placeholder="Message Kestrel AI" required></textarea><button class="primary">Send</button></form>
   <dialog id="aiDlg"></dialog>`);
@@ -832,7 +848,7 @@ function openAiSettings() {
 function viewProfile() {
   const u = S.me.user;
   render(html`
-  <h1>Profile</h1>
+  ${title('Profile')}
   <section class="card">
     <form id="pf" class="stack">
       <div><label>Name</label><input name="name" value="${u.name}" maxlength="60" required></div>
@@ -847,7 +863,7 @@ function viewProfile() {
   </section>
   <section class="card">
     <h2>About Kestrel</h2>
-    <p class="small">Kestrel is open source (MIT licence). The HawksPredict models are open weights. <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a> · <a href="#models">Model hub</a></p>
+    <p class="small">Kestrel is open source (MIT licence). The HawksPredict models are open weights. <a href="${REPO_URL}" target="_blank" rel="noopener">Source code</a> · <a href="#models">Model hub</a></p>
     <p class="small muted">Teammates see your name and colour. Your log, PRs, predictions and AI chats are yours only; AI chats stay in this browser.</p>
   </section>
   <section class="card">

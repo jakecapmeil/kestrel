@@ -26,7 +26,7 @@ Open-source training for school running teams. Live at **https://kestrel.jakecap
 | `public/` | The web app. Plain HTML, CSS and JS modules with no build step. `public/ai.js` holds the browser-side providers. |
 | `migrations/` | Cloudflare D1 (SQLite) schema. |
 | `models/` | The built-in open-weight models and their cards. |
-| `scripts/` | `check-models.mjs` (the engine matches the reference models and rejects bad files), `build-models.mjs`, and `auth-stub.mjs` (a local stand-in for Supabase sign-in). |
+| `scripts/` | `check-models.mjs` (the engine matches the original HawksPredict code on `reference-cases.json` and rejects bad files) and `auth-stub.mjs` (a local stand-in for Supabase sign-in). |
 
 ## Run your own
 
@@ -35,16 +35,17 @@ Open-source training for school running teams. Live at **https://kestrel.jakecap
 3. Create the database and deploy:
 
 ```bash
+npm install
 npx wrangler d1 create kestrel_db        # put the id in wrangler.jsonc
-npx wrangler d1 migrations apply kestrel_db --remote -c kestrel/wrangler.jsonc
-npx wrangler deploy -c kestrel/wrangler.jsonc
-npx wrangler secret put GEMINI_API_KEY -c kestrel/wrangler.jsonc   # optional: free default AI
+npm run migrate:remote
+npm run deploy
+npx wrangler secret put GEMINI_API_KEY   # optional: free default AI
 ```
 
-To develop locally without Supabase, run `node kestrel/scripts/auth-stub.mjs` and point `SUPABASE_URL` at `http://localhost:8799`. Any email signs in with the password `password`.
+To develop locally without Supabase, run `npm run auth-stub` and `npm run migrate:local`, then `npx wrangler dev --port 8788 --var SUPABASE_URL:http://localhost:8799 --var SUPABASE_KEY:stub`. Any email signs in with the password `password`. `npm run check` tests the model engine.
 
 ## Licence
 
-Code: MIT ([LICENSE](../LICENSE)). Model weights: see [models/README.md](models/README.md). Lite and Marathon are CC BY 4.0; Short's licence is unclear because of one of its training sources.
+Code: MIT ([LICENSE](LICENSE)). Model weights: see [models/README.md](models/README.md). Lite and Marathon are CC BY 4.0; Short's licence is unclear because of one of its training sources.
 
-Kestrel grew out of Hawks, a team calendar and training app for one high school cross-country team (the rest of this repository).
+Kestrel grew out of [Hawks](https://github.com/jakecapmeil/hawks), a team calendar and training app for one high school cross-country team. The HawksPredict research (datasets, experiments, training scripts) lives there under [research/hawkspredict](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict).

@@ -56,7 +56,7 @@ The HawksPredict-Lite format. Kestrel computes the 21 Lite features from the ath
   - `mgl[n]`: `1` sends a missing value (NaN) left, `0` sends it right.
 - `interval`: `{ "<buckets>|<distance group>": [low, high] }`, log offsets for the 80% range. `low` must be ≤ 0 and `high` ≥ 0. Buckets run 1-3; distance groups are 0 (≤ 1700 m), 1 (≤ 4100 m), 2 (≤ 7000 m) and 3 (longer). `1|0` is the fallback.
 
-LightGBM and XGBoost trees convert to this layout directly. `research/hawkspredict/scripts/lite_train.py` shows the export (and `exp20_marathon.py` for the marathon trees).
+LightGBM and XGBoost trees convert to this layout directly. [`lite_train.py`](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts/lite_train.py) shows the export (and [`exp20_marathon.py`](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts/exp20_marathon.py) for the marathon trees).
 
 ### `short-pairs` (task `short`)
 
@@ -73,9 +73,9 @@ The HawksPredict-Marathon format. The tree rules are the same as `lite-trees`, w
 
 ## Fine-tuning a built-in model
 
-1. Download it from the Model hub (or take it from `kestrel/models/`).
-2. Retrain on your results with the scripts in `research/hawkspredict/scripts`, keeping the same features.
+1. Download it from the Model hub (or take it from `models/`).
+2. Retrain on your results with the [HawksPredict training scripts](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts), keeping the same features.
 3. Write the trees out in the layout above, give the model a new `name` or `version`, fill in `trained_on` and `license`, and upload it.
 4. Click **Use this model**. Your race times now come from your model, and the chip under each time says which model made it.
 
-Check your numbers before uploading: `node kestrel/scripts/check-models.mjs` shows how the built-in files are tested.
+Check your numbers before uploading: `npm run check` shows how the built-in files are tested.

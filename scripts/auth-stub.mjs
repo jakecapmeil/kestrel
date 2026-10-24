@@ -1,6 +1,6 @@
 // A stand-in for Supabase Auth, for local testing only: just enough for supabase-js password sign-in
 // and for the Worker's token check. Any email signs in with password "password"; the token is the email.
-//   node kestrel/scripts/auth-stub.mjs   (listens on :8799; run wrangler dev with SUPABASE_URL=http://localhost:8799)
+//   npm run auth-stub   (listens on :8799; run wrangler dev with SUPABASE_URL=http://localhost:8799)
 // An email starting "unconfirmed" comes back with no confirmation date.
 import { createServer } from 'node:http';
 

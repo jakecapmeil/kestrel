@@ -1,6 +1,6 @@
 # Kestrel model cards
 
-The four built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). The training scripts and full results are in [research/hawkspredict](../../research/hawkspredict) (`RESULTS.md`, `DATASETS.md`).
+The four built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). They were trained in the [Hawks repository](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict), where the training scripts and full results are (`RESULTS.md`, `DATASETS.md`).
 
 All errors below are mean absolute error in percent of race time, on data the model never saw.
 
@@ -18,7 +18,7 @@ All errors below are mean absolute error in percent of race time, on data the mo
 - **Task:** 400 m, 600 m, 1000 m and steeplechase. 100 m and 200 m need a sprint PR to predict from.
 - **How:** for every pair of events, a line `ln t_target = a + b ln t_source + c male` with its residual SD. Up to three nearest known events are combined by inverse variance, and the range is inflated by a cross-validated factor.
 - **Trained on:** World Athletics all-time top lists (best mark per athlete and event, elite), NRCD collegiate PBs (CC BY 4.0) and the training half of the Ontario finalists (CC BY 4.0).
-- **How good:** cross-validated error from 0.95% (600 m) to 3.6% (400 m) per event, below Riegel's on every event (Riegel: 2.4-10.8%). Per-event numbers are in `research/hawkspredict/RESULTS.md` (exp13).
+- **How good:** cross-validated error from 0.95% (600 m) to 3.6% (400 m) per event, below Riegel's on every event (Riegel: 2.4-10.8%). Per-event numbers are in [RESULTS.md](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/RESULTS.md) (exp13).
 - **Weights licence: unclear.** The World Athletics list copy it was fitted on (Kaggle `mexwell/world-athletics-database`) states no licence. Published here for transparency and research; check before reusing commercially. A refit on a CC0 copy of the lists (Kaggle `jeannicolasduval/world-athletics-all-time-rankings`) is planned.
 
 ## HawksPredict-Marathon v1 (`hawkspredict-marathon.json`)
