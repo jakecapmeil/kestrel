@@ -267,7 +267,7 @@ export function marathonPredict(w, training, today) {
   const g = Number.isNaN(f.best_riegel) ? 'g0' : f.wk_mean < 40 ? 'g1' : f.wk_mean < 70 ? 'g2' : 'g3';
   const iv = w.interval[g] || w.interval.g1;
   const mu = treesSum(w, w.feats.map((k) => f[k]));
-  return { sec: Math.exp(mu), lo: Math.exp(mu + iv[0]), hi: Math.exp(mu + iv[1]), run_days: [...byDay.values()].filter((d) => d.km >= 1).length };
+  return { sec: Math.exp(mu), lo: Math.exp(mu + iv[0]), hi: Math.exp(mu + iv[1]), feats: f, run_days: [...byDay.values()].filter((d) => d.km >= 1).length };
 }
 
 // ---------- riegel ----------
@@ -377,4 +377,90 @@ export function validateModel(m) {
     kestrel: 1, name: m.name.trim(), version: m.version || '', kind: m.kind, task: m.task,
     license: m.license || '', description: m.description || '', trained_on: m.trained_on || '', weights: w,
   };
+}
+
+// ---------- adapters for the training engine (train/fitness.js) ----------
+// The fitness engine calls race models the way it called HawksPredict. modelSet() returns those calls
+// for whichever models an athlete picked in Kestrel Lab, so any published model of the right task can
+// stand in for HawksPredict-Lite, -Short or -Marathon.
+
+// The built-in Short model's events, used for event keys whatever model is picked.
+export const SHORT_METERS = SHORT.weights.events;
+const BY_ID = new Map(BUILTIN.map((m) => [m.id, m]));
+
+// A short-model event key for a result of m metres (1600 and 3200 are scaled to the mile and 3000).
+function shortSourceIn(events, m, sec) {
+  if (Math.abs(m - 1600) / 1600 < 0.01 && events['1609']) return { ev: '1609', sec: sec * Math.pow(1609.344 / 1600, 1.06) };
+  if (Math.abs(m - 3200) / 3200 < 0.01 && events['3000']) return { ev: '3000', sec: sec * Math.pow(3000 / 3200, 1.06) };
+  for (const [ev, meters] of Object.entries(events)) {
+    if (ev.startsWith('S')) continue;
+    if (Math.abs(m - meters) / meters < 0.015) return { ev, sec };
+  }
+  return null;
+}
+
+export function modelSet(picked = {}, sex = '') {
+  const race = picked.race || BY_ID.get(DEFAULTS.race);
+  const short = picked.short || BY_ID.get(DEFAULTS.short);
+  const marathon = picked.marathon || BY_ID.get(DEFAULTS.marathon);
+  const shortEvents = short.kind === 'short-pairs' ? short.weights.events : SHORT_METERS;
+  const label = (m) => ({ name: m.name, version: m.version || '' });
+
+  // results: [{ m, sec, surf }]  target: { m, surf } -> { sec, lo, hi, buckets } | null
+  function raceAny(results, target) {
+    const clean = (results || []).filter((r) => r && r.m > 0 && r.sec > 0);
+    if (!clean.length) return null;
+    if (race.kind === 'riegel') { const r = riegelPredict(race.weights, clean, target); return r && { ...r, buckets: 1 }; }
+    const one = (male) => liteOne(race.weights, clean, { ...target, male });
+    const buckets = liteFeatures(clean, target).n_buckets;
+    if (sex) { const r = one(sex === 'm' ? 1 : 0); return r && { ...r, buckets }; }
+    const a = one(0);
+    const b = one(1);
+    if (!a || !b) return null;
+    return { sec: Math.sqrt(a.sec * b.sec), lo: Math.min(a.lo, b.lo), hi: Math.max(a.hi, b.hi), buckets };
+  }
+
+  // sources: [{ ev, sec, extra }]  target: short event key -> { sec, lo, hi, sd, n } | null
+  function shortAny(sources, target) {
+    if (short.kind === 'riegel') {
+      const tm = SHORT_METERS[target];
+      if (!tm) return null;
+      const res = sources.filter((s) => SHORT_METERS[s.ev] && !s.ev.startsWith('S')).map((s) => ({ m: SHORT_METERS[s.ev], sec: s.sec }));
+      const r = riegelPredict(short.weights, res, { m: tm });
+      return r && { ...r, sd: Math.log(r.hi / r.lo) / (2 * Z80), n: 1 };
+    }
+    if (!short.weights.events[target]) return null;
+    const r = shortPredict(short.weights, sources.filter((s) => short.weights.events[s.ev]), target, sex);
+    return r && { ...r, sd: Math.log(r.hi / r.lo) / (2 * Z80), n: Math.min(3, sources.length) };
+  }
+
+  // workouts: [{ date, distance_mi, moving_sec, category }]
+  function marathonFrom(workouts, today) {
+    const training = (workouts || []).filter((w) => w.category !== 'crosstrain')
+      .map((w) => ({ date: w.date, miles: w.distance_mi, minutes: (w.moving_sec || 0) / 60 }));
+    return marathonPredict(marathon.weights, training, today);
+  }
+
+  return {
+    raceAny, shortAny, marathon: marathonFrom,
+    shortSource: (m, sec) => shortSourceIn(shortEvents, m, sec),
+    info: { race: label(race), short: label(short), marathon: label(marathon) },
+    ids: { race: race.id, short: short.id, marathon: marathon.id },
+  };
+}
+
+// The models an athlete picked (people.settings.models), resolved to model files. Private models count only
+// for their owner; a model that was deleted falls back to the default.
+export async function pickedModels(db, personId, settingsJson) {
+  let picked = {};
+  try { picked = JSON.parse(settingsJson || '{}').models || {}; } catch { /* defaults */ }
+  const out = {};
+  for (const task of Object.keys(TASKS)) {
+    const id = picked[task];
+    if (!id || id === DEFAULTS[task]) continue;
+    if (BY_ID.has(id)) { if (BY_ID.get(id).task === task) out[task] = BY_ID.get(id); continue; }
+    const row = await db.prepare("SELECT body, task FROM models WHERE id = ? AND (visibility = 'public' OR owner_id = ?)").bind(id, personId).first();
+    if (row && row.task === task) { try { out[task] = { ...JSON.parse(row.body), id }; } catch { /* default */ } }
+  }
+  return out;
 }

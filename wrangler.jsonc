@@ -28,6 +28,10 @@
   "ai": {
     "binding": "AI"
   },
+  // Hourly watch sync (intervals.icu) for athletes who connected a watch.
+  "triggers": {
+    "crons": ["17 * * * *"]
+  },
   "observability": {
     "enabled": true
   }
