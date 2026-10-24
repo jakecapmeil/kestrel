@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Kestrel Lab</title>
+<meta name="description" content="Kestrel Lab: open running models. Browse, try, download and publish race-time and training models, and call them from your own code.">
+<link rel="icon" href="/kestrel.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/kestrel.css">
+<link rel="stylesheet" href="/lab/lab.css">
+</head>
+<body class="lab">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="rough" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.8"/></filter>
+</svg>
+<header class="lab-top">
+  <a class="k-brand" href="/lab#/"><img src="/kestrel.svg" alt="" width="28" height="28"><span class="lab-word">KESTREL <b>LAB</b></span></a>
+  <nav class="lab-nav" aria-label="Kestrel Lab">
+    <a href="#/" data-nav="home">Models</a>
+    <a href="#/new" data-nav="new">Publish</a>
+    <a href="#/docs" data-nav="docs">Docs &amp; API</a>
+    <a href="#/me" data-nav="me">Your models</a>
+  </nav>
+  <a class="k-lab" href="/">Back to Kestrel</a>
+</header>
+<main id="lab"><p class="k-small">Loading…</p></main>
+<footer class="lab-foot">Kestrel Lab is part of Kestrel, open source under the MIT licence. Model weights carry their publishers' licences. <a href="https://github.com/jakecapmeil/kestrel" target="_blank" rel="noopener">Source</a></footer>
+<script type="module" src="/lab/lab.js"></script>
+</body>
+</html>

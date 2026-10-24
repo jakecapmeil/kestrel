@@ -8,7 +8,7 @@
 //   - teammates see each other's name, colour, availability and RSVPs, never training, health or contact details.
 
 import { authUser, AuthError } from './auth.js';
-import { EVENT, parseTime } from './events.js';
+import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, predictEvent, marathonPredict, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, rankForMiles, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
@@ -410,8 +410,10 @@ async function findModel(db, viewerId, id) {
   return { ...file, ...row, weights: file.weights, owner: row.owner || 'someone' };
 }
 
-async function usedBy(db, id) {
-  const r = await db.prepare('SELECT COUNT(*) AS n FROM people WHERE settings LIKE ?').bind(`%"${id}"%`).first();
+// Athletes whose pick for the model's task is this model (an athlete who never picked uses the default).
+async function usedBy(db, id, task) {
+  if (!TASKS[task]) return 0;
+  const r = await db.prepare(`SELECT COUNT(*) AS n FROM people WHERE age_ok = 1 AND COALESCE(json_extract(settings, '$.models.${task}'), ?) = ?`).bind(DEFAULTS[task], id).first();
   return r?.n || 0;
 }
 
@@ -427,7 +429,7 @@ async function listModels(db, viewerId, { task = '', q = '' } = {}) {
   const ql = q.toLowerCase();
   const built = BUILTIN.filter((m) => (!TASKS[task] || m.task === task) && (!ql || `${m.name} ${m.description}`.toLowerCase().includes(ql)));
   const out = [...built.map(pub), ...results.map((r) => ({ ...pub(r), mine: r.owner_id === viewerId }))];
-  for (const m of out) m.used_by = await usedBy(db, m.id);
+  for (const m of out) m.used_by = await usedBy(db, m.id, m.task);
   return out;
 }
 
@@ -610,7 +612,7 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));
@@ -642,6 +644,17 @@ async function route(request, env, url) {
   }
   let viewer = null;
   try { viewer = await authUser(request, env); } catch { /* signed out: public Lab pages only */ }
+  // Try a model from its Lab page without an account: 60 predictions a day per visitor (by a hash of the IP).
+  if (path === '/api/lab/try' && method === 'POST') {
+    const who = viewer ? `p:${viewer.id}` : `ip:${(await sha256(request.headers.get('CF-Connecting-IP') || 'local')).slice(0, 16)}`;
+    const use = await db.prepare('INSERT INTO api_usage (key_id, date, calls) VALUES (?, ?, 1) ON CONFLICT(key_id, date) DO UPDATE SET calls = calls + 1 RETURNING calls').bind(who, todayInTz()).first();
+    if (use.calls > 60) throw new BadRequest('That is today\'s 60 free tries. Sign in and make an API key for more.');
+    return json(await apiPredict(db, viewer?.id || null, await readJson(request)));
+  }
+  if (path === '/api/lab/stats' && method === 'GET') {
+    const r = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(downloads), 0) AS d, COUNT(DISTINCT owner_id) AS o FROM models WHERE visibility = 'public'").first();
+    return json({ models: r.n + BUILTIN.length, downloads: r.d, publishers: r.o + 1 });
+  }
   if (path === '/api/lab/models' && method === 'GET') return json({ models: await listModels(db, viewer?.id, { task: str(q.get('task'), 20), q: str(q.get('q'), 60) }) });
   const labModel = path.match(/^\/api\/lab\/models\/(.+)$/);
   if (labModel && method === 'GET') {
@@ -652,7 +665,7 @@ async function route(request, env, url) {
       const file = { kestrel: 1, name: m.name, version: m.version, kind: m.kind, task: m.task, license: m.license, description: m.description, trained_on: m.trained_on, weights: m.weights };
       return new Response(JSON.stringify(file), { headers: { 'Content-Type': 'application/json', 'Content-Disposition': `attachment; filename="${`${m.name}-${m.version || 'model'}`.replace(/[^\w.-]+/g, '_')}.json"` } });
     }
-    return json({ model: { ...pub(m), readme: m.readme || '', mine: !!viewer && m.owner_id === viewer.id, used_by: await usedBy(db, m.id), weights_summary: weightsSummary(m) } });
+    return json({ model: { ...pub(m), readme: m.readme || '', mine: !!viewer && m.owner_id === viewer.id, used_by: await usedBy(db, m.id, m.task), weights_summary: weightsSummary(m) } });
   }
 
   // ---- everything below needs a signed-in, onboarded person
