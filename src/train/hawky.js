@@ -314,7 +314,7 @@ export async function levelStatus(db, person, today, health) {
   const rank = rankOf(person);
   if (!rank) return null;
   const coach = person.coach_rank ?? rank;
-  const cap = Math.min(6, coach + 2);
+  const cap = Math.min(Math.max(...Object.keys(plansOf(person)).map(Number)), coach + 2);
   const target = milesOfRank(person, rank);
   const thisWeek = weekStartOf(today);
   const weeks = [];

@@ -10,7 +10,7 @@
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, predictEvent, marathonPredict, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
-import { PLANS, plansOf, rankOf, rankForMiles, validateTeamPlans, PlanFormatError } from './train/plans.js';
+import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken } from './train/coach.js';
@@ -776,7 +776,7 @@ async function route(request, env, url) {
       const fitness = await getFitness(db, me.id, today);
       return json({
         ...libraryMeta(), groups: WORKOUT_GROUPS,
-        workouts: WORKOUTS.map((w) => ({ ...w, group: workoutGroup(w), personal: personalWorkout(w, fitness?.vo2r ? fitness : null, rankOf(person)) })),
+        workouts: WORKOUTS.map((w) => ({ ...w, group: workoutGroup(w), personal: personalWorkout(w, fitness?.vo2r ? fitness : null, libraryRank(rankOf(person))) })),
         fitness, five_k_time: await fiveKFor(db, me.id), prs: await getPrs(db, me.id),
       });
     }
