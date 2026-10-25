@@ -1,5 +1,5 @@
 // intervals.icu sync: Garmin and COROS both sync to intervals.icu for free,
-// and its API lets Hawks pull those runs (with laps) without Claude, Strava or
+// and its API lets Kessler pull those runs (with laps) without Claude, Strava or
 // any subscription. Each runner pastes their athlete id and API key once.
 //
 // The key is AES-GCM encrypted with a key derived from MCP_AUTH_TOKEN (a
@@ -86,7 +86,7 @@ export async function connect(env, personId, athleteId, apiKey) {
   return { connected: true, athlete: id, name: me?.name || '' };
 }
 
-// The decrypted key for calls Hawks makes on the runner's behalf (writing planned workouts); never sent to a browser.
+// The decrypted key for calls Kessler makes on the runner's behalf (writing planned workouts); never sent to a browser.
 export async function credentials(env, personId) {
   const person = await loadPerson(env, personId);
   return { athlete: person.icu_athlete, key: await decrypt(env, person.icu_key_enc), base: env?.ICU_API_BASE || API };
@@ -257,7 +257,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
       .bind(person.id, ...chunk).all()).results.forEach((r) => logged.add(r.strava_id));
   }
   const fresh = usable.filter((a) => !logged.has(`intervals:${a.id}`));
-  // Runs already in Hawks still get the newest numbers intervals.icu has (no
+  // Runs already in Kessler still get the newest numbers intervals.icu has (no
   // extra requests), and a start time if they were logged before we kept one:
   // without it the day's runs can't be put in order.
   const refresh = usable.filter((a) => logged.has(`intervals:${a.id}`)).map((a) => [a, JSON.stringify(metricsOf(a)), timeOf(a)]).filter(([, m, t]) => m !== '{}' || t);

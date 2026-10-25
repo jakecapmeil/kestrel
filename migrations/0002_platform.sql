@@ -1,4 +1,4 @@
--- Kestrel v2: the Hawks data model (one row per athlete in people, personal tables keyed by person_id)
+-- Kestrel v2: the Kessler data model (one row per athlete in people, personal tables keyed by person_id)
 -- with teams on top. 0001's tables held no data and are replaced.
 --   people.id is the Supabase user id. Personal tables are only read for that person.
 --   Team tables (events, posts, comments, locations, team_plans) carry team_id and are read after a membership check.

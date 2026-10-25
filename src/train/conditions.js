@@ -10,7 +10,7 @@
 //   way down).
 //   Van Cortlandt: the park's 5K (Cemetery Hill, the Back Hills, gravel and
 //   grass) runs about 5.5% slower than a track 5000, about a minute for an
-//   18-minute runner (coaches' rule of thumb, and Hawks runners' own VC vs
+//   18-minute runner (coaches' rule of thumb, and Kessler runners' own VC vs
 //   track times). The watch only sees ~150 ft of climbing there, so the
 //   course gets its own factor instead of the hill formula.
 //   Other cross-country races: 2.5% for grass and turns, plus their hills.

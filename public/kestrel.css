@@ -1,10 +1,10 @@
-/* Kestrel over the Hawks app: the compatibility layer.
+/* Kestrel over the Kessler app: the compatibility layer.
    The design system lives in /ds (tokens, base, components). This file does two jobs until the app is ported
-   screen by screen (docs/redesign-plan.md, phase 2): it restyles the old Hawks classes with the system's radii,
+   screen by screen (docs/redesign-plan.md, phase 2): it restyles the old Kessler classes with the system's radii,
    surfaces and type, and it styles the pieces Kestrel added around the app (header, sign-in, teams, settings).
    Delete a block here when its screen moves to ds components. */
 
-/* ---------- old Hawks classes, restyled */
+/* ---------- old Kessler classes, restyled */
 body{letter-spacing:-0.005em;}
 .card{border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-1);}
 .card-title,.modal-head h3{font-family:var(--font-display);font-weight:700;letter-spacing:-.02em;}

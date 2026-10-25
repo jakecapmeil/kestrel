@@ -1,6 +1,6 @@
-// Kestrel around the Hawks app: sign-in (Supabase), onboarding, teams (switch, start, join, manage), which model
+// Kestrel around the Kessler app: sign-in (Supabase), onboarding, teams (switch, start, join, manage), which model
 // powers Kestrel AI, and which Kestrel Lab models make race predictions. The app itself (index.html's main script)
-// starts through window.hawksInit once someone is signed in; every API call it makes carries the sign-in and the
+// starts through window.kesslerInit once someone is signed in; every API call it makes carries the sign-in and the
 // team on screen through window.KESTREL.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import * as AI from '/ai.js';
@@ -345,7 +345,7 @@ async function offerPlan() {
   const r = await api('/api/me/plan').catch(() => null);
   if (!r || r.custom || r.team_plan) return;
   store.set(`kestrel.planOffered.${K.me.user.id}`, true);
-  openPlanBuilder({ team: false, current: null, onSaved: () => window.hawksReload() });
+  openPlanBuilder({ team: false, current: null, onSaved: () => window.kesslerReload() });
 }
 
 // Shows the app, starting it the first time and reloading it on a team switch.
@@ -354,9 +354,9 @@ async function start() {
   renderHeader();
   if (!K.started) {
     K.started = true;
-    await window.hawksInit();
+    await window.kesslerInit();
   } else {
-    await window.hawksReload();
+    await window.kesslerReload();
   }
 }
 
@@ -370,14 +370,14 @@ function renderHeader() {
     K.teamId = pick.value;
     K.role = K.teams.find((x) => x.id === K.teamId)?.role || null;
     store.set('kestrel.team', K.teamId);
-    await window.hawksReload();
+    await window.kesslerReload();
   };
   $('kAddTeam').onclick = () => renderTeamStart(true);
   const w = $('kWho');
   const u = K.me.user;
   w.innerHTML = html`<span class="k-avatar" style="background:${u.color}">${(u.name || 'You').trim().slice(0, 1).toUpperCase()}</span><span class="k-who-name">${u.name || 'You'}</span>`.s;
   w.setAttribute('aria-label', `${u.name || 'You'}: profile`);
-  w.onclick = () => window.hawksSetPage('you', 'profile');
+  w.onclick = () => window.kesslerSetPage('you', 'profile');
 }
 
 // Profile save (You > Profile)
@@ -420,7 +420,7 @@ window.kestrelRenderTeamCard = async (el) => {
   $('kCopyInvite').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Invite link copied.'); } catch { prompt('Copy this invite link:', link); } };
   if ($('kNewCode')) $('kNewCode').onclick = (e) => attempt(async () => { if (!confirm('Make a new invite code? The old code and link stop working.')) return; await api(`/api/teams/${K.teamId}/code`, { method: 'POST' }); window.kestrelRenderTeamCard(el); }, e.currentTarget);
   if ($('kAdmin')) $('kAdmin').onclick = () => window.openTeamAdmin();
-  if ($('kPlanEdit')) $('kPlanEdit').onclick = () => window.hawksSetPage('team', 'training');
+  if ($('kPlanEdit')) $('kPlanEdit').onclick = () => window.kesslerSetPage('team', 'training');
   if ($('kRename')) $('kRename').onclick = (e) => attempt(async () => {
     const name = prompt('Team name', team.name);
     if (!name) return;
@@ -439,7 +439,7 @@ window.kestrelRenderTeamCard = async (el) => {
     if (!confirm(team.members.length === 1 ? 'You are the last member. Leaving deletes the team and its calendar. Leave?' : 'Leave this team?')) return;
     await api(`/api/teams/${K.teamId}/members/${K.me.user.id}`, { method: 'DELETE' });
     K.teamId = null; store.del('kestrel.team');
-    await refreshMe(); renderHeader(); await window.hawksReload();
+    await refreshMe(); renderHeader(); await window.kesslerReload();
   }, e.currentTarget);
 };
 
@@ -531,7 +531,7 @@ window.kestrelRenderTeamTraining = async (el) => {
   if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
     if (!confirm('Remove the team plan? Everyone on the team goes back to having no plan until they build their own.')) return;
     await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' });
-    await window.hawksReload();
+    await window.kesslerReload();
     window.kestrelRenderTeamTraining(el);
   }, e.currentTarget);
 };
@@ -561,7 +561,7 @@ function openPlanJson(r, done) {
     try { plans = JSON.parse($('kPlanJson').value); } catch { throw new Error('That is not valid JSON.'); }
     await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
     d.close(); toast('Team plan saved.');
-    await window.hawksReload(); done();
+    await window.kesslerReload(); done();
   }, e.currentTarget);
 }
 
@@ -711,7 +711,7 @@ function openPlanBuilder({ team, current, onSaved }) {
     await api(base, { method: 'PUT', body: JSON.stringify({ plan: st.plan }) });
     d.close();
     toast(team ? 'Team plan saved. Everyone trains from it now.' : 'Plan saved. Your coach uses it from today.');
-    await window.hawksReload();
+    await window.kesslerReload();
     if (onSaved) onSaved();
   }, e.currentTarget);
 }
@@ -749,7 +749,7 @@ window.kestrelRenderPersonalPlan = async (el) => {
   if ($('kMyPlanReset')) $('kMyPlanReset').onclick = (e) => attempt(async () => {
     if (!confirm('Remove your own plan?')) return;
     await api('/api/me/plan', { method: 'DELETE' });
-    await window.hawksReload();
+    await window.kesslerReload();
     window.kestrelRenderPersonalPlan(el);
   }, e.currentTarget);
 };

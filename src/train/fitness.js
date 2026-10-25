@@ -1,11 +1,11 @@
 // Fitness States: an up-to-date read on what each runner can race right now
 // (400 through half marathon), a VO2max estimate and recent mileage. Every
-// pace in Hawks (workout library, Kai, the plan) comes from here.
+// pace in Kessler (workout library, Kai, the plan) comes from here.
 //
 // How it's worked out:
 //   1. Race-quality efforts: race results from the watch, PRs (with their
 //      dates) and a self-entered "current 5K" (only when nothing newer
-//      exists), from the last two years. HawksPredict-Lite (pacemodel.js, a
+//      exists), from the last two years. KesslerPredict-Lite (pacemodel.js, a
 //      small tree model trained on collegiate results) turns them into a time
 //      and an 80% range for every event from 400 m to the half marathon. It
 //      knows each runner's own speed/endurance shape from their results.
@@ -25,13 +25,13 @@
 import { parseReps, snap100 } from './workouts.js';
 import { conditionsOf, courseIdOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_RE } from './conditions.js';
 import { normalizePrs, parseCourseKey, courseKey, courseLabel, trackedOf, coursesById } from './courses.js';
-// Race models come from Kestrel Lab: whichever the athlete picked for each task (HawksPredict by default).
+// Race models come from Kestrel Lab: whichever the athlete picked for each task (KesslerPredict by default).
 import { modelSet, pickedModels, SHORT_METERS } from '../models.js';
 const Z80 = 1.2816;
 
 const DAY = 86400000;
 const MILE = 1609.344;
-// Fitness States switched from the race VO2max blend to HawksPredict-Lite on this date.
+// Fitness States switched from the race VO2max blend to KesslerPredict-Lite on this date.
 const LITE_SINCE = '2026-10-22';
 
 export const EVENTS = [
@@ -44,7 +44,7 @@ export const EVENTS = [
   { key: 'half', label: 'Half marathon', m: 21097.5 },
 ];
 
-// Events HawksPredict-Lite was not trained on. HawksPredict-Short estimates them from the Lite
+// Events KesslerPredict-Lite was not trained on. KesslerPredict-Short estimates them from the Lite
 // estimates and any PRs the runner has at these distances; they are offered in the table's edit mode.
 export const EXTRA_EVENTS = [
   { key: '100', label: '100m', m: 100, group: 'sprint', short: '100' },
@@ -53,10 +53,10 @@ export const EXTRA_EVENTS = [
   { key: '1000', label: '1000m', m: 1000, group: 'middle', short: '1000' },
   { key: '2000SC', label: '2000m steeple', m: 2000, group: 'steeple', short: 'S2000' },
   { key: '3000SC', label: '3000m steeple', m: 3000, group: 'steeple', short: 'S3000' },
-  // The marathon is HawksPredict-Marathon's: from the last 16 weeks of training, not from PRs.
+  // The marathon is KesslerPredict-Marathon's: from the last 16 weeks of training, not from PRs.
   { key: 'marathon', label: 'Marathon', m: 42195, group: 'long' },
 ];
-// PR events that only HawksPredict-Short reads (a 100 or a steeple time says nothing about the 1600-to-5K model).
+// PR events that only KesslerPredict-Short reads (a 100 or a steeple time says nothing about the 1600-to-5K model).
 const SHORT_M = SHORT_METERS;
 const SHORT_OWN = new Set(['100', '200', '600', '1000', 'S2000', 'S3000']);
 const PR_NAMES = { 100: '100m', 200: '200m', 400: '400m', 600: '600m', 800: '800m', 1000: '1000m', 1609: 'mile', 3000: '3000m', 5000: '5K', S2000: '2000m steeple', S3000: '3000m steeple' };
@@ -248,7 +248,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   // else on its catalogue factor.
   const toFlatOn = (id, sec, m) => RM.toFlat(id, sec, m, factorOf(id));
   const toCourseOn = (id, flatSec, m) => RM.toCourse(id, flatSec, m, factorOf(id));
-  const shortPrs = []; // PRs HawksPredict-Short can use: { ev, sec, age }
+  const shortPrs = []; // PRs KesslerPredict-Short can use: { ev, sec, age }
 
   // 1. Max efforts.
   const seenCourse = new Set(); // one race can sit under two course PRs (a typed one and a found one): count it once
@@ -479,7 +479,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   for (const x of [...maxSrc, ...subSrc]) x.used = true;
   for (const x of sources) if (x.kind === 'pr' && !x.eff) x.used = true; // 400/800 PRs shape the short estimates
 
-  // HawksPredict-Lite: race-quality efforts (races, PRs, and a self-entered 5K
+  // KesslerPredict-Lite: race-quality efforts (races, PRs, and a self-entered 5K
   // only when nothing newer exists) from the last two years, every one already
   // credited back to a flat, cool course. Splits from runs, rep sets, heart
   // rate and Garmin are not race evidence and stay out. Needs at least one.
@@ -515,7 +515,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   let basis = 'none';
   if (lite) {
     vo2r = lite.vo2r;
-    basis = 'hawkspredict';
+    basis = 'kesslerpredict';
   } else if (M) {
     vo2r = M.v;
     basis = 'races';
@@ -536,7 +536,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
       as_of: today, basis, vo2r: null, vo2max: latestG ? round1(latestG.vo2max) : null, vo2max_source: latestG ? 'watch' : null,
       confidence: 'none', mpw, mpw_prev: mpwPrev, fitness_score: fitnessScore(workouts, wellness, today), pr_candidates: prCandidates,
       longest_28d: round1(cur.longest), estimates: [], zones: [], cs: null, speed_index: null,
-      sources: [], note: 'Add a PR or connect your watch so Hawks can estimate your fitness.',
+      sources: [], note: 'Add a PR or connect your watch so Kessler can estimate your fitness.',
     };
   }
   vo2r = clamp(vo2r, 20, 85);
@@ -606,7 +606,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     est[e.key] = { ...e, sec: t, raw, lo: lite ? lite.by[e.key].lo * scale : null, hi: lite ? lite.by[e.key].hi * scale : null };
   }
 
-  // HawksPredict-Short: the events Lite was not trained on. Its sources are Lite's own estimates (a little
+  // KesslerPredict-Short: the events Lite was not trained on. Its sources are Lite's own estimates (a little
   // less exact than a real result, so they carry extra uncertainty) and any PRs at the other short distances.
   if (lite) {
     const fromLite = [];
@@ -635,7 +635,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     }
   }
 
-  // HawksPredict-Marathon: from the 16 weeks of running before today (needs 15 running days). Independent of the PR-based models.
+  // KesslerPredict-Marathon: from the 16 weeks of running before today (needs 15 running days). Independent of the PR-based models.
   let mar = null;
   try { mar = RM.marathon(workouts, today); } catch (e) { /* never let the marathon row break the rest of Fitness States */ }
   if (mar) {
@@ -733,7 +733,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
 // fitness is the 42-day weighted average of daily training load, fatigue the
 // 7-day one, and form is fitness minus fatigue. intervals.icu's own numbers
 // are used when the sync brings them (they count every activity); otherwise
-// Hawks works them out from its load (minutes x effort).
+// Kessler works them out from its load (minutes x effort).
 function fitnessScore(workouts, wellness, today) {
   const icu = wellness.filter((r) => r.ctl != null);
   const lastIcu = icu[icu.length - 1];
@@ -754,7 +754,7 @@ function fitnessScore(workouts, wellness, today) {
       atl += (L - atl) / 7;
       if (i <= 55) series.push({ date: d, fitness: round1(ctl) });
     }
-    fitness = ctl; fatigue = atl; source = 'Hawks';
+    fitness = ctl; fatigue = atl; source = 'Kessler';
   }
   const ago = series.find((p) => p.date >= addDays(today, -28));
   return {
@@ -816,7 +816,7 @@ export async function recomputeFitness(db, personId, today) {
   const old = await db.prepare(
     'SELECT date, five_k_sec, vdot AS vo2r FROM fitness_history WHERE person_id = ? AND date <= ? ORDER BY date DESC LIMIT 1'
   ).bind(personId, addDays(today, -28)).first();
-  // History before the switch to HawksPredict-Lite came from the old method: no trend across the cutover.
+  // History before the switch to KesslerPredict-Lite came from the old method: no trend across the cutover.
   if (old && fiveK && old.date >= LITE_SINCE) {
     data.trend = { five_k_sec_change: Math.round(fiveK.sec - old.five_k_sec), vo2r_change: round1(data.vo2r - old.vo2r), since: addDays(today, -28) };
   }

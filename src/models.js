@@ -2,17 +2,17 @@
 // Models are data, never code: each kind has one evaluator here, and uploads are checked by validateModel before they are stored.
 //
 // Kinds (and the task slot each fills):
-//   lite-trees      race      HawksPredict-Lite format: boosted trees over a log-seconds residual on a weighted-Riegel baseline.
-//   short-pairs     short     HawksPredict-Short format: log-log lines between event pairs, inverse-variance combined.
-//   marathon-trees  marathon  HawksPredict-Marathon format: boosted trees over 16 weeks of training features.
+//   lite-trees      race      KesslerPredict-Lite format: boosted trees over a log-seconds residual on a weighted-Riegel baseline.
+//   short-pairs     short     KesslerPredict-Short format: log-log lines between event pairs, inverse-variance combined.
+//   marathon-trees  marathon  KesslerPredict-Marathon format: boosted trees over 16 weeks of training features.
 //   riegel          race | short   t2 = t1 * (d2/d1)^exponent from the nearest PR, with a log-SD for the range.
 //
-// The evaluators are the Hawks ones (src/pacemodel.js, src/shortmodel.js, src/marathon.js) with the model passed in;
+// The evaluators are the Kessler ones (src/pacemodel.js, src/shortmodel.js, src/marathon.js) with the model passed in;
 // scripts/check-models.mjs proves they give the same numbers on the built-in files.
 
-import LITE from '../models/hawkspredict-lite.json' with { type: 'json' };
-import SHORT from '../models/hawkspredict-short.json' with { type: 'json' };
-import MARATHON from '../models/hawkspredict-marathon.json' with { type: 'json' };
+import LITE from '../models/kesslerpredict-lite.json' with { type: 'json' };
+import SHORT from '../models/kesslerpredict-short.json' with { type: 'json' };
+import MARATHON from '../models/kesslerpredict-marathon.json' with { type: 'json' };
 import RIEGEL from '../models/riegel.json' with { type: 'json' };
 import VDOT from '../models/vdot.json' with { type: 'json' };
 import TANDA from '../models/tanda-2011.json' with { type: 'json' };
@@ -39,7 +39,7 @@ export const PURPOSES = {
 export const TASKS = Object.fromEntries(Object.entries(PURPOSES).filter(([, p]) => p.model).map(([k, p]) => [k, p.label]));
 // No default for `course`: a course with no model keeps its catalogue factor (Van Cortlandt 1.055, other cross-country 1.025).
 export const DEFAULTS = {
-  race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon',
+  race: 'kestrel/kesslerpredict-lite', short: 'kestrel/kesslerpredict-short', marathon: 'kestrel/kesslerpredict-marathon',
 };
 // Slots: a purpose can also be overridden per event, so an athlete can run the 5K on one model and the 1600 on
 // another. A slot is `purpose:event` (`race:5K`, `short:600`); the event keys are Fitness States' own. A slot with
@@ -509,9 +509,9 @@ export function validateModel(m) {
 }
 
 // ---------- adapters for the training engine (train/fitness.js) ----------
-// The fitness engine calls race models the way it called HawksPredict. modelSet() returns those calls
+// The fitness engine calls race models the way it called KesslerPredict. modelSet() returns those calls
 // for whichever models an athlete picked in Kestrel Lab, so any published model of the right task can
-// stand in for HawksPredict-Lite, -Short or -Marathon.
+// stand in for KesslerPredict-Lite, -Short or -Marathon.
 
 // The built-in Short model's events, used for event keys whatever model is picked.
 export const SHORT_METERS = SHORT.weights.events;

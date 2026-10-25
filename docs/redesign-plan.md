@@ -21,11 +21,11 @@ Problems with the push:
 
 ### Why it reads as vibe-coded
 
-- **A skin on top of a fork.** The app is the Hawks calendar (6,817-line `index.html`, 115 inline `style=""` attributes, 87 distinct hex colours) with `kestrel.css` overriding it. There are 11 `!important`s, a duplicated button, and tokens that lie: `--gold` holds red, `--gold-bg` is pink. Every new screen inherits the contradiction.
+- **A skin on top of a fork.** The app is the Kessler calendar (6,817-line `index.html`, 115 inline `style=""` attributes, 87 distinct hex colours) with `kestrel.css` overriding it. There are 11 `!important`s, a duplicated button, and tokens that lie: `--gold` holds red, `--gold-bg` is pink. Every new screen inherits the contradiction.
 - **Decoration standing in for design.** Red-pen underline under every page title, hand-drawn circle on the selected day, an SVG turbulence filter on icons, uppercase tracking on every label. Each is fine once; applied everywhere they become the "look" and carry no information.
 - **One radius, everywhere.** 2px corners on cards, inputs, buttons, chips. No hierarchy between a card, a control and a badge.
 - **Generic structure.** Every screen is "page title, then card, then card". Nothing says what matters on that screen.
-- **Hawks leftovers.** `hawks*` localStorage keys (17 call sites), `Those available are: …` copy box, the coach prompt names "the Kestrel cross country team", and the AI avatar is the letter K.
+- **Kessler leftovers.** `kessler*` localStorage keys (17 call sites), `Those available are: …` copy box, the coach prompt names "the Kestrel cross country team", and the AI avatar is the letter K.
 
 ### Layout and navigation
 
@@ -219,7 +219,7 @@ Each phase ships on its own and leaves the app working.
 
 | Phase | Content | Size |
 |---|---|---|
-| **0. Fix what the push broke** | Hide landing for signed-in users (route it to `/welcome` or show it only signed out); fix hero clipping; one `.k-btn`; correct plan-level copy; fix tab-label collision; "not on a team" empty state instead of a network error; rename `hawks*` storage keys (with migration read); fix coach prompt copy. | S |
+| **0. Fix what the push broke** | Hide landing for signed-in users (route it to `/welcome` or show it only signed out); fix hero clipping; one `.k-btn`; correct plan-level copy; fix tab-label collision; "not on a team" empty state instead of a network error; rename `kessler*` storage keys (with migration read); fix coach prompt copy. | S |
 | **1. Design system** | `public/ds/*` (tokens, base, components, hawk sprite), living style guide, final hawk redraw (header, avatar, empty, loading, favicon). New tokens aliased over old names so nothing breaks. | M |
 | **2. App shell** | Bottom tab bar / desktop rail, new header, Kestrel · Lab switcher. Port screens one at a time: Schedule → Train → You. Delete `kestrel.css` overrides screen by screen; split `index.html` into per-view modules as each moves. | L |
 

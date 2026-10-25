@@ -1,5 +1,5 @@
 // Run grading: how hard a run was, judged against the runner's own
-// HawksPredict-Lite training paces (Fitness States) and checked by heart rate.
+// KesslerPredict-Lite training paces (Fitness States) and checked by heart rate.
 //
 // Pace side: a run's pace is turned into a share of the runner's race VO2max (Daniels'
 // %VO2max: easy 62-70%, steady 81%, marathon 84%, threshold 88%, 10K ~92%, 5K

@@ -1,7 +1,7 @@
-// Race-day calculators. Heat uses the same temperature + dew point chart as the rest of Hawks (conditions.js, Hadley's coaching table), which agrees with
+// Race-day calculators. Heat uses the same temperature + dew point chart as the rest of Kessler (conditions.js, Hadley's coaching table), which agrees with
 // two checks on real results (research/hawkspredict/RESULTS.md, exp18): NRCD cross country runs about 0.2% slower per degree F above 60, and Ontario
 // high-school 3000 m about 0.4% slower per 10 F of temperature + dew point, with no measurable effect from 400 to 1500 m. Taper follows published
-// controlled studies; Hawks' own marathon data cannot test it (exp21: runners whose last three weeks fell below 55% of their build ran slower, but that group includes
+// controlled studies; Kessler' own marathon data cannot test it (exp21: runners whose last three weeks fell below 55% of their build ran slower, but that group includes
 // the injured and ill).
 import { heatCost, hillCost } from './conditions.js';
 
@@ -79,6 +79,6 @@ export function taperCalc(q) {
       'The day before: 2-3 easy miles with a few strides. Sleep matters more than any extra run.',
       'Feeling flat or heavy mid-taper is normal. Do not add miles to fix it.',
     ],
-    evidence: 'Controlled studies of tapering (a 2007 meta-analysis of 27 studies by Bosquet and colleagues) found the best results from about two weeks of cutting volume 40-60% while keeping intensity and frequency, worth around 2% in performance. Hawks could not re-test this: in 13,000 real marathons, runners whose last three weeks fell under 55% of their build ran slower than expected, but that group includes people who were injured or ill.',
+    evidence: 'Controlled studies of tapering (a 2007 meta-analysis of 27 studies by Bosquet and colleagues) found the best results from about two weeks of cutting volume 40-60% while keeping intensity and frequency, worth around 2% in performance. Kessler could not re-test this: in 13,000 real marathons, runners whose last three weeks fell under 55% of their build ran slower than expected, but that group includes people who were injured or ill.',
   };
 }

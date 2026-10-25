@@ -1,4 +1,4 @@
-// Plan -> watch. Garmin and COROS both pull planned workouts from intervals.icu (Settings, "upload planned workouts"), and Hawks already
+// Plan -> watch. Garmin and COROS both pull planned workouts from intervals.icu (Settings, "upload planned workouts"), and Kessler already
 // holds each runner's intervals.icu key, so the plan is sent there as structured running workouts with the runner's own Fitness States paces.
 //
 //   buildWorkout(day, fitness, personId)  one plan day -> an intervals.icu event (or null for an off day)
@@ -139,7 +139,7 @@ export function buildWorkout(day, fitness, personId) {
     heading = day.type === 'Long run' ? 'Long run' : day.type === 'Race' ? 'Race' : day.type;
   }
   const strides = /stride/i.test(notes) && day.type !== 'Workout' ? '\n\nStrides: 4-6 x 20s relaxed fast, after the run.' : '';
-  const note = text ? `\n\nHawks plan: ${text}` : '';
+  const note = text ? `\n\nKessler plan: ${text}` : '';
   return {
     category: 'WORKOUT', type: 'Run', target: 'PACE', start_date_local: `${day.date}T00:00:00`,
     name: `${heading}: ${title}`, description: blocks.join('\n\n') + strides + note, moving_time: Math.round(seconds),
@@ -190,7 +190,7 @@ export async function pushPlan(env, personId, { days = 14 } = {}) {
   if (!person) throw new IntervalsError('Unknown person');
   const today = todayInTz();
   const fitness = await getFitness(db, personId, today);
-  if (!fitness?.zones?.length) throw new IntervalsError('Add a race or PR first so Hawks can set your paces.');
+  if (!fitness?.zones?.length) throw new IntervalsError('Add a race or PR first so Kessler can set your paces.');
   const wanted = await planWorkouts(db, person, fitness, today, n);
   const end = addDays(today, n - 1);
   const prefix = `hawks:${personId}:`;
@@ -222,7 +222,7 @@ export async function pushPlan(env, personId, { days = 14 } = {}) {
     sent: sent.length, created, updated, deleted, from: today, to: end,
     steps_understood: back.length - unread.length, steps_not_read: unread, push_errors: pushErrors, watch_upload: toggles,
     note: unread.length
-      ? 'intervals.icu saved these days as text but did not turn them into steps; they will show as notes. Tell Hawks which days so the format can be fixed.'
+      ? 'intervals.icu saved these days as text but did not turn them into steps; they will show as notes. Tell Kessler which days so the format can be fixed.'
       : 'Workouts are on your intervals.icu calendar. Turn on "upload planned workouts" for Garmin or COROS in intervals.icu (Settings, Connections) and they appear on the watch after its next sync.',
   };
 }
