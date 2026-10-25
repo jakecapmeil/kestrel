@@ -1269,6 +1269,25 @@
   .session-body .session-acts{margin-top:0;}
   .session-splits:has(#splitPanel[style*="none"]){display:none;}
   .session-splits:not(:empty){margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line);}
+  #tlDayCard .tl-day-actions{gap:var(--sp-2);align-items:center;}
+  #tlDayCard.viewing #tlTrackWrap,#tlDayCard.viewing #tlManual,#tlDayCard.viewing #splitPanel,#tlDayCard.viewing .stack-lg,#tlDayCard.viewing .divider,#tlDayCard.viewing #tlLockNote,#tlDayCard.viewing #tlCancel,#tlDayCard.viewing .tag-pick{display:none !important;}
+  #tlDayCard.editing #tlEdit,#tlDayCard.editing #tlReadout,#tlDayCard.editing .session-suggest{display:none !important;}
+  .tag-chip{display:inline-block;font-size:var(--fs-caption);padding:1px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;}
+  .tag-chip.hard{background:var(--gold-bg);color:var(--gold-ink);border-color:transparent;}
+  .session-suggest{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-2) var(--sp-3);margin-top:var(--sp-2);font-size:var(--fs-subhead);line-height:1.4;}
+  .session-suggest span{flex:1 1 200px;}
+  .tag-pick{margin-top:var(--sp-3);}
+  .tag-pick .tag-opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .tag-pick .tag-opts button{font-size:var(--fs-footnote);padding:4px 11px;border-radius:99px;min-height:0;}
+  .tag-pick .tag-opts button.on{border-color:var(--ink);font-weight:600;}
+  .tag-new{display:none;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .tag-new.show{display:flex;}
+  .tag-new input,.tag-new select{width:auto;flex:1 1 120px;}
+  .tl-readout{margin-top:var(--sp-3);display:grid;gap:var(--sp-3);}
+  .tl-readout .ro-label{font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);margin-bottom:2px;}
+  .tl-readout .ro-text{font-size:var(--fs-subhead);line-height:1.5;white-space:pre-wrap;}
+  .ro-splits{width:100%;border-collapse:collapse;font-size:var(--fs-footnote);margin-top:var(--sp-2);}
+  .ro-splits td{padding:4px 6px;border-top:1px solid var(--line);}
   .tl-close{display:none;width:36px;height:36px;padding:0;border-radius:50%;}
   @media (max-width:959px){
     body.tl-sheet{overflow:hidden;}
@@ -1278,6 +1297,37 @@
     }
     body.tl-sheet .tl-close{display:flex;align-items:center;justify-content:center;}
   }
+
+  /* ---- Record ----------------------------------------------------------- */
+  .page-tab{position:relative;}
+  .rec-dot{display:none;position:absolute;top:6px;right:calc(50% - 22px);width:9px;height:9px;border-radius:50%;background:var(--int-4);box-shadow:0 0 0 2px var(--card);}
+  body.rec-live .rec-dot{display:block;animation:pulse 1.2s ease-in-out infinite;}
+  .rec{display:flex;flex-direction:column;gap:var(--sp-4);max-width:560px;margin:0 auto;}
+  .rec-hero{text-align:center;padding:var(--sp-5) var(--sp-4);}
+  .rec-gps{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-footnote);font-weight:600;color:var(--ink-soft);margin-bottom:var(--sp-4);}
+  .rec-gps i{width:9px;height:9px;border-radius:50%;background:var(--ink-soft);}
+  .rec-gps.good i{background:var(--int-1);} .rec-gps.fair i{background:var(--int-2);} .rec-gps.bad i{background:var(--int-4);}
+  .rec-go{width:148px;height:148px;border-radius:50%;border:0;background:var(--gold);color:var(--on-fill);font:800 22px var(--font-display);letter-spacing:-.02em;box-shadow:0 10px 30px color-mix(in srgb,var(--gold) 38%,transparent);transition:transform .25s var(--spring),box-shadow .25s;}
+  .rec-go:hover{transform:scale(1.04);}
+  .rec-big{font:800 clamp(56px,16vw,84px)/1 var(--font-display);letter-spacing:-.05em;font-variant-numeric:tabular-nums;text-align:center;}
+  .rec-big small{font-size:.32em;letter-spacing:0;margin-left:6px;color:var(--ink-soft);font-weight:700;}
+  .rec-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);text-align:center;}
+  .rec-stats div b{display:block;font:800 clamp(22px,6vw,30px)/1.1 var(--font-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .rec-stats div span{font-size:var(--fs-caption);font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
+  .rec-map{width:100%;height:200px;border-radius:var(--r-control);background:var(--track);display:block;}
+  .rec-map path{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;}
+  .rec-map circle.now{fill:var(--gold);stroke:var(--card);stroke-width:3;}
+  .rec-map circle.start{fill:var(--int-1);stroke:var(--card);stroke-width:2;}
+  .rec-actions{display:flex;gap:var(--sp-3);justify-content:center;}
+  .rec-actions button{flex:1;max-width:220px;height:56px;border-radius:var(--r-pill);font-size:var(--fs-headline);font-weight:700;}
+  .rec-actions .stop{background:var(--int-4);color:#fff;border:0;}
+  .rec-splits{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;font-variant-numeric:tabular-nums;}
+  .rec-splits li{display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line);font-weight:600;}
+  .rec-splits li:last-child{border-bottom:0;}
+  .rec-splits li span:first-child{color:var(--ink-soft);}
+  .rec-note{font-size:var(--fs-footnote);color:var(--ink-soft);text-align:center;line-height:1.45;}
+  .rec-form{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
+  .rec-form .full{grid-column:1/-1;}
 
   /* ---- Header sync menu ---------------------------------------------- */
   .head-right{display:flex;align-items:center;gap:var(--sp-2);}
@@ -1436,6 +1486,13 @@
   .split-add{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2);font-size:var(--fs-footnote);color:var(--ink-soft);}
   .split-add input{width:78px;padding:8px 6px;text-align:center;}
   .split-add button{height:var(--btn-h-sm);}
+  .split-quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2);}
+  .split-quick button{height:34px;padding:0 12px;border-radius:var(--r-pill);background:var(--track);color:var(--ink);border:1px solid transparent;font-size:var(--fs-footnote);font-weight:700;font-variant-numeric:tabular-nums;}
+  .split-quick button:hover{border-color:var(--line);}
+  .split-paste{margin-top:var(--sp-2);}
+  .split-paste summary{cursor:pointer;font-size:var(--fs-footnote);font-weight:600;color:var(--ink-soft);padding:6px 0;}
+  .split-paste textarea{width:100%;margin:4px 0 6px;font-variant-numeric:tabular-nums;}
+  .split-row input:focus{background:var(--card);}
   .sm-btn{height:var(--btn-h-sm);padding:0 var(--sp-3);font-size:var(--fs-footnote);}
 
   /* ---- Workouts: picker tiles ------------------------------------------- */
@@ -1695,6 +1752,7 @@
 <link rel="stylesheet" href="/ds/components.css">
 <link rel="stylesheet" href="/ds/shell.css">
 <link rel="stylesheet" href="/kestrel.css">
+<link rel="stylesheet" href="/ds/motion.css">
 </head>
 <body>
 
@@ -1767,6 +1825,7 @@
   <div class="page-tabs" role="tablist" aria-label="Sections">
     <button type="button" class="page-tab active" id="pageTabSchedule" role="tab" aria-selected="true" aria-controls="pageSchedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle class="fill" cx="8.5" cy="14.5" r="1.1"/><circle class="fill" cx="12" cy="14.5" r="1.1"/><circle class="fill" cx="15.5" cy="14.5" r="1.1"/></svg><span>Schedule</span></button>
     <button type="button" class="page-tab" id="pageTabTraining" role="tab" aria-selected="false" aria-controls="pageTraining"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.500c0-1.7.5-3 1.8-3.400l3.2-1 1.4 1.800c.7.9 1.7 1.4 2.8 1.400H17c2.2 0 4 1.4 4 3.200V17H3z"/><path d="M8 11.100V8.500M3.5 19.500h17M12.7 13.300l.8-1.300M15 13.600l.8-1.3"/></svg><span>Train</span></button>
+    <button type="button" class="page-tab" id="pageTabRecord" role="tab" aria-selected="false" aria-controls="pageRecord"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle class="fill" cx="12" cy="12" r="3.6"/></svg><span>Record</span><i class="rec-dot" aria-hidden="true"></i></button>
     <button type="button" class="page-tab" id="pageTabTeam" role="tab" aria-selected="false" aria-controls="pageTeam"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8" r="2.6"/><circle cx="16.5" cy="9" r="2.2"/><path d="M3.5 19c.4-3 2.5-4.8 5-4.8s4.6 1.8 5 4.8M13.6 14.6c.8-.6 1.8-.9 2.9-.9 2.2 0 3.7 1.5 4 4.3"/></svg><span>Team</span></button>
     <button type="button" class="page-tab" id="pageTabYou" role="tab" aria-selected="false" aria-controls="pageYou"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.700 3.5-5.800 7-5.800s6.300 2.100 7 5.800"/></svg><span>You</span></button>
   </div>
@@ -2041,7 +2100,11 @@
               <div class="eyebrow" id="tlDayEyebrow"></div>
               <div class="card-title" id="tlDayTitle"></div>
             </div>
-            <button type="button" class="ghost tl-close" id="tlClose" aria-label="Close day">✕</button>
+            <div class="cluster tl-day-actions">
+              <button type="button" class="ghost sm-btn" id="tlEdit">Edit</button>
+              <button type="button" class="ghost sm-btn" id="tlCancel">Cancel</button>
+              <button type="button" class="ghost tl-close" id="tlClose" aria-label="Close day">✕</button>
+            </div>
           </div>
           <div class="plan-note" id="tlPlanNote" style="display:none;"></div>
           <div class="hawky-line" id="tlDayLine" style="display:none;"></div>
@@ -2056,6 +2119,7 @@
           </div>
           <div id="tlDaySplits"></div>
           <div class="sessions" id="tlSessions"></div>
+          <div class="tl-readout" id="tlReadout"></div>
           <div class="tl-events" id="tlEvents"></div>
           <!-- The split builder moves into whichever session is open. -->
           <div id="splitPanel" class="split-panel">
@@ -2074,6 +2138,19 @@
                 <button type="button" class="ghost" id="splitAddSet">Add set</button>
                 <button type="button" class="ghost" id="splitAddOne">+ Rep</button>
               </div>
+              <div class="split-quick" id="splitQuick" role="group" aria-label="Common sets">
+                <button type="button" data-n="6" data-m="200">6×200</button>
+                <button type="button" data-n="8" data-m="400">8×400</button>
+                <button type="button" data-n="5" data-m="800">5×800</button>
+                <button type="button" data-n="4" data-m="1000">4×1000</button>
+                <button type="button" data-n="3" data-m="1600">3×1600</button>
+                <button type="button" data-n="1" data-m="1600">Mile</button>
+              </div>
+              <details class="split-paste">
+                <summary>Paste a list of times</summary>
+                <textarea id="splitPaste" rows="3" placeholder="1:12  1:11  1:10.5  1:09&#10;or one per line. 112 = 1:12, 72 = 72 s" aria-label="Paste rep times"></textarea>
+                <button type="button" class="ghost" id="splitPasteGo">Fill reps</button>
+              </details>
               </div>
           </div>
           <hr class="divider">
@@ -2237,6 +2314,16 @@
         </section>
       </div>
     </div>
+  </div>
+
+  <div id="pageRecord" style="display:none;">
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Record</div>
+        <h2 class="page-title">Record a run</h2>
+      </div>
+    </div>
+    <div id="recRoot"></div>
   </div>
 
   <div id="pageTeam" style="display:none;">
@@ -2661,7 +2748,7 @@ let selectedDate = null;
 let editMode = false;
 let showPastEvents = false;
 let currentPage = 'schedule';
-const PAGES = ['schedule','training','team','you'];
+const PAGES = ['schedule','training','record','team','you'];
 let scheduleView = 'calendar';
 let youView = 'profile';
 try{ const v = localStorage.getItem('kestrel.scheduleView'); scheduleView = ['meets','places'].includes(v) ? v : 'calendar'; }catch(e){}
@@ -3942,6 +4029,7 @@ function setPage(page){
   if(page === 'you') renderYou();
   if(page === 'training') renderTraining();
   if(page === 'team') renderTeam();
+  if(page === 'record') window.kRecord?.show(); else window.kRecord?.leave();
 }
 
 function paintSeg(segId, attr, value){
@@ -5170,10 +5258,16 @@ function wireUI(){
   $('tlPrev').addEventListener('click', ()=>{ tlMonthIdx--; if(tlMonthIdx < 0){ tlMonthIdx = 11; tlYear--; } tlSelected = null; renderTrainingLog(); });
   $('tlNext').addEventListener('click', ()=>{ tlMonthIdx++; if(tlMonthIdx > 11){ tlMonthIdx = 0; tlYear++; } tlSelected = null; renderTrainingLog(); });
   $('tlSave').addEventListener('click', saveTrainingDay);
+  $('tlEdit').addEventListener('click', ()=>{ tlEditing = true; renderTrainingDay(); });
+  $('tlCancel').addEventListener('click', ()=>{
+    if((tlDirty || tlSplitDirty) && !confirm('Discard your changes?')) return;
+    tlEditing = false; tlDirty = false; tlSplitDirty = false;
+    renderTrainingDay();
+  });
   $('tlDayCard').addEventListener('input', e=>{ tlDirty = true; if(e.target.closest('#splitPanel')) tlSplitDirty = true; });
   $('tlClose').addEventListener('click', ()=>{
     if(tlDirty && !confirm('Close without saving?')) return;
-    tlSelected = null; tlDirty = false; tlSplitDirty = false;
+    tlSelected = null; tlEditDate = null; tlDirty = false; tlSplitDirty = false;
     document.body.classList.remove('tl-sheet');
     renderTrainingLog();
   });
@@ -5194,6 +5288,26 @@ function wireUI(){
     const n = Math.min(40, Math.max(1, parseInt($('splitAddN').value, 10) || 1));
     const m = Math.max(50, parseInt($('splitAddM').value, 10) || 400);
     addSplitSet(n, m);
+  });
+  $('splitQuick').addEventListener('click', (e)=>{ const b = e.target.closest('[data-n]'); if(b) addSplitSet(Number(b.dataset.n), Number(b.dataset.m)); });
+  $('splitPasteGo').addEventListener('click', ()=>{ if(fillSplitsFromText($('splitPaste').value)) $('splitPaste').value = ''; });
+  // Enter walks down the time column; Enter on the last rep starts another at the same distance. Digits expand to m:ss on leaving the field.
+  $('splitBuilder').addEventListener('keydown', (e)=>{
+    const inp = e.target;
+    if(e.key !== 'Enter' || inp.tagName !== 'INPUT' || !inp.closest('.split-row[data-i]')) return;
+    e.preventDefault();
+    const i = Number(inp.closest('.split-row').dataset.i);
+    const next = $('splitBuilder').querySelector(`.split-row[data-i="${i + 1}"] input[data-k="s"]`);
+    if(next){ next.focus(); next.select(); }
+    else if(splitRows[i].s > 0 && splitRows.length < 40) addSplitSet(1, splitRows[i].m || 400);
+  });
+  $('splitBuilder').addEventListener('focusout', (e)=>{
+    const inp = e.target;
+    if(inp.dataset?.k !== 's') return;
+    const fixed = expandClock(inp.value);
+    if(fixed === inp.value) return;
+    inp.value = fixed;
+    inp.dispatchEvent(new Event('input', { bubbles:true }));
   });
   $('splitAddOne').addEventListener('click', ()=> addSplitSet(1, splitRows.length ? splitRows[splitRows.length - 1].m : (parseInt($('splitAddM').value, 10) || 400)));
   $('libReset').addEventListener('click', ()=>{ ['libRace','libPhase','libLen','libLevel'].forEach(id=> $(id).value = ''); libType = ''; renderLibrary(); });
@@ -5348,6 +5462,7 @@ async function fetchPlan(key, query){
 let trainingView = 'plan';
 try{ trainingView = localStorage.getItem('kestrel.trainingView') || 'plan'; }catch(e){}
 let tlYear = null, tlMonthIdx = null, tlSelected = null, tlDays = {};
+let tlEditing = false, tlEditDate = null, runTags = { builtin: [], custom: [] };
 let library = null, libOpen = '';
 const TL_TYPES = ['easy','recovery','long','tempo','threshold','intervals','track','fartlek','hills','strides','race','shakeout','crosstrain','strength','rest'];
 const TL_STATUS = { as_planned:'As planned', harder:'Harder', easier:'Easier', adjusted:'Adjusted', missed:'Missed', rest:'Rest' };
@@ -5426,6 +5541,7 @@ async function renderTrainingLog(){
   if(currentPage !== 'training' || trainingView !== 'log' || personId !== activePersonId) return;
   if(!data){ $('tlHint').textContent = 'Couldn’t load your log. Check your connection.'; return; }
   tlDays = {}; data.days.forEach(d=>{ tlDays[d.date] = d; });
+  if(data.tags) runTags = data.tags;
   renderWeekSummary();
 
   const month = dateKeyOf(first).slice(0,7);
@@ -5632,12 +5748,82 @@ function sessionSummary(sx){
   return `<div class="session-summary">${escapeHtml(bits + cmp)}</div>`;
 }
 
+const dismissedSuggest = new Set();
+function tagLabel(id){
+  const b = runTags.builtin.find(t=>t.id === id);
+  return b ? b.label : id;
+}
+function roSplits(reps){
+  if(!reps || !reps.length) return '';
+  return `<table class="ro-splits num">${reps.map((r,i)=>`<tr><td>${i+1}</td><td>${r.m} m</td><td>${fmtClock(r.s)}</td></tr>`).join('')}</table>`;
+}
+function fmtClock(sec){
+  sec = Math.round(sec * 10) / 10;
+  const m = Math.floor(sec / 60); const x = sec - m * 60;
+  return m ? `${m}:${(x < 10 ? '0' : '') + (Math.round(x * 10) % 10 ? x.toFixed(1) : x.toFixed(0))}` : String(sec);
+}
+function tagPickerHtml(sx){
+  if(!sx.main_id || !runTags.builtin.length) return '';
+  const cur = sx.tag || '';
+  const opts = [...runTags.builtin.filter(t=>t.id !== 'crosstrain').map(t=>({ id: t.id, label: t.label })), ...runTags.custom.map(t=>({ id: t.name, label: t.name, custom: true }))];
+  return `<div class="tag-pick" data-main="${escapeHtml(sx.main_id)}">
+    <div class="eyebrow">Type of run</div>
+    <div class="tag-opts">
+      <button type="button" class="ghost ${cur ? '' : 'on'}" data-tag="">Auto</button>
+      ${opts.map(o=>`<button type="button" class="ghost ${cur === o.id ? 'on' : ''}" data-tag="${escapeHtml(o.id)}">${escapeHtml(o.label)}</button>`).join('')}
+      <button type="button" class="ghost" data-newtag="1">+ New tag</button>
+    </div>
+    <div class="tag-new"><input type="text" maxlength="24" placeholder="Name, e.g. Hill repeats" aria-label="New tag name"><select aria-label="Counts as"><option value="workout">Counts as a workout</option><option value="race">Counts as a race</option><option value="easy">Counts as easy</option><option value="long">Counts as long</option><option value="recovery">Counts as recovery</option></select><button type="button" data-addtag="1">Add</button></div>
+    <div class="hint">Race: a steady all-out effort. Time trial: all-out, not a sanctioned race. Workout: structured reps, tempo or fartlek.</div>
+  </div>`;
+}
+function readoutHtml(day){
+  const bits = [];
+  if(day.summary) bits.push(`<div><div class="ro-label">What happened</div><div class="ro-text">${escapeHtml(day.summary)}</div></div>`);
+  if(day.coach_note) bits.push(`<div><div class="ro-label">Kestrel AI's note</div><div class="ro-text">${escapeHtml(day.coach_note)}</div></div>`);
+  if(day.notes) bits.push(`<div><div class="ro-label">Your notes</div><div class="ro-text">${escapeHtml(day.notes)}</div></div>`);
+  const rec = [day.feel != null && `Feel ${day.feel}/10`, day.sleep_hours != null && `${day.sleep_hours} h sleep`, day.strength && 'Strength done'].filter(Boolean);
+  if(rec.length) bits.push(`<div><div class="ro-label">Recovery</div><div class="ro-text">${escapeHtml(rec.join(' · '))}</div></div>`);
+  if(!(day.sessions || []).length && (day.split_reps || []).length) bits.push(`<div><div class="ro-label">Splits</div>${roSplits(day.split_reps)}</div>`);
+  return bits.join('');
+}
+async function setRunTagRemote(stravaId, tag){
+  const res = await apiPost('/api/log/tag', { personId: activePersonId, strava_id: stravaId, tag });
+  if(!res || res.error){ alert(res?.error || 'Couldn’t save the tag. Check your connection.'); return false; }
+  fitnessData = null;
+  return true;
+}
+function bindTagUi(){
+  const root = $('tlSessions');
+  root.querySelectorAll('.session-suggest').forEach(box=>{
+    const key = box.dataset.main + ':' + box.dataset.tag;
+    if(dismissedSuggest.has(key)){ box.remove(); return; }
+    box.querySelector('[data-act="apply"]').addEventListener('click', async ()=>{ if(await setRunTagRemote(box.dataset.main, box.dataset.tag)) renderTrainingLog(); });
+    box.querySelector('[data-act="dismiss"]').addEventListener('click', ()=>{ dismissedSuggest.add(key); box.remove(); });
+  });
+  root.querySelectorAll('.tag-pick').forEach(pick=>{
+    pick.querySelectorAll('[data-tag]').forEach(b=> b.addEventListener('click', async ()=>{ if(await setRunTagRemote(pick.dataset.main, b.dataset.tag)) renderTrainingLog(); }));
+    const form = pick.querySelector('.tag-new');
+    pick.querySelector('[data-newtag]').addEventListener('click', ()=>{ form.classList.toggle('show'); form.querySelector('input').focus(); });
+    form.querySelector('[data-addtag]').addEventListener('click', async ()=>{
+      const name = form.querySelector('input').value.trim(); if(!name) return;
+      const res = await apiPost('/api/log/custom-tag', { personId: activePersonId, name, base: form.querySelector('select').value });
+      if(!res || res.error){ alert(res?.error || 'Couldn’t add the tag.'); return; }
+      runTags.custom = res.custom;
+      if(await setRunTagRemote(pick.dataset.main, name)) renderTrainingLog();
+    });
+  });
+}
+
 async function renderTrainingDay(){
   const card = $('tlDayCard');
   $('tlEmpty').style.display = tlSelected ? 'none' : '';
   if(!tlSelected){ card.style.display = 'none'; return; }
   card.style.display = '';
   const day = tlDays[tlSelected] || { types: [], sessions: [], split_reps: [] };
+  // A new day opens as a read-only view; an empty one goes straight to editing.
+  if(tlEditDate !== tlSelected){ tlEditDate = tlSelected; tlEditing = !((day.sessions || []).length || day.miles || (day.split_reps || []).length || day.summary || day.notes); }
+  card.classList.toggle('editing', tlEditing); card.classList.toggle('viewing', !tlEditing);
   const d = new Date(tlSelected + 'T12:00:00');
   $('tlDayEyebrow').textContent = d.toLocaleDateString(undefined, { weekday:'long' });
   $('tlDayTitle').textContent = d.toLocaleDateString(undefined, { month:'long', day:'numeric', year:'numeric' });
@@ -5677,14 +5863,16 @@ async function renderTrainingDay(){
     const reps = 0;
     return `<div class="session ${open ? 'open' : ''}" data-key="${escapeHtml(sx.key)}">
       <button type="button" class="session-btn" aria-expanded="${open}">
-        <span class="session-head"><span class="list-title">${escapeHtml(sx.title && !/^(morning|afternoon|evening|lunch|night)? ?run$|^new york running$/i.test(sx.title) ? sx.title : SESSION_LABEL[sx.category] || 'Run')}</span><span class="session-reps">${reps ? `${reps} splits` : ''}</span><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></span>
+        <span class="session-head"><span class="list-title">${escapeHtml(sx.title && !/^(morning|afternoon|evening|lunch|night)? ?run$|^new york running$/i.test(sx.title) ? sx.title : SESSION_LABEL[sx.category] || 'Run')}</span><span class="tag-chip ${['workout','race'].includes(sx.category) ? 'hard' : ''}">${escapeHtml(sx.tag_label || SESSION_LABEL[sx.category] || 'Run')}</span><span class="session-reps">${reps ? `${reps} splits` : ''}</span><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></span>
         <span class="session-meta num">${escapeHtml(meta)}</span>
       </button>
+      ${sx.suggest && sx.main_id ? `<div class="session-suggest" data-main="${escapeHtml(sx.main_id)}" data-tag="${escapeHtml(sx.suggest.tag)}"><span>${escapeHtml(sx.suggest.why)}</span><button type="button" class="sm-btn" data-act="apply">Tag as ${escapeHtml(tagLabel(sx.suggest.tag))}</button><button type="button" class="ghost sm-btn" data-act="dismiss">Dismiss</button></div>` : ''}
       <div class="session-body">
         ${sessionSummary(sx)}
+        ${tagPickerHtml(sx)}
         ${acts}
         ${sx.report ? `<div class="session-report"><b>Kestrel AI</b>${escapeHtml(sx.report)}</div>` : ''}
-        <div class="session-splits"></div>
+        <div class="session-splits">${sx.manual ? roSplits(sx.splits) : ''}</div>
       </div>
     </div>`;
   }).join('') || '<div class="hint">No run logged. Add miles above, or it fills in from your watch.</div>';
@@ -5703,6 +5891,9 @@ async function renderTrainingDay(){
     tlOpenSession = tlOpenSession === key ? '' : key;
     renderTrainingDay();
   }));
+
+  bindTagUi();
+  $('tlReadout').innerHTML = readoutHtml(day);
 
   // What the team schedule had on this day, linked back to the calendar.
   const evs = events[tlSelected] || [];
@@ -5739,6 +5930,28 @@ async function renderTrainingDay(){
   }
 }
 
+// "245" -> "2:45", "1245" -> "12:45"; anything with a colon, point or 1-2 digits is left alone (72 = 72 s).
+function expandClock(v){
+  const t = String(v || '').trim();
+  if(!/^\d{3,4}$/.test(t)) return t;
+  return `${parseInt(t.slice(0, -2), 10)}:${t.slice(-2)}`;
+}
+// Paste "1:12 1:11 1:10.5" (spaces, commas or lines) and the reps fill in order, adding rows as needed.
+function fillSplitsFromText(text){
+  const times = String(text || '').split(/[\s,;]+/).map(expandClock).filter(Boolean);
+  if(!times.length) return 0;
+  const m = splitRows.length ? splitRows[splitRows.length - 1].m : (parseInt($('splitAddM').value, 10) || 400);
+  let used = 0;
+  times.forEach((t, i)=>{
+    const sec = parseClock(t);
+    if(!sec) return;
+    if(!splitRows[i]) splitRows.push({ m, s: 0, rest: '' });
+    splitRows[i].s = sec; splitRows[i].sText = t; used++;
+  });
+  if(used){ tlDirty = true; tlSplitDirty = true; setSplitsOpen(true); renderSplitBuilder(); }
+  return used;
+}
+
 function addSplitSet(n, m){
   setSplitsOpen(true);
   tlSplitDirty = true;
@@ -5746,7 +5959,7 @@ function addSplitSet(n, m){
   tlDirty = true;
   renderSplitBuilder();
   const first = $('splitBuilder').querySelector(`.split-row[data-i="${splitRows.length - n}"] input[data-k="s"]`);
-  if(first) first.focus();
+  if(first){ first.focus(); first.select(); }
 }
 
 async function saveTrainingDay(){
@@ -5775,8 +5988,8 @@ async function saveTrainingDay(){
   if(!res || res.error || (res2 && res2.error)){ alert(res?.error || res2?.error || 'Couldn’t save. Check your connection.'); return; }
   tlDirty = false; tlSplitDirty = false;
   fitnessData = null; library = null;
-  $('tlSaved').style.display = '';
-  setTimeout(()=>{ renderTrainingLog(); }, 400);
+  tlEditing = false;
+  renderTrainingLog();
 }
 
 // --- Workouts: pick a kind, then customize ------------------------------------
@@ -6345,6 +6558,7 @@ window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>
+<script src="/record.js"></script>
 <script type="module" src="/kestrel.js"></script>
 </body>
 </html>

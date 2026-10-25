@@ -19,6 +19,66 @@ export const DAY_STATUSES = ['as_planned', 'harder', 'easier', 'missed', 'adjust
 // Strava workout category -> day type.
 const CATEGORY_TYPE = { easy: 'easy', recovery: 'recovery', long: 'long', workout: 'intervals', race: 'race', shakeout: 'shakeout', crosstrain: 'crosstrain' };
 
+// Tags a run can carry. `base` is the category the rest of Kestrel reasons with: hard-day logic, fitness and plan matching.
+export const BUILTIN_TAGS = [
+  { id: 'easy', label: 'Easy', base: 'easy' }, { id: 'recovery', label: 'Recovery', base: 'recovery' },
+  { id: 'long', label: 'Long run', base: 'long' }, { id: 'shakeout', label: 'Shakeout', base: 'shakeout' },
+  { id: 'tempo', label: 'Tempo', base: 'workout' }, { id: 'threshold', label: 'Threshold', base: 'workout' },
+  { id: 'intervals', label: 'Intervals', base: 'workout' }, { id: 'fartlek', label: 'Fartlek', base: 'workout' },
+  { id: 'hills', label: 'Hills', base: 'workout' }, { id: 'workout', label: 'Workout', base: 'workout' },
+  { id: 'time_trial', label: 'Time trial', base: 'race' }, { id: 'race', label: 'Race', base: 'race' },
+  { id: 'crosstrain', label: 'Cross-training', base: 'crosstrain' },
+];
+export const TAG_BASES = ['easy', 'recovery', 'long', 'workout', 'race'];
+const TAG_LABEL = Object.fromEntries(BUILTIN_TAGS.map((t) => [t.id, t.label]));
+
+export async function customTags(db, personId) {
+  return (await db.prepare('SELECT name, base FROM run_tags WHERE person_id = ? ORDER BY name').bind(personId).all()).results;
+}
+
+export async function addCustomTag(db, personId, name, base) {
+  name = clip(name, 24);
+  if (!name) throw new LogError('Name the tag');
+  if (!TAG_BASES.includes(base)) throw new LogError(`base must be one of ${TAG_BASES.join(', ')}`);
+  if (BUILTIN_TAGS.some((t) => t.id === name.toLowerCase() || t.label.toLowerCase() === name.toLowerCase())) throw new LogError('That tag already exists');
+  await db.prepare('INSERT INTO run_tags (person_id, name, base) VALUES (?, ?, ?) ON CONFLICT(person_id, name) DO UPDATE SET base = excluded.base').bind(personId, name, base).run();
+  return customTags(db, personId);
+}
+
+export async function removeCustomTag(db, personId, name) {
+  await db.prepare('DELETE FROM run_tags WHERE person_id = ? AND name = ?').bind(personId, clip(name, 24)).run();
+  return customTags(db, personId);
+}
+
+// Tag one run ('' clears it back to Kestrel's own guess). The tag's base becomes the run's category.
+export async function setRunTag(db, personId, stravaId, tag) {
+  tag = clip(tag, 24);
+  const run = await db.prepare('SELECT category, tag, auto_category FROM workouts WHERE person_id = ? AND strava_id = ?').bind(personId, stravaId).first();
+  if (!run) throw new LogError('Unknown run');
+  if (!tag) {
+    await db.prepare("UPDATE workouts SET tag = '', category = COALESCE(NULLIF(auto_category, ''), category), auto_category = '' WHERE person_id = ? AND strava_id = ?").bind(personId, stravaId).run();
+  } else {
+    const builtin = BUILTIN_TAGS.find((t) => t.id === tag);
+    const custom = builtin ? null : await db.prepare('SELECT base FROM run_tags WHERE person_id = ? AND name = ?').bind(personId, tag).first();
+    const base = builtin?.base || custom?.base;
+    if (!base) throw new LogError('Unknown tag');
+    await db.prepare("UPDATE workouts SET tag = ?, auto_category = CASE WHEN COALESCE(tag, '') = '' THEN category ELSE auto_category END, category = ? WHERE person_id = ? AND strava_id = ?").bind(tag, base, personId, stravaId).run();
+  }
+  await staleFitness(db, personId);
+}
+
+// What Kestrel thinks the run was, when that differs from its label. The runner's own tag is never second-guessed.
+function suggestTag(main, meet, laps) {
+  if (main.tag || main.category === 'crosstrain') return null;
+  const miles = main.distance_mi || 0;
+  const hrE = main.hr_effort ?? main.effort ?? 0;
+  const reps = laps.length >= 3;
+  if (main.category !== 'race' && meet && !reps && miles >= 0.9 && hrE >= 7) return { tag: 'race', why: `You had "${meet.title}" on the calendar and this was one hard, continuous effort.` };
+  if (main.category === 'workout' && !reps && miles >= 0.9 && miles <= 26.3 && hrE >= 8) return { tag: 'time_trial', why: 'One steady, near-max effort with no rep breaks. That reads as a time trial or race, not a workout.' };
+  if (main.category === 'race' && reps && !meet) return { tag: 'workout', why: 'It has rep breaks and no meet that day, so it looks like a workout.' };
+  return null;
+}
+
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const clip = (v, max) => String(v ?? '').trim().slice(0, max);
 
@@ -135,7 +195,7 @@ function activityDetail(w, events = [], role = '') {
   const heat = cond?.heat || 0;
   const hill = cond?.hill || 0;
   return {
-    id: w.strava_id, name: w.name, category: w.category, role, start: w.start_local || '', end: endMin(w) === null ? '' : hhmm(endMin(w)),
+    id: w.strava_id, name: w.name, category: w.category, tag: w.tag || '', role, start: w.start_local || '', end: endMin(w) === null ? '' : hhmm(endMin(w)),
     miles: w.distance_mi, minutes: w.moving_sec ? Math.round(w.moving_sec / 60) : null,
     moving_sec: w.moving_sec ?? null, elapsed_sec: w.elapsed_sec ?? null,
     pace: pace ? fmtSec(Math.round(pace)) : null,
@@ -179,6 +239,14 @@ export function sessionsOf(rs, events = []) {
       main_id: main.strava_id,
       start: items[0].start_local || '',
       category: main.category,
+      tag: main.tag || '',
+      tag_label: main.tag ? (TAG_LABEL[main.tag] || main.tag) : '',
+      suggest: (() => {
+        const meet = events.find((e) => e.date === main.date && e.type === 'meet');
+        let laps = [];
+        try { laps = JSON.parse(main.laps || '[]'); } catch { /* ignore */ }
+        return suggestTag(main, meet, Array.isArray(laps) ? laps : []);
+      })(),
       title: main.name || '',
       miles: round1(miles),
       minutes: Math.round(sec / 60),
@@ -235,7 +303,7 @@ export async function getDays(db, personId, from, to) {
   const [days, runs, events] = await Promise.all([
     db.prepare('SELECT * FROM training_days WHERE person_id = ? AND date >= ? AND date <= ?').bind(personId, from, to).all(),
     db.prepare(
-      `SELECT strava_id, date, name, category, distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, effort, hr_effort, load, library_id, summary,
+      `SELECT strava_id, date, name, category, tag, distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, effort, hr_effort, load, library_id, summary,
               start_local, laps, planned_type, planned_miles, surface, course, course_id, gps_vc, gps_course, temp_f, dew_point_f, metrics
        FROM workouts WHERE person_id = ? AND date >= ? AND date <= ? ORDER BY start_local, created_at`
     ).bind(personId, from, to).all(),
@@ -258,7 +326,7 @@ export async function getDays(db, personId, from, to) {
     const running = rs.filter((w) => w.category !== 'crosstrain');
     const stravaMiles = running.reduce((s, w) => s + (w.distance_mi || 0), 0);
     const types = new Set(parseTypes(e?.types));
-    rs.forEach((w) => types.add(CATEGORY_TYPE[w.category] || 'easy'));
+    rs.forEach((w) => types.add(DAY_TYPES.includes(w.tag) ? w.tag : (CATEGORY_TYPE[w.category] || 'easy')));
     const maxEffort = rs.reduce((m, w) => Math.max(m, w.effort || 0), 0);
     // Plan matching goes by heart rate alone: an easy run in the heat is still easy.
     const maxHrEffort = rs.reduce((m, w) => Math.max(m, w.hr_effort ?? w.effort ?? 0), 0);
@@ -408,7 +476,7 @@ export function compactDays(days) {
 
 export async function getLog(db, personId, from, to) {
   const days = await getDays(db, personId, from, to);
-  return { from, to, weeks: weeklyTotals(days), days };
+  return { from, to, weeks: weeklyTotals(days), days, tags: { builtin: BUILTIN_TAGS, custom: await customTags(db, personId) } };
 }
 
 // Every time this person ran a given library workout, oldest first, so Claude

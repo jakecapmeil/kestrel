@@ -11,7 +11,7 @@ import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
-import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
+import { getLog, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
@@ -1100,6 +1100,11 @@ async function route(request, env, url) {
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
     return json({ ok: true, reps });
   }
+  if (path === '/api/log/tag') {
+    await setRunTag(db, me.id, str(b.strava_id, 80), b.tag);
+    return json({ ok: true });
+  }
+  if (path === '/api/log/custom-tag') return json({ custom: b.remove ? await removeCustomTag(db, me.id, b.name) : await addCustomTag(db, me.id, b.name, b.base) });
   if (path === '/api/log/track') {
     const day = await setDayTrack(db, me.id, str(b.date, 10), b.track === true);
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();

@@ -35,7 +35,15 @@ function html(strings, ...vals) {
   });
   return raw(out);
 }
-const render = (r) => { $lab.innerHTML = r.s; window.scrollTo(0, 0); };
+let lastHash = null;
+// A new page eases in and starts at the top; re-rendering the same page (typing in search, say) stays put.
+const render = (r) => {
+  const fresh = lastHash !== location.hash;
+  lastHash = location.hash;
+  $lab.classList.toggle('lab-enter', fresh);
+  $lab.innerHTML = r.s;
+  if (fresh) window.scrollTo(0, 0);
+};
 const title = (text) => html`<h1 class="k-title">${text}</h1>`;
 const fmtSize = (n) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : n > 1e3 ? `${Math.round(n / 1e3)} KB` : `${n} B`);
 function fmtTime(sec) {

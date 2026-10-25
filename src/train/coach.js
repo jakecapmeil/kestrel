@@ -434,7 +434,8 @@ export async function logWorkouts(db, person, list) {
          surface, raw_distance_mi, raw_elev_ft, temp_f, dew_point_f, weather_checked, hr_effort, metrics, course, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(person_id, strava_id) DO UPDATE SET
-         date=excluded.date, name=COALESCE(NULLIF(excluded.name, ''), name), sport=excluded.sport, category=excluded.category,
+         date=excluded.date, name=COALESCE(NULLIF(excluded.name, ''), name), sport=excluded.sport,
+         category=CASE WHEN COALESCE(tag, '') <> '' THEN category ELSE excluded.category END, auto_category=CASE WHEN COALESCE(tag, '') <> '' THEN excluded.category ELSE '' END,
          distance_mi=COALESCE(excluded.distance_mi, distance_mi), moving_sec=COALESCE(excluded.moving_sec, moving_sec),
          elapsed_sec=COALESCE(excluded.elapsed_sec, elapsed_sec),
          avg_hr=COALESCE(excluded.avg_hr, avg_hr), max_hr=COALESCE(excluded.max_hr, max_hr),
