@@ -242,11 +242,10 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   const tracked = trackedOf(parseSettings(person?.settings));
   // What a course costs: Van Cortlandt has its own measured factor, every other course is a cross-country course.
   const factorOf = (id) => courses.get(id)?.factor ?? (id === 'vc' ? VC_FACTOR : XC_FACTOR);
-  // Van Cortlandt runs on the athlete's picked Van Cortlandt model (a slot per event: 5K or 2.5 mi); every other
-  // course keeps its catalogue factor until it has a model of its own (add it to COURSES in models.js).
-  const vcEvent = (m) => (m < 4500 ? '2.5mi' : '5K');
-  const toFlatOn = (id, sec, m) => (id === 'vc' ? RM.toFlat('vc', sec, vcEvent(m)) : sec / factorOf(id));
-  const toCourseOn = (id, flatSec, m) => (id === 'vc' ? RM.toCourse('vc', flatSec, vcEvent(m)) : flatSec * factorOf(id));
+  // A course runs on the model the athlete picked for that course or distance (slots `course:<id>[:<metres>]`),
+  // else on its catalogue factor.
+  const toFlatOn = (id, sec, m) => RM.toFlat(id, sec, m, factorOf(id));
+  const toCourseOn = (id, flatSec, m) => RM.toCourse(id, flatSec, m, factorOf(id));
   const shortPrs = []; // PRs HawksPredict-Short can use: { ev, sec, age }
 
   // 1. Max efforts.

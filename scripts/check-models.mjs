@@ -59,21 +59,30 @@ REF.marathon.forEach((c, i) => same(`marathon ${i}`, marathonPredict(byId['hawks
     if (Math.abs(toCourse(w, sec) / sec - VC_FACTOR) > 1e-12) { fails++; console.log('VC default is not x1.055', sec); }
     if (Math.abs(toFlat(w, toCourse(w, sec, 'm'), 'm') / sec - 1) > 1e-12) { fails++; console.log('course round trip', sec); }
   }
-  compared++;
-  if (Math.abs(modelSet().courseFactor('vc', 1080) - VC_FACTOR) > 1e-12) { fails++; console.log('modelSet course factor'); }
+  // A course with no model keeps its catalogue factor; the model-based factor is only used once one is picked.
+  compared += 2;
+  if (Math.abs(modelSet().courseFactor('vc', 1080, 5000, VC_FACTOR) - VC_FACTOR) > 1e-12) { fails++; console.log('no-model course factor'); }
+  if (Math.abs(modelSet().toFlat('franklin-park', 1000, 5000, 1.025) - 1000 / 1.025) > 1e-9) { fails++; console.log('no-model toFlat'); }
 }
 
 // Slots: a per-event pick overrides its purpose for that event only, and nothing else moves.
 {
   const results = [{ m: 1600, sec: 300, surf: 'track' }, { m: 3200, sec: 650, surf: 'track' }];
   const plain = modelSet({}, 'm');
-  const mixed = modelSet({ $slots: { 'race:5K': byId.vdot, 'vc:2.5mi': { ...byId['vc-flat-factor'], weights: { a: 0.1, b: 1, c: 0 } } } }, 'm');
+  const line = (a) => ({ ...byId['vc-flat-factor'], weights: { a, b: 1, c: 0 } });
+  const mixed = modelSet({ $slots: { 'race:5K': byId.vdot, 'course:vc': line(0.1), 'course:vc:4023': line(0.2), 'course:franklin-park': line(0.3) } }, 'm');
   const at = (set, m, key) => set.raceAny(results, { m, surf: 'track' }, key);
-  compared += 4;
+  const ratio = (set, id, m) => set.toCourse(id, 1000, m, 1.025) / 1000;
+  compared += 8;
   if (at(plain, 5000, '5K').sec === at(mixed, 5000, '5K').sec) { fails++; console.log('race:5K override had no effect'); }
   if (at(plain, 800, '800').sec !== at(mixed, 800, '800').sec) { fails++; console.log('race:5K override moved the 800'); }
-  if (Math.abs(mixed.toCourse('vc', 1000, '2.5mi') / 1000 - Math.exp(0.1)) > 1e-12) { fails++; console.log('vc:2.5mi override not used'); }
-  if (Math.abs(mixed.toCourse('vc', 1000, '5K') / 1000 - VC_FACTOR) > 1e-12) { fails++; console.log('vc:2.5mi override leaked into vc 5K'); }
+  const want = (id, m, r) => { if (Math.abs(ratio(mixed, id, m) - r) > 1e-9) { fails++; console.log('course slot', id, m, ratio(mixed, id, m), r); } };
+  want('vc', 5000, Math.exp(0.1));            // the course slot
+  want('vc', 4023, Math.exp(0.2));            // a distance slot beats the course slot
+  want('vc', 4010, Math.exp(0.2));            // a GPS distance within 3% still finds it
+  want('franklin-park', 5000, Math.exp(0.3)); // another course, its own slot
+  want('sunken-meadow', 5000, 1.025);         // an unpicked course keeps its catalogue factor
+  if (Math.abs(ratio(plain, 'vc', 5000) - 1.025) > 1e-12) { fails++; console.log('unpicked vc moved'); }
 }
 
 for (const m of BUILTIN) {
@@ -92,6 +101,7 @@ const bad = [
   { ...byId['vc-flat-factor'], weights: { a: 0, b: 3, c: 0 } },
   { ...byId['vc-flat-factor'], weights: { a: 1.5, b: 1, c: 0 } },
   { ...byId['vc-flat-factor'], task: 'race' },
+  { ...byId['vc-flat-factor'], course: 'Van Cortlandt!' },
 ];
 for (const b of bad) {
   try { validateModel(b); fails++; console.log('bad model accepted', b.kind); } catch (e) { if (!(e instanceof ModelError)) { fails++; console.log('wrong error', e); } }

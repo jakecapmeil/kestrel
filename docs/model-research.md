@@ -8,7 +8,7 @@ Researched 2026-10-25. The rule for this list: a Kestrel model is data, never co
 |---|---|---|---|
 | **Daniels VDOT** (`kestrel/vdot`, kind `vdot`) | race | Daniels & Gilbert (1979), *Oxygen Power*. The two curves (oxygen cost of running, %VO2max held for t minutes) were already in `src/train/fitness.js`; the model turns them into a predictor from the nearest PR. | Checked against Daniels' published table (VDOT 50: 5K 19:57 gives 10K 41:21, half 1:31:35, marathon 3:10:49) to within 0.03%. The 80% range (log-SD 0.035) is a default, not fitted. |
 | **Tanda marathon** (`kestrel/tanda-2011`, kind `tanda`) | marathon | Tanda (2011), *Prediction of marathon performance time on the basis of training indices*, J. Hum. Sport Exerc. 6(3):511-520. Pace (s/km) = 17.1 + 140.0 e^(-0.0053 K) + 0.55 P, K = mean weekly km and P = mean training pace over 8 weeks. Fitted on 22 runners, 46 marathons, 2:47-3:36, standard error about 4 min. Tanda (2022) re-tested it on Strava data: RMSE 5.4 min in 2:47-3:36. | Coefficients taken from the paper's abstract and its repository record, not the full PDF. The model answers nothing outside 2:47-3:36 and needs 15 running days. |
-| **Van Cortlandt flat factor** (`kestrel/vc-flat-factor`, kind `course-transfer`) | `vc` course | The coaches' rule of thumb already in `src/train/conditions.js`: VC runs 5.5% slower than flat. | Not fitted. It reproduces today's numbers exactly (`npm run check` asserts x1.055) and is the baseline for a real VC model. |
+| **Van Cortlandt flat factor** (`kestrel/vc-flat-factor`, kind `course-transfer`) | course | The coaches' rule of thumb already in `src/train/conditions.js`: VC runs 5.5% slower than flat. | Not fitted. It reproduces today's numbers exactly (`npm run check` asserts x1.055) and is the baseline for a real VC model. |
 
 ## Worth adding next
 
@@ -48,12 +48,12 @@ A **purpose** is a place in the app where a model does a job (`PURPOSES` in `src
 | `race` | `lite-trees`, `riegel`, `vdot` | Fitness States, race predictions (800 m and up) |
 | `short` | `short-pairs`, `riegel` | 100-1000 m and steeplechase |
 | `marathon` | `marathon-trees`, `tanda` | Marathon estimate from training |
-| `vc` (a course) | `course-transfer` | Van Cortlandt: crediting VC races back to flat, and the "5K / 2.5 mi at Van Cortlandt" predictions |
+| `course` | `course-transfer` | Any course in the catalogue, per course or per distance: crediting its races back to flat, and the "5K at Van Cortlandt" style predictions |
 | `coach` | not a model file | Provider chosen in the Lab (free Gemini, your own key, local) |
 
-Any purpose can be overridden per event with a **slot** (`race:5K`, `short:600`, `vc:2.5mi`; `SLOT_EVENTS` in `src/models.js`). Resolution order for one prediction: the event's slot, else the purpose's pick, else the built-in default. So one athlete can run the 5K on VDOT, the 1600 on Riegel, the rest on HawksPredict-Lite, and Van Cortlandt's 2.5 mi on a model fitted just for that distance. The Purposes page edits all of it and shows the whole setup as JSON that can be copied or applied back.
+Any purpose can be overridden per event with a **slot** (`race:5K`, `short:600`, `course:vc:4023`; `SLOT_EVENTS` in `src/models.js`). Resolution order for one prediction: the event's slot, else the purpose's pick, else the built-in default. So one athlete can run the 5K on VDOT, the 1600 on Riegel, the rest on HawksPredict-Lite, and Van Cortlandt's 2.5 mi on a model fitted just for that distance. Courses resolve distance slot (`course:vc:4023`), then course slot (`course:vc`), then the `course` pick, then the course's catalogue factor, so a course with no model behaves exactly as before. The Purposes page edits all of it and shows the whole setup as JSON that can be copied or applied back.
 
-To add a course, add it to `COURSES`, teach `courseOf` to recognise it, and ship a default `course-transfer` model. Picking, validation, the Workbench note, the API and the Purposes page all follow from the registry. Course models are separate from `race`, so a Van Cortlandt model can never change a track prediction.
+Any course in the catalogue (built in or added by people) can be given a model with no code change: fit one for it, upload it, and pick it on the Purposes page. Course models are separate from `race`, so a course model can never change a track prediction.
 
 Not built: more than one coaching variant. Coaching is a provider plus a prompt that the server checks every answer against (`applyCoachSaves`); making the prompt swappable is the next step, but it needs a design for who is allowed to publish prompts.
 

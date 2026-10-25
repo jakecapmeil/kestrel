@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const $lab = $('lab');
 const L = { cfg: null, sb: null, token: null, me: null, task: '', q: '' };
 // Purposes (the jobs a model can have in the app) come from /api/config; these are the short names.
-const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', vc: 'Van Cortlandt' };
+const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', course: 'Courses' };
 const KIND_LABEL = {
   'lite-trees': 'Boosted trees (HawksPredict-Lite format)',
   'short-pairs': 'Event-pair lines (HawksPredict-Short format)',
@@ -203,7 +203,7 @@ async function viewModel(id, tab = 'card') {
   if (!MODEL_TABS.some(([k]) => k === tab)) tab = 'card';
   const m = r.model;
   const me = await signedIn();
-  const isCourse = !!(L.cfg.courses || {})[m.task];
+  const isCourse = m.task === 'course';
   const curl = isCourse
     ? `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","flat_sec":1080,"sex":"m"}'`
     : m.task === 'marathon'
@@ -226,7 +226,7 @@ async function viewModel(id, tab = 'card') {
           <div class="k-row"><button class="k-btn primary">Add version</button>${m.source_url ? html`<button type="button" class="k-btn" id="verPull">Update from source</button>` : ''}</div></form>` : ''}</section>`;
   } else if (tab === 'try') {
     body = isCourse
-      ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter what a runner would run on a flat course in good weather. The model says what that is worth on ${L.cfg.courses[m.task].label}.</p>
+      ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter what a runner would run on a flat course in good weather. The model says what that is worth on ${m.course ? 'the course it was fitted for' : 'a course'}.</p>
           <form id="courseForm">
             <label class="k-label" for="flatTime">Flat time (a 5K, say)</label><input class="k-input" id="flatTime" placeholder="18:00" inputmode="numeric" required>
             <label class="k-label" for="courseSex">Sex (optional)</label>
@@ -338,7 +338,7 @@ async function viewModel(id, tab = 'card') {
       attempt(async () => {
         const out = await api('/api/lab/try', { method: 'POST', body: JSON.stringify({ model: m.id, flat_sec: flat, sex: $('courseSex').value }) });
         const p = out.prediction.sec;
-        $('tryOut').innerHTML = html`<div class="lab-result">${fmtTime(p)}</div><p class="k-small">${fmtTime(flat)} flat is worth ${fmtTime(p)} on ${L.cfg.courses[m.task].label} (${((p / flat - 1) * 100).toFixed(1)}% slower).</p>`.s;
+        $('tryOut').innerHTML = html`<div class="lab-result">${fmtTime(p)}</div><p class="k-small">${fmtTime(flat)} flat is worth ${fmtTime(p)} on the course (${((p / flat - 1) * 100).toFixed(1)}% slower).</p>`.s;
       }, e.submitter);
     };
   }
@@ -738,9 +738,10 @@ async function viewProviders() {
 // A purpose has one pick; each of its events can override that pick (race:5K, short:600, vc:2.5mi).
 async function viewPurposes() {
   const me = await signedIn();
-  const [list, mine] = await Promise.all([
+  const [list, mine, cat] = await Promise.all([
     attempt(() => api('/api/lab/models')),
     me ? attempt(() => api('/api/me')) : null,
+    me ? attempt(() => api('/api/courses')) : null,
   ]);
   if (!list) return;
   const purposes = L.cfg.purposes || {};
@@ -750,7 +751,26 @@ async function viewPurposes() {
   for (const [key, p] of Object.entries(purposes)) (groups[p.group] ||= []).push([key, p]);
   const byId = Object.fromEntries(list.models.map((m) => [m.id, m]));
   const opt = (m, sel) => html`<option value="${m.id}" ${m.id === sel ? raw('selected') : ''}>${m.name} ${m.version}</option>`;
+  // Courses: the ones this athlete follows (plus any with a pick already), each with a model for the course and one per distance.
+  const courseSection = (p) => {
+    const options = list.models.filter((m) => m.task === 'course');
+    const names = Object.fromEntries((cat?.courses || []).map((c) => [c.id, c.name]));
+    const rows = new Map();
+    for (const t of cat?.tracked || []) { if (!rows.has(t.course)) rows.set(t.course, new Set()); rows.get(t.course).add(t.m); }
+    for (const k of Object.keys(eventPicks)) { const m = /^course:([^:]+)(?::(\d+))?$/.exec(k); if (m) { if (!rows.has(m[1])) rows.set(m[1], new Set()); if (m[2]) rows.get(m[1]).add(Number(m[2])); } }
+    const pick = (slot, none) => html`<select class="k-input" data-slot="${slot}"><option value="">${none}</option>${options.map((m) => opt(m, eventPicks[slot]))}</select>`;
+    const dist = (m) => (m % 1609 < 40 || m % 1609 > 1569 ? `${(Math.round(m / 160.9) / 10)} mi` : m % 1000 === 0 ? `${m / 1000}K` : `${m} m`);
+    return html`<div class="lab-purpose"><div><h3>${p.label}</h3>
+      <p class="k-small">A course with no model uses its catalogue factor (Van Cortlandt runs 5.5% slower than flat, other cross-country courses 2.5%). Pick a model to replace that for one course, or for one distance on it; a distance beats its course, and a course beats the setting below. ${options.length} course model${options.length === 1 ? '' : 's'}. <a href="#/models?task=course">Browse</a></p></div>
+      ${me ? html`<div class="k-row"><label class="k-small">All courses <select class="k-input" data-pick="course"><option value="">Catalogue factors (default)</option>${options.map((m) => opt(m, mine?.models?.course))}</select></label></div>
+      <div class="lab-slot-grid lab-course-grid">${[...rows].map(([id, ms]) => html`<fieldset><legend>${names[id] || id}</legend>
+        <label>Whole course${pick(`course:${id}`, 'Same as all courses')}</label>
+        ${[...ms].sort((a, b) => a - b).map((m) => html`<label>${dist(m)}${pick(`course:${id}:${m}`, 'Same as the course')}</label>`)}</fieldset>`)}</div>
+      ${rows.size ? '' : html`<p class="k-small">Follow a course in Kestrel (Records, then Courses) and it shows up here.</p>`}` : html`<p class="k-small">Sign in to Kestrel to choose.</p>`}
+      </div>`;
+  };
   const row = ([key, p]) => {
+    if (key === 'course') return courseSection(p);
     if (p.model === false) {
       return html`<div class="lab-purpose"><div><h3>${p.label}</h3><p class="k-small">Powered by a provider, not a weights file: the free Kestrel model, your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer. The plan rules and safety checks are the same whatever you choose.</p></div><a class="k-btn small" href="#/providers">Choose a provider</a></div>`;
     }

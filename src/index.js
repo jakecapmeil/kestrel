@@ -9,7 +9,7 @@
 
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
-import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, COURSES, SLOT_EVENTS, SLOTS, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
+import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
@@ -105,6 +105,8 @@ async function updateMe(db, me, b) {
     const models = { ...(settings.models || {}) };
     for (const [task, id] of Object.entries(b.models || {})) {
       if (!TASKS[task]) throw new BadRequest(`Unknown task ${task}.`);
+      // `course` has no default model: an empty pick puts every course back on its catalogue factor.
+      if (task === 'course' && !id) { delete models.course; continue; }
       const m = await findModel(db, me.id, String(id));
       if (!m) throw new BadRequest('That model does not exist or is private.');
       if (m.task !== task) throw new BadRequest(`${m.name} is a ${m.task} model, not ${task}.`);
@@ -113,11 +115,13 @@ async function updateMe(db, me, b) {
     // Per-event picks, keyed `purpose:event` (see SLOT_EVENTS). An empty id clears the slot so it follows its purpose again.
     const eventModels = { ...(settings.event_models || {}) };
     for (const [slot, id] of Object.entries(b.event_models || {})) {
-      if (!SLOTS[slot]) throw new BadRequest(`Unknown slot ${slot}. Slots are purpose:event, such as race:5K.`);
+      const purpose = slotPurpose(slot);
+      if (!purpose) throw new BadRequest(`Unknown slot ${slot}. Slots are purpose:event (race:5K) or course:<id>[:<metres>] (course:vc:5000).`);
       if (!id) { delete eventModels[slot]; continue; }
+      if (purpose === 'course' && !(await getCourse(db, courseSlot(slot).id))) throw new BadRequest(`No course called ${courseSlot(slot).id}.`);
       const m = await findModel(db, me.id, String(id));
       if (!m) throw new BadRequest('That model does not exist or is private.');
-      if (m.task !== SLOTS[slot]) throw new BadRequest(`${m.name} is a ${m.task} model, not ${SLOTS[slot]}.`);
+      if (m.task !== purpose) throw new BadRequest(`${m.name} is a ${m.task} model, not ${purpose}.`);
       eventModels[slot] = m.id;
     }
     set('settings', JSON.stringify({ ...settings, models, event_models: eventModels }));
@@ -409,7 +413,7 @@ async function planView(db, me, level) {
 // ------------------------------------------------------------------ Kestrel Lab
 
 const pub = (m) => ({
-  id: m.id, slug: m.slug || m.id, name: m.name, version: m.version || '', kind: m.kind, task: m.task, license: m.license || '',
+  id: m.id, slug: m.slug || m.id, name: m.name, version: m.version || '', kind: m.kind, task: m.task, course: m.course || '', license: m.license || '',
   description: m.description || '', trained_on: m.trained_on || '', base_model: m.base_model || '', builtin: !!m.builtin,
   owner: m.owner || 'Kestrel', owner_id: m.builtin ? null : m.owner_id, visibility: m.visibility || 'public',
   size: m.size ?? JSON.stringify(m.weights).length, downloads: m.downloads || 0, created_at: m.created_at || null, source_url: m.source_url || '',
@@ -513,7 +517,7 @@ async function workbench(db, me, ids) {
     const model = await findModel(db, me.id, id);
     if (!model) throw new NotFound('Model not found.');
     if (model.task === 'marathon') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Marathon models read training logs, not PRs, so the Workbench cannot test them here.' }); continue; }
-    if (COURSES[model.task]) { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: `${COURSES[model.task].label} models convert a flat-course time into a course time, so the Workbench cannot score them on PRs. Use one in your account to see it in Fitness.` }); continue; }
+    if (model.task === 'course') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Course models convert a flat-course time into a course time, so the Workbench cannot score them on PRs. Pick one for a course on the Purposes page to see it in Fitness.' }); continue; }
     const rows = [];
     for (const p of have) {
       if (p.ev.task !== model.task) continue;
@@ -553,11 +557,11 @@ async function apiPredict(db, viewerId, b) {
     const r = model.kind === 'tanda' ? tandaPredict(model.weights, days, today) : marathonPredict(model.weights, days, today);
     return { model: model.id, event: 'marathon', prediction: r && { sec: r.sec, lo: r.lo, hi: r.hi }, note: r ? undefined : model.kind === 'tanda' ? 'Needs enough running days in the 8 weeks before today, and a predicted time between 2:47 and 3:36.' : 'Needs at least 15 running days in the 16 weeks before today.' };
   }
-  if (COURSES[model.task]) {
+  if (model.task === 'course') {
     const flat = Number(b.flat_sec);
     if (!(flat > 30 && flat < 100000)) throw new BadRequest('Send flat_sec: the time in seconds the runner would run on a flat course in good weather.');
     const sex = ['f', 'm'].includes(b.sex) ? b.sex : '';
-    return { model: model.id, course: model.task, flat_sec: flat, prediction: { sec: toCourse(model.weights, flat, sex) } };
+    return { model: model.id, course: model.course || null, flat_sec: flat, prediction: { sec: toCourse(model.weights, flat, sex) } };
   }
   const ev = EVENT.get(str(b.event, 20));
   if (!ev) throw new BadRequest('event must be one of: ' + [...EVENT.keys()].join(', '));
@@ -693,7 +697,7 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, courses: COURSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));

@@ -23,11 +23,6 @@ export const PLATFORM_NAME = 'Kestrel Lab';
 
 export const BUILTIN = [LITE, SHORT, MARATHON, RIEGEL, VDOT, TANDA, VC_FLAT].map((m) => ({ ...m, id: `kestrel/${m.slug}`, builtin: true }));
 
-// Courses that can have their own models. Add one here, name it in conditions.js (courseOf), and ship a default
-// `course-transfer` model for it; athletes can then pick a model per course.
-export const COURSES = {
-  vc: { label: 'Van Cortlandt Park', blurb: 'The Bronx cross-country course: Cemetery Hill, the Back Hills, gravel and grass.' },
-};
 
 // PURPOSES are the places in the app where a model does a job. A published model declares exactly one (its `task`),
 // and an athlete picks one model per purpose. `model: false` purposes are not weight files: coaching is powered by
@@ -36,30 +31,36 @@ export const PURPOSES = {
   race: { group: 'Predict', label: 'Race times, 800 m and up (track, cross country, road)', model: true },
   short: { group: 'Predict', label: 'Sprints, 400-1000 m and steeplechase', model: true },
   marathon: { group: 'Predict', label: 'Marathon from your last 16 weeks of training', model: true },
-  ...Object.fromEntries(Object.entries(COURSES).map(([k, c]) => [k, { group: 'Course', label: `${c.label}: what a flat-course time is worth here`, model: true, course: k }])),
+  // Any course in the catalogue (src/train/courses.js, built in or added by people) can have its own model, per course or per distance.
+  course: { group: 'Course', label: 'What a flat-course time is worth on a course (Van Cortlandt, Franklin Park, ...)', model: true },
   coach: { group: 'Coach', label: 'Coaching chat and run reports', model: false },
 };
 // The purposes a weights file can fill.
 export const TASKS = Object.fromEntries(Object.entries(PURPOSES).filter(([, p]) => p.model).map(([k, p]) => [k, p.label]));
+// No default for `course`: a course with no model keeps its catalogue factor (Van Cortlandt 1.055, other cross-country 1.025).
 export const DEFAULTS = {
   race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon',
-  vc: 'kestrel/vc-flat-factor',
 };
 // Slots: a purpose can also be overridden per event, so an athlete can run the 5K on one model and the 1600 on
-// another, or use one model for Van Cortlandt's 5K and the flat factor for its 2.5 mi. A slot is `purpose:event`
-// (`race:5K`, `short:600`, `vc:2.5mi`); the event keys are Fitness States' own. A slot with no pick follows its purpose.
+// another. A slot is `purpose:event` (`race:5K`, `short:600`); the event keys are Fitness States' own. A slot with
+// no pick follows its purpose. Courses are slots too, keyed the way course PRs are: `course:<id>` for a whole course
+// and `course:<id>:<metres>` for one distance there (`course:vc:4023`). Resolution for a course time:
+// distance slot, then course slot, then the `course` purpose pick, then the course's catalogue factor.
 export const SLOT_EVENTS = {
   race: [['400', '400 m'], ['800', '800 m'], ['1600', '1600 m'], ['3200', '3200 m'], ['5K', '5K'], ['10K', '10K'], ['half', 'Half marathon']],
   short: [['100', '100 m'], ['200', '200 m'], ['600', '600 m'], ['1000', '1000 m'], ['2000SC', '2000 m steeple'], ['3000SC', '3000 m steeple']],
-  ...Object.fromEntries(Object.entries(COURSES).map(([k, c]) => [k, [['5K', `5K at ${c.label}`], ['2.5mi', `2.5 mi at ${c.label}`]]])),
 };
 export const slotKey = (purpose, event) => `${purpose}:${event}`;
 // slot -> purpose, for every valid slot
 export const SLOTS = Object.fromEntries(Object.entries(SLOT_EVENTS).flatMap(([p, evs]) => evs.map(([e]) => [slotKey(p, e), p])));
+const COURSE_SLOT = /^course:([a-z0-9][a-z0-9-]{0,60})(?::(\d{3,5}))?$/;
+// The purpose a slot belongs to, or null when it is not a slot. Course slots are checked for a real course in index.js.
+export const slotPurpose = (slot) => SLOTS[slot] || (COURSE_SLOT.test(slot) ? 'course' : null);
+export const courseSlot = (slot) => { const m = COURSE_SLOT.exec(slot); return m ? { id: m[1], m: m[2] ? Number(m[2]) : null } : null; };
 
 export const KINDS = {
   'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'],
-  vdot: ['race'], tanda: ['marathon'], 'course-transfer': Object.keys(COURSES),
+  vdot: ['race'], tanda: ['marathon'], 'course-transfer': ['course'],
 };
 export const LITE_FEATS = LITE.weights.feats;
 export const MARATHON_FEATS = MARATHON.weights.feats;
@@ -462,6 +463,7 @@ export function validateModel(m) {
   if (!KINDS[m.kind]) throw new ModelError(`kind must be one of: ${Object.keys(KINDS).join(', ')}`);
   if (!KINDS[m.kind].includes(m.task)) throw new ModelError(`a ${m.kind} model can only be used for: ${KINDS[m.kind].join(', ')}`);
   for (const k of ['version', 'license']) if (m[k] !== undefined && !text(m[k], 60)) throw new ModelError(`${k}: up to 60 characters`);
+  if (m.course !== undefined && !(text(m.course, 60) && /^[a-z0-9-]*$/.test(m.course))) throw new ModelError('course: a course id such as vc (lowercase letters, digits, dashes)');
   for (const k of ['description', 'trained_on']) if (m[k] !== undefined && !text(m[k], 2000)) throw new ModelError(`${k}: up to 2000 characters`);
   const w = m.weights;
   if (!w || typeof w !== 'object') throw new ModelError('weights is required');
@@ -502,6 +504,7 @@ export function validateModel(m) {
   return {
     kestrel: 1, name: m.name.trim(), version: m.version || '', kind: m.kind, task: m.task,
     license: m.license || '', description: m.description || '', trained_on: m.trained_on || '', weights: w,
+    ...(m.course ? { course: m.course } : {}),
   };
 }
 
@@ -529,7 +532,6 @@ export function modelSet(picked = {}, sex = '') {
   const race = picked.race || BY_ID.get(DEFAULTS.race);
   const short = picked.short || BY_ID.get(DEFAULTS.short);
   const marathon = picked.marathon || BY_ID.get(DEFAULTS.marathon);
-  const courses = Object.fromEntries(Object.keys(COURSES).map((k) => [k, picked[k] || BY_ID.get(DEFAULTS[k])]));
   const slots = picked.$slots || {};
   // The model for a purpose at one event: the slot's pick, else the purpose's.
   const forSlot = (purpose, event, base) => (event !== undefined && slots[slotKey(purpose, event)]) || base;
@@ -574,24 +576,35 @@ export function modelSet(picked = {}, sex = '') {
     return marathon.kind === 'tanda' ? tandaPredict(marathon.weights, training, today) : marathonPredict(marathon.weights, training, today);
   }
 
-  // What a flat-course time is worth on a course, and back; `event` ('5K', '2.5mi') picks a per-event course model.
-  // A course without a model is the flat time.
-  const courseModel = (course, event) => forSlot(course, event, courses[course]);
-  const toCourseSec = (course, flatSec, event) => { const m = courseModel(course, event); return m ? toCourse(m.weights, flatSec, sex) : flatSec; };
-  const toFlatSec = (course, courseSec, event) => { const m = courseModel(course, event); return m ? toFlat(m.weights, courseSec, sex) : courseSec; };
+  // The model for a course at a distance: that distance's slot (within 3%, since GPS distances wobble), then the
+  // course's slot, then the `course` purpose pick. null means the course keeps its catalogue factor.
+  const courseModel = (course, m) => {
+    let best = null;
+    if (m > 0) {
+      for (const [k, v] of Object.entries(slots)) {
+        const cs = courseSlot(k);
+        if (cs && cs.id === course && cs.m && Math.abs(cs.m - m) / cs.m <= 0.03 && (!best || Math.abs(cs.m - m) < best.d)) best = { v, d: Math.abs(cs.m - m) };
+      }
+    }
+    return best?.v || slots[`course:${course}`] || picked.course || null;
+  };
+  // What a flat-course time is worth on a course, and back. `factor` is the catalogue factor, used when no model is picked.
+  const toCourseSec = (course, flatSec, m, factor = 1) => { const mod = courseModel(course, m); return mod ? toCourse(mod.weights, flatSec, sex) : flatSec * factor; };
+  const toFlatSec = (course, courseSec, m, factor = 1) => { const mod = courseModel(course, m); return mod ? toFlat(mod.weights, courseSec, sex) : courseSec / factor; };
 
   return {
     raceAny, shortAny, marathon: marathonFrom,
     shortSource: (m, sec) => shortSourceIn(shortEvents, m, sec),
     toCourse: toCourseSec, toFlat: toFlatSec,
     // The time ratio course/flat for a run of this many seconds (conditionsOf multiplies by it).
-    courseFactor: (course, courseSec, event) => courseSec / toFlatSec(course, courseSec, event),
+    courseFactor: (course, courseSec, m, factor = 1) => courseSec / toFlatSec(course, courseSec, m, factor),
+    courseModel,
     info: {
-      race: label(race), short: label(short), marathon: label(marathon), ...Object.fromEntries(Object.keys(courses).map((k) => [k, label(courses[k])])),
+      race: label(race), short: label(short), marathon: label(marathon),
       // Slots that run on a different model than their purpose: { 'race:5K': { name, version } }
       overrides: Object.fromEntries(Object.entries(slots).map(([k, m]) => [k, label(m)])),
     },
-    ids: { race: race.id, short: short.id, marathon: marathon.id, ...Object.fromEntries(Object.entries(courses).map(([k, m]) => [k, m.id])), ...Object.fromEntries(Object.entries(slots).map(([k, m]) => [k, m.id])) },
+    ids: { race: race.id, short: short.id, marathon: marathon.id, ...(picked.course ? { course: picked.course.id } : {}), ...Object.fromEntries(Object.entries(slots).map(([k, m]) => [k, m.id])) },
   };
 }
 
@@ -618,8 +631,9 @@ export async function pickedModels(db, personId, settingsJson) {
   }
   const slots = {};
   for (const [slot, id] of Object.entries(settings.event_models || {})) {
-    if (!SLOTS[slot] || !id) continue;
-    const m = await resolveModel(db, personId, id, SLOTS[slot]);
+    const purpose = slotPurpose(slot);
+    if (!purpose || !id) continue;
+    const m = await resolveModel(db, personId, id, purpose);
     if (m) slots[slot] = m;
   }
   if (Object.keys(slots).length) out.$slots = slots;
