@@ -14,7 +14,8 @@ import { saveDay, sessionsOf } from './log.js';
 import { reportSessions, AiError } from './gemini.js';
 import { recomputeFitness } from './fitness.js';
 import { gradeRun } from './grade.js';
-import { inVanCortlandt, VC_RE } from './conditions.js';
+import { VC_RE } from './conditions.js';
+import { courseAt } from './courses.js';
 import { vo2rFor, withPlans } from './coach.js';
 import { looksLikeTrack, snap100, trackMilesFromMeters, TRACK_MILE_M } from './workouts.js';
 
@@ -259,8 +260,8 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   }
   const gpsRefresh = usable.filter((a) => logged.has(`intervals:${a.id}`) && startOf(a));
   for (let i = 0; i < gpsRefresh.length; i += 50) {
-    await db.batch(gpsRefresh.slice(i, i + 50).map((a) => db.prepare('UPDATE workouts SET gps_vc = ? WHERE person_id = ? AND strava_id = ?')
-      .bind(inVanCortlandt(...startOf(a)) ? 1 : 0, person.id, `intervals:${a.id}`)));
+    await db.batch(gpsRefresh.slice(i, i + 50).map((a) => db.prepare('UPDATE workouts SET gps_vc = ?, gps_course = ? WHERE person_id = ? AND strava_id = ?')
+      .bind(courseAt(...startOf(a)) === 'vc' ? 1 : 0, courseAt(...startOf(a)), person.id, `intervals:${a.id}`)));
   }
   if (!fresh.length) return { imported: 0, checked: usable.length, total: all.length, skipped_strava: skippedStrava };
 
@@ -297,7 +298,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     const wk = date.slice(0, 8) + String(Math.floor(Number(date.slice(8)) / 7));
     const miles = a.distance / 1609.344;
     const track = RUN_TYPES.has(a.type) && looksLikeTrack({ name: a.name || '', type: a.type, elevFtPerMile: ((a.total_elevation_gain || 0) * 3.281) / Math.max(miles, 0.1), laps });
-    runs.push({ a, gps: gpsStart ? (inVanCortlandt(...gpsStart) ? 1 : 0) : null, work, laps, track, trackM, splits: laps.length ? splitsText(laps, track) : '', date, start: timeOf(a), category: ruleCategory(a, work, maxHr, weekLongest.get(wk) || 0, vo2r, laps) });
+    runs.push({ a, gps: gpsStart ? (courseAt(...gpsStart) === 'vc' ? 1 : 0) : null, gpsCourse: gpsStart ? courseAt(...gpsStart) : null, work, laps, track, trackM, splits: laps.length ? splitsText(laps, track) : '', date, start: timeOf(a), category: ruleCategory(a, work, maxHr, weekLongest.get(wk) || 0, vo2r, laps) });
   }
   runs.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
 
@@ -378,8 +379,8 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   // The GPS verdict on each run's course (the course column holds Hawky's guess).
   const gpsRuns = runs.filter((r) => r.gps != null);
   for (let i = 0; i < gpsRuns.length; i += 50) {
-    await db.batch(gpsRuns.slice(i, i + 50).map((r) => db.prepare('UPDATE workouts SET gps_vc = ? WHERE person_id = ? AND strava_id = ?')
-      .bind(r.gps, person.id, `intervals:${r.a.id}`)));
+    await db.batch(gpsRuns.slice(i, i + 50).map((r) => db.prepare('UPDATE workouts SET gps_vc = ?, gps_course = ? WHERE person_id = ? AND strava_id = ?')
+      .bind(r.gps, r.gpsCourse, person.id, `intervals:${r.a.id}`)));
   }
 
   // Workouts also go on the day log with their rep splits; Hawky's day lines too.

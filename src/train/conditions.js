@@ -24,12 +24,6 @@ const HEAT = [[100, 0], [110, 0.005], [120, 0.01], [130, 0.02], [140, 0.03], [15
 const HOME = { lat: 40.85, lon: -73.9 };
 const DAY = 86400000;
 
-// Van Cortlandt Park's footprint (Bronx), with a little margin. A run's GPS
-// start inside it is at the park; outside it never is, whatever the name says.
-export function inVanCortlandt(lat, lon) {
-  return lat >= 40.884 && lat <= 40.915 && lon >= -73.909 && lon <= -73.871;
-}
-
 export const VC_RE = /van\s*cort?land|\bvcp\b|vannie|tortoise\s*(&|and)\s*(the\s*)?hare/i;
 
 // Fraction slower than ideal weather.
@@ -60,6 +54,12 @@ const eventText = (e) => [e.title, e.location, e.description, e.loc_name].filter
 // are ruled out first.
 export function courseOf(w, events = []) {
   if (w.surface === 'track') return '';
+  // 'none' is the runner saying it was not on a course.
+  if (w.course_id === 'none') return '';
+  // A course the runner picked is final: Van Cortlandt is 'vc', any other is a cross-country course.
+  if (w.course_id) return w.course_id === 'vc' ? 'vc' : 'xc';
+  // Where the watch's GPS says the run started, when that is a course Kestrel has bounds for.
+  if (w.gps_course) return w.gps_course === 'vc' ? 'vc' : 'xc';
   // A run named after the park is there. Otherwise Hawky's read of it (from
   // the run and the day's calendar) decides, then the rules below.
   // GPS settles it when the watch recorded a position: at the park, or not.
@@ -77,6 +77,15 @@ export function courseOf(w, events = []) {
   return '';
 }
 
+// The id of the course a run was on ('vc', 'franklin-park', ...), or '' when it was on none that Kestrel knows.
+// Van Cortlandt is also inferred (GPS, name, calendar); every other course only comes from the runner's pick.
+export function courseIdOf(w, events = []) {
+  if (w.course_id === 'none') return '';
+  if (w.course_id) return w.course_id;
+  if (w.gps_course) return w.gps_course;
+  return courseOf(w, events) === 'vc' ? 'vc' : '';
+}
+
 const fmtF = (f) => `${Math.round(f)}°F`;
 
 // What a run's time is worth on a flat course in good weather: divide by factor.
@@ -89,7 +98,7 @@ export function conditionsOf(w, events = [], { reps = false, courseFactor = null
   const secs = w.sec || w.elapsed_sec || w.moving_sec;
   // The course's own events by distance: 2.5 mi (the high-school race) or the 5K.
   const meters = w.meters || (w.raw_distance_mi ?? w.distance_mi) * 1609.344;
-  const vcf = course === 'vc' && courseFactor && secs > 0 ? courseFactor('vc', secs, meters < 4000 ? '2.5mi' : '5K') : VC_FACTOR;
+  const vcf = course === 'vc' && courseFactor && secs > 0 ? courseFactor('vc', secs, meters < 4500 ? '2.5mi' : '5K') : VC_FACTOR;
   const factor = (course === 'vc' ? vcf : course === 'xc' ? XC_FACTOR : 1) * (1 + hill) * (1 + heat);
   const parts = [
     course === 'vc' ? 'Van Cortlandt course' : course === 'xc' ? 'cross-country course' : '',

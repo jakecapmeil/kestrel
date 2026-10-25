@@ -3,7 +3,8 @@
 // planned vs actual, status, difficulty, notes, and a rolling load note.
 import { WORKOUTS, WORKOUT_TYPES, RACES, PHASES, PACE_ZONES, pacesFrom5k, findWorkouts, workoutTargets, parseReps, snap100, trackMiles, TRACK_MILE_M } from './workouts.js';
 import { getFitness } from './fitness.js';
-import { conditionsOf } from './conditions.js';
+import { conditionsOf, courseIdOf } from './conditions.js';
+import { normalizePrs, parseCourseKey, getCourse } from './courses.js';
 
 // Marks Fitness States stale so the next read recomputes them.
 const staleFitness = (db, personId) => db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(personId).run();
@@ -11,7 +12,8 @@ const staleFitness = (db, personId) => db.prepare('UPDATE fitness_states SET com
 export class LogError extends Error {}
 
 export const DAY_TYPES = ['easy', 'recovery', 'long', 'tempo', 'threshold', 'intervals', 'track', 'fartlek', 'hills', 'strides', 'race', 'shakeout', 'crosstrain', 'strength', 'rest'];
-export const PR_EVENTS = ['100', '200', '400', '600', '800', '1000', '1600', '3200', '5K', '2000 SC', '3000 SC', 'XC 5K', 'VC 2.5 mi'];
+export const PR_EVENTS = ['100', '200', '400', '600', '800', '1000', '1600', '3200', '5K', '2000 SC', '3000 SC'];
+// Course PRs ("course:vc:5000", the 5K at Van Cortlandt) are accepted as well: see courses.js.
 export const DAY_STATUSES = ['as_planned', 'harder', 'easier', 'missed', 'adjusted', 'rest'];
 
 // Strava workout category -> day type.
@@ -140,6 +142,8 @@ function activityDetail(w, events = [], role = '') {
     // The same effort on a flat course in cool weather (as Fitness States count it).
     pace_adjusted: pace && cond && cond.factor >= 1.005 ? fmtSec(Math.round(pace / cond.factor)) : null,
     course: cond?.course || '',
+    course_id: courseIdOf(w, events),
+    can_track: String(w.strava_id || '').startsWith('intervals:'),
     avg_hr: w.avg_hr ?? null, max_hr: w.max_hr ?? null, cadence: w.avg_cadence ?? null,
     elev_ft: w.elev_gain_ft ?? null, elev_per_mi: w.elev_gain_ft != null && miles > 0.3 ? Math.round(w.elev_gain_ft / miles) : null,
     temp_f: w.temp_f ?? null, dew_point_f: w.dew_point_f ?? null,
@@ -232,7 +236,7 @@ export async function getDays(db, personId, from, to) {
     db.prepare('SELECT * FROM training_days WHERE person_id = ? AND date >= ? AND date <= ?').bind(personId, from, to).all(),
     db.prepare(
       `SELECT strava_id, date, name, category, distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, effort, hr_effort, load, library_id, summary,
-              start_local, laps, planned_type, planned_miles, surface, course, gps_vc, temp_f, dew_point_f, metrics
+              start_local, laps, planned_type, planned_miles, surface, course, course_id, gps_vc, gps_course, temp_f, dew_point_f, metrics
        FROM workouts WHERE person_id = ? AND date >= ? AND date <= ? ORDER BY start_local, created_at`
     ).bind(personId, from, to).all(),
     db.prepare(
@@ -449,15 +453,19 @@ export function parsePrs(raw) {
 
 export async function getPrs(db, personId) {
   const row = await db.prepare('SELECT prs FROM people WHERE id = ?').bind(personId).first();
-  return parsePrs(row?.prs);
+  return normalizePrs(parsePrs(row?.prs));
 }
 
 // Merges: pass an event with a null/empty time to clear it.
 export async function setPrs(db, personId, prs) {
   if (!prs || typeof prs !== 'object' || Array.isArray(prs)) throw new LogError(`prs must be an object keyed by event: ${PR_EVENTS.join(', ')}`);
-  const current = await getPrs(db, personId);
-  for (const [event, v] of Object.entries(prs)) {
-    if (!PR_EVENTS.includes(event)) throw new LogError(`Unknown event "${event}". Use: ${PR_EVENTS.join(', ')}`);
+  const current = normalizePrs(await getPrs(db, personId));
+  for (const [rawEvent, v] of Object.entries(normalizePrs(prs))) {
+    const event = rawEvent;
+    const ck = parseCourseKey(event);
+    if (ck) {
+      if (!(await getCourse(db, ck.id))) throw new LogError(`Unknown course "${ck.id}". Course PRs look like course:vc:5000 (the course id, then metres).`);
+    } else if (!PR_EVENTS.includes(event)) throw new LogError(`Unknown event "${event}". Use: ${PR_EVENTS.join(', ')}, or course:<id>:<metres> for a course PR.`);
     const time = clip(typeof v === 'string' ? v : v?.time, 10);
     if (!time) { delete current[event]; continue; }
     if (!PR_TIME.test(time)) throw new LogError(`${event}: time must look like 58.4, 2:15 or 19:38`);
@@ -561,7 +569,7 @@ export function logTools(withPerson) {
     },
     {
       name: 'set_prs',
-      description: `Save the runner's personal records (merged into what's there; an empty time clears one). Events: ${PR_EVENTS.join(', ')}. Ask for PRs during setup if they're missing.`,
+      description: `Save the runner's personal records (merged into what's there; an empty time clears one). Events: ${PR_EVENTS.join(', ')}; a PR on a course is course:<id>:<metres>, e.g. course:vc:5000 for the 5K at Van Cortlandt or course:vc:4023 for the 2.5 mi. Kestrel also finds PRs itself from synced races, so only ask for ones it is missing. Ask for PRs during setup if they're missing.`,
       inputSchema: {
         type: 'object', required: [...req, 'prs'],
         properties: {
