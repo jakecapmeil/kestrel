@@ -7,7 +7,7 @@
 //                                          days that became rest lose their workout, then reads everything back to check intervals.icu parsed the steps
 //
 // Workout text follows intervals.icu's builder: "- <distance or time> <pace range>/mi Pace" lines, a block per set ("6x" header), blank lines between blocks.
-import { planWeek } from './hawky.js';
+import { planWeek } from './kai.js';
 import { weekStartOf, todayInTz, loadPerson } from './coach.js';
 import { getFitness } from './fitness.js';
 import { segmentsOf, zoneOf } from './workouts.js';

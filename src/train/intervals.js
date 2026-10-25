@@ -5,9 +5,9 @@
 // The key is AES-GCM encrypted with a key derived from MCP_AUTH_TOKEN (a
 // Worker secret) and is never returned to a browser.
 //
-// Runs get a rule-based category first (the math), then Hawky (Gemini), if
+// Runs get a rule-based category first (the math), then Kai (Gemini), if
 // it's set up, refines the category and writes one report per session.
-// Scoring is the same logWorkouts path Hawky in Claude uses. Old history is
+// Scoring is the same logWorkouts path Kai in Claude uses. Old history is
 // imported in chunks with rules only, so it never spends the AI quota.
 import { logWorkouts, todayInTz, COACH_RUBRIC, bodyStatus, backfillConditions } from './coach.js';
 import { saveDay, sessionsOf } from './log.js';
@@ -237,7 +237,7 @@ async function streamStart(key, id, env) {
 const timeOf = (a) => (String(a.start_date_local || '').match(/T(\d{2}:\d{2})/) || [])[1] || '';
 const dateOf = (a) => String(a.start_date_local || '').slice(0, 10);
 
-// Pull activities between two dates and log them. `ai` turns on Hawky's
+// Pull activities between two dates and log them. `ai` turns on Kai's
 // session reports for recent sessions.
 async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBudget }) {
   const db = env.DB;
@@ -341,7 +341,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   }
   runs.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
 
-  // Hawky: one report per session (warm-up + workout + cool-down together)
+  // Kai: one report per session (warm-up + workout + cool-down together)
   // for recent days. Failures fall back to the rule-based labels.
   let ai = null;
   let aiNote = '';
@@ -415,14 +415,14 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     imported += (await logWorkouts(db, person, rows.slice(i, i + 60))).logged.length;
   }
 
-  // The GPS verdict on each run's course (the course column holds Hawky's guess).
+  // The GPS verdict on each run's course (the course column holds Kai's guess).
   const gpsRuns = runs.filter((r) => r.gps != null);
   for (let i = 0; i < gpsRuns.length; i += 50) {
     await db.batch(gpsRuns.slice(i, i + 50).map((r) => db.prepare('UPDATE workouts SET gps_vc = ?, gps_course = ? WHERE person_id = ? AND strava_id = ?')
       .bind(r.gps, r.gpsCourse, person.id, `intervals:${r.a.id}`)));
   }
 
-  // Workouts also go on the day log with their rep splits; Hawky's day lines too.
+  // Workouts also go on the day log with their rep splits; Kai's day lines too.
   for (const r of runs) {
     if (!r.splits) continue;
     const existing = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(person.id, r.date).first();

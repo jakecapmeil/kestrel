@@ -33,6 +33,20 @@
   "triggers": {
     "crons": ["17 * * * *"]
   },
+  // Pull-request previews (Workers Builds runs `wrangler preview`): same public Supabase project, a separate
+  // D1 database so previews never touch real athlete data. Apply migrations to it with
+  // a temporary config that names kestrel_preview (migrations_dir ./migrations) and `wrangler d1 migrations apply DB --remote -c <it>`.
+  "previews": {
+    "vars": {
+      "SUPABASE_URL": "https://nalkviwzobfatwknyeeu.supabase.co",
+      "SUPABASE_KEY": "sb_publishable_CGZ55wWJx7lJPMfXF_hqNg_l_fZUv-a",
+      "AI_DAILY_LIMIT": "40"
+    },
+    "d1_databases": [
+      { "binding": "DB", "database_id": "d7a074d9-2fa0-468e-8539-a4b7c1d0d688" }
+    ],
+    "ai": { "binding": "AI" }
+  },
   "observability": {
     "enabled": true
   }

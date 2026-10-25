@@ -89,7 +89,7 @@ function lapsOf(rs, track) {
 
 // Activities less than 75 min apart (end to start) are one session: warm-up,
 // workout and cool-down saved as separate activities read as one workout.
-// Hawky's report for a session lives on its main activity.
+// Kai's report for a session lives on its main activity.
 const HARD_CATS = new Set(['workout', 'race']);
 const RANK = { race: 6, workout: 5, long: 4, easy: 3, shakeout: 2, recovery: 1, crosstrain: 0 };
 const toMin = (hhmm) => { const m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
@@ -391,7 +391,7 @@ export function weeklyTotals(days) {
   return [...weeks.values()].map(({ _diff, ...w }) => ({ ...w, avg_difficulty: _diff.length ? round1(_diff.reduce((a, b) => a + b, 0) / _diff.length) : null }));
 }
 
-// For Claude and Hawky: the same days without what only the page draws (an
+// For Claude and Kai: the same days without what only the page draws (an
 // activity's laps, already in the session's splits, and its HR zone bars).
 export function compactDays(days) {
   return days.map((d) => ({
@@ -516,7 +516,7 @@ const DAY_PROPS = {
   library_id: { type: 'string', description: 'Workout library id, when the session was a library workout (lets you track progress on it)' },
   splits: { type: 'string', description: 'Rep splits as text, e.g. "800m 2:45; 800m 2:44". Prefer split_reps.' },
   split_reps: { type: 'array', description: 'Rep splits, one per rep: meters, seconds and the recovery after it', items: { type: 'object', properties: { m: { type: 'number' }, s: { type: 'number' }, rest: { type: 'string', description: 'e.g. "2:00" or "200m jog"' } }, required: ['m', 's'] } },
-  day_line: { type: 'string', description: "Hawky's one-line summary of the whole day" },
+  day_line: { type: 'string', description: "Kai's one-line summary of the whole day" },
   summary: { type: 'string', description: 'What actually happened: dose, pace, HR, conditions, how it felt' },
   coach_note: { type: 'string', description: 'What was changed for upcoming days and why' },
   load_note: { type: 'string', description: 'Standing read on the last 7-10 days, carried forward' },
@@ -544,7 +544,7 @@ export function logTools(withPerson) {
   return [
     {
       name: 'get_training_log',
-      description: `Daily training log${withPerson ? ' for one person' : ''} between two dates (default: last 28 days): miles, runs, difficulty, run types, status vs plan, planned session, splits, summary and coach notes per day, plus Mon-Sun weekly totals. Runs synced from the watch or logged through Hawky are merged in automatically, grouped into sessions with a plan tag per day.`,
+      description: `Daily training log${withPerson ? ' for one person' : ''} between two dates (default: last 28 days): miles, runs, difficulty, run types, status vs plan, planned session, splits, summary and coach notes per day, plus Mon-Sun weekly totals. Runs synced from the watch or logged through Kai are merged in automatically, grouped into sessions with a plan tag per day.`,
       inputSchema: { type: 'object', required: req, properties: { ...person, from: { type: 'string' }, to: { type: 'string' } }, additionalProperties: false },
     },
     {

@@ -1,5 +1,5 @@
 // Body map parts, as the vendored body-muscles library names them (vendor/
-// body-muscles/, MUSCLE_MAP). Hawky uses this to read and mark soreness by the
+// body-muscles/, MUSCLE_MAP). Kai uses this to read and mark soreness by the
 // same ids the body map uses. Regenerate if the library is updated.
 export const BODY_PARTS = {
   'head': "Head",

@@ -84,7 +84,7 @@ export async function healthSummary(db, person, today) {
   const miles = (n) => round1(runs.results.filter((r) => r.date > addDays(today, -n) && r.category !== 'crosstrain').reduce((a, r) => a + (r.distance_mi || 0), 0));
 
   // Only marks set in the last week count; older ones may just never have
-  // been cleared, so Hawky asks about them instead of acting on them.
+  // been cleared, so Kai asks about them instead of acting on them.
   const fresh = (t, days) => !!t && Date.now() - t < days * 86400000;
   const marked = marks.results.map((m) => ({ part: m.part, name: BODY_PARTS[m.part] || m.part, status: m.status, recent: fresh(m.updated_at, 7) }));
   const pain = marked.filter((m) => m.status === 'pain' && m.recent);
@@ -187,7 +187,7 @@ function suggestSession(plan, date, type, weekDays, fitness) {
   return { text, targets: fitness?.vo2r ? workoutTargets({ main: text, paces: text, type: 'vo2' }, fitness) : [] };
 }
 
-// The rules Hawky applies by itself, only to today and tomorrow, only to make
+// The rules Kai applies by itself, only to today and tomorrow, only to make
 // a day easier. A runner can always keep the plan instead.
 function autoAdjust(base, health) {
   if (!base || base.type === 'Off') return null;
@@ -208,7 +208,7 @@ function autoAdjust(base, health) {
 }
 
 // Every day of a Mon-Sun week as the runner should run it: the plan, or the
-// change Hawky made, or (today/tomorrow) Hawky's readiness adjustment.
+// change Kai made, or (today/tomorrow) Kai's readiness adjustment.
 export async function planWeek(db, person, weekStart, today, health, fitness) {
   const plan = planFor(person);
   if (!plan) return null;
@@ -249,9 +249,9 @@ function effectiveDay(date, base, change, today, health) {
   return day;
 }
 
-// A change from Hawky's chat (or Hawky in Claude), checked against the
+// A change from Kai's chat (or Kai in Claude), checked against the
 // guardrails above. Returns the saved change.
-export async function applyPlanChange(db, person, raw, source = 'hawky') {
+export async function applyPlanChange(db, person, raw, source = 'kai') {
   const today = todayInTz();
   const date = String(raw?.date || '');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < today || date > addDays(today, 13)) throw new PlanError('The coach can change days from today to two weeks out.');
@@ -353,7 +353,7 @@ async function setRank(db, person, to, reason, source) {
   return { from_miles: milesOfRank(person, from), to_miles: milesOfRank(person, to) };
 }
 
-// Hawky moves a runner up by itself early in the week, so a week's plan
+// Kai moves a runner up by itself early in the week, so a week's plan
 // never changes halfway through.
 export async function autoLevel(db, person, today, health) {
   const dow = new Date(today + 'T12:00:00Z').getUTCDay();
@@ -370,18 +370,18 @@ export async function changeLevel(db, person, direction, reason, today, health) 
   if (!st) throw new PlanError('No plan yet.');
   if (direction === 'up') {
     if (!st.ready) throw new PlanError(`Not ready to level up yet: ${st.gates.filter((g) => !g.ok).map((g) => g.label).join('; ')}.`);
-    return await setRank(db, person, st._rank + 1, reason || 'Ready for more', 'hawky');
+    return await setRank(db, person, st._rank + 1, reason || 'Ready for more', 'kai');
   }
   if (direction === 'down') {
     if (st._rank <= 1) throw new PlanError('Already on the lightest plan.');
-    return await setRank(db, person, st._rank - 1, reason || 'Backing off', 'hawky');
+    return await setRank(db, person, st._rank - 1, reason || 'Backing off', 'kai');
   }
   throw new PlanError('direction must be up or down');
 }
 
 // ------------------------------------------------------------------ state
 
-export async function hawkyState(db, personId, today = todayInTz()) {
+export async function kaiState(db, personId, today = todayInTz()) {
   const person = await loadPerson(db, personId);
   let health = await healthSummary(db, person, today);
   health.ran_today = !!(await db.prepare("SELECT 1 FROM workouts WHERE person_id = ? AND date = ? AND category != 'crosstrain' LIMIT 1").bind(person.id, today).first());
