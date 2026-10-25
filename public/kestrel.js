@@ -335,7 +335,17 @@ async function finishSetup() {
   }
   await refreshMe();
   if (!K.teams.length && !store.get('kestrel.solo')) { renderTeamStart(); return; }
-  start();
+  await start();
+  offerPlan();
+}
+
+// A new account has no training plan. Offer to build one with Kestrel AI the first time, once.
+async function offerPlan() {
+  if (store.get(`kestrel.planOffered.${K.me.user.id}`)) return;
+  const r = await api('/api/me/plan').catch(() => null);
+  if (!r || r.custom || r.team_plan) return;
+  store.set(`kestrel.planOffered.${K.me.user.id}`, true);
+  openPlanBuilder({ team: false, current: null, onSaved: () => window.hawksReload() });
 }
 
 // Shows the app, starting it the first time and reloading it on a team switch.
@@ -511,7 +521,7 @@ window.kestrelRenderTeamTraining = async (el) => {
       </div></div>
       ${r.custom
         ? html`<p class="k-small">${r.spec?.summary || 'Your captains built this plan.'}</p><p class="k-small">Every athlete trains from the level that fits their current mileage and fitness, and their own Kestrel AI coach adapts it day to day. Athletes who built a personal plan keep using theirs.</p>`
-        : html`<p class="k-small">Nothing is preloaded. ${lead ? 'Talk it through with Kestrel AI: tell it your season, how many days you run, workout days and race days, then refine it until it is right. It scales to every runner on the roster.' : 'Your captain or coach can build one. Until then you train from Kestrel’s built-in plans.'}</p>`}
+        : html`<p class="k-small">Nothing is preloaded. ${lead ? 'Talk it through with Kestrel AI: tell it your season, how many days you run, workout days and race days, or attach the plan you use now (PDF, Word, Excel, CSV). Refine it until it is right. It scales to every runner on the roster.' : 'Your captain or coach can build one. Until then you can build your own in Train → Plan.'}</p>`}
       ${lead ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-btn" type="button" id="kPlanJsonBtn">Edit as JSON</button><button class="k-link danger" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
       ${r.custom && r.spec ? planTable(r.spec) : ''}
       <p class="k-small">Plans are general guidance, not medical advice, and are not checked by Kestrel for any one runner.</p>
@@ -519,7 +529,7 @@ window.kestrelRenderTeamTraining = async (el) => {
   if ($('kPlanBuild')) $('kPlanBuild').onclick = () => openPlanBuilder({ team: true, current: r.spec, onSaved: () => window.kestrelRenderTeamTraining(el) });
   if ($('kPlanJsonBtn')) $('kPlanJsonBtn').onclick = () => openPlanJson(r, () => window.kestrelRenderTeamTraining(el));
   if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
-    if (!confirm('Remove the team plan? Everyone goes back to Kestrel’s built-in plans.')) return;
+    if (!confirm('Remove the team plan? Everyone on the team goes back to having no plan until they build their own.')) return;
     await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' });
     await window.hawksReload();
     window.kestrelRenderTeamTraining(el);
@@ -563,9 +573,49 @@ const PLAN_STARTS = [
   'Off-season base building, easy running only',
 ];
 
+const PLAN_STARTS_ME = [
+  'Build me a plan from my profile and goals',
+  'I am training for a 5K in 8 weeks and can run 5 days a week',
+  'I want to build mileage safely, easy running mostly',
+];
+
+// Text out of an uploaded file, in the browser. Libraries load only when that file type is used.
+const loadScript = (src) => new Promise((ok, no) => {
+  if (document.querySelector(`script[src="${src}"]`)) return ok();
+  const el = document.createElement('script');
+  el.src = src; el.onload = ok; el.onerror = () => no(new Error('could not load the file reader; check your connection'));
+  document.head.appendChild(el);
+});
+async function extractText(file) {
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (['txt', 'md', 'csv', 'tsv', 'json'].includes(ext) || file.type.startsWith('text/')) return await file.text();
+  const buf = await file.arrayBuffer();
+  if (ext === 'pdf') {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let out = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+      const page = await (await pdf.getPage(i)).getTextContent();
+      out += page.items.map((x) => x.str).join(' ') + '\n';
+    }
+    return out;
+  }
+  if (ext === 'docx') {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js');
+    return (await window.mammoth.extractRawText({ arrayBuffer: buf })).value;
+  }
+  if (ext === 'xlsx' || ext === 'xls') {
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    const wb = window.XLSX.read(buf, { type: 'array' });
+    return wb.SheetNames.slice(0, 6).map((n) => `## ${n}\n${window.XLSX.utils.sheet_to_csv(wb.Sheets[n])}`).join('\n\n');
+  }
+  throw new Error('unsupported file type (use PDF, Word, Excel, CSV or text)');
+}
+
 function openPlanBuilder({ team, current, onSaved }) {
   const base = team ? `/api/teams/${K.teamId}/plan` : '/api/me/plan';
-  const st = { turns: [], plan: current || null, preview: null, busy: false };
+  const st = { turns: [], plan: current || null, preview: null, busy: false, docs: [], week: 'normal' };
   const d = dialog();
   d.classList.add('k-wide');
   d.innerHTML = html`<h2>${team ? 'Build the team training plan' : 'Build your training plan'}</h2>
@@ -575,6 +625,9 @@ function openPlanBuilder({ team, current, onSaved }) {
       <div class="k-pbpreview" id="kPbPreview"></div>
     </div>
     <div class="k-chips" id="kPbChips"></div>
+    <div class="k-drop" id="kPbDrop"><input type="file" id="kPbFile" multiple hidden accept=".txt,.md,.csv,.tsv,.json,.pdf,.docx,.xlsx,.xls">
+      <button class="k-btn small" type="button" id="kPbAttach">Attach files</button>
+      <span class="k-small" id="kPbDocs">Have a plan already? Drop in a PDF, Word, Excel, CSV or text file and Kestrel AI will learn from it.</span></div>
     <form class="k-row" id="kPbForm"><input class="k-input grow" id="kPbInput" maxlength="1000" placeholder="${st.plan ? 'What should change?' : 'Describe the plan you want'}" autocomplete="off"><button class="k-btn primary" type="submit" id="kPbSend">Send</button></form>
     <p class="k-small" id="kPbMsg" role="status"></p>
     <div class="k-row"><button class="k-btn primary" type="button" id="kPbSave" disabled>${team ? 'Use this plan for the team' : 'Use this plan'}</button><button class="k-link" type="button" id="kPbClose">Close</button></div>
@@ -586,20 +639,25 @@ function openPlanBuilder({ team, current, onSaved }) {
     chat.innerHTML = (st.turns.length ? st.turns : [{ role: 'kai', text: st.plan ? 'Here is the current plan. Tell me what to change.' : 'What kind of plan do you want? Season, days a week, workout days, race days, anything to avoid.' }])
       .map((t) => `<div class="k-bubble ${t.role}">${esc(t.text).replace(/\n/g, '<br>')}</div>`).join('') + (st.busy ? '<div class="k-bubble kai">Thinking…</div>' : '');
     chat.scrollTop = chat.scrollHeight;
-    $('kPbChips').innerHTML = st.turns.length ? '' : PLAN_STARTS.map((x, i) => `<button type="button" class="k-chip" data-i="${i}">${esc(x)}</button>`).join('');
-    $('kPbChips').querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => { $('kPbInput').value = PLAN_STARTS[b.dataset.i]; $('kPbInput').focus(); }; });
+    $('kPbDocs').innerHTML = st.docs.length ? st.docs.map((x, i) => `<span class="k-chip doc">${esc(x.name)}${x.truncated ? ' (shortened)' : ''} <button type="button" data-rm="${i}" aria-label="Remove ${esc(x.name)}">×</button></span>`).join(' ') : 'Have a plan already? Drop in a PDF, Word, Excel, CSV or text file and Kestrel AI will learn from it.';
+    $('kPbDocs').querySelectorAll('[data-rm]').forEach((b) => { b.onclick = () => { st.docs.splice(Number(b.dataset.rm), 1); paint(); }; });
+    $('kPbChips').innerHTML = st.turns.length ? '' : (team ? PLAN_STARTS : PLAN_STARTS_ME).map((x, i) => `<button type="button" class="k-chip" data-i="${i}">${esc(x)}</button>`).join('');
+    $('kPbChips').querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => { $('kPbInput').value = (team ? PLAN_STARTS : PLAN_STARTS_ME)[b.dataset.i]; $('kPbInput').focus(); }; });
     const pv = $('kPbPreview');
     if (!st.preview && !st.plan) { pv.innerHTML = '<p class="k-small">Your plan will show here.</p>'; }
     else if (st.preview) {
       const lv = st.preview.levels;
       const cur = Number(pv.dataset.level) || lv[Math.min(3, lv.length - 1)].level;
       const L = lv.find((x) => x.level === cur) || lv[0];
+      const wk = st.week;
       pv.innerHTML = `<b>${esc(st.preview.spec.name)}</b><p class="k-small">${esc(st.preview.spec.summary)}</p>
+        <div class="seg seg-sm" role="tablist">${[['normal', 'Normal'], ['race', 'Race week'], ['taper', 'Taper']].map(([k, l]) => `<button type="button" class="seg-btn ${wk === k ? 'active' : ''}" data-wk="${k}">${l}</button>`).join('')}</div>
         <label class="k-label" for="kPbLevel">Level (weekly miles)</label>
         <select class="k-input" id="kPbLevel">${lv.map((x) => `<option value="${x.level}" ${x.level === L.level ? 'selected' : ''}>${x.miles} miles a week</option>`).join('')}</select>
-        <div class="k-pbweek">${L.week.map((w) => `<div><b>${w.day.slice(0, 3)}</b><span>${esc(w.type)}</span><span>${w.miles ? w.miles + ' mi' : ''}</span><small>${esc(w.notes)}</small></div>`).join('')}</div>
-        <p class="k-small">Normal week shown. Race week and taper are built from it. ${team ? 'Each athlete is placed on the level that matches their fitness.' : 'You start on the level that matches your fitness and move up as you get fitter.'}</p>`;
+        <div class="k-pbweek">${L.weeks[wk].map((w) => `<div><b>${w.day.slice(0, 3)}</b><span>${esc(w.type)}</span><span>${w.miles ? w.miles + ' mi' : ''}</span><small>${esc(w.notes)}</small></div>`).join('')}</div>
+        <p class="k-small">${team ? 'Each athlete is placed on the level that matches their fitness.' : 'You start on the level that matches your fitness and move up as you get fitter.'}</p>`;
       $('kPbLevel').onchange = (e) => { pv.dataset.level = e.target.value; paint(); };
+      pv.querySelectorAll('[data-wk]').forEach((b) => { b.onclick = () => { st.week = b.dataset.wk; paint(); }; });
     } else {
       pv.innerHTML = planTable(st.plan).s;
     }
@@ -609,6 +667,29 @@ function openPlanBuilder({ team, current, onSaved }) {
   if (st.plan) attempt(async () => { st.preview = (await api(`${base}/preview`, { method: 'POST', body: JSON.stringify({ plan: st.plan }) })); paint(); });
 
   $('kPbClose').onclick = () => d.close();
+  const addFiles = async (files) => {
+    for (const f of files) {
+      if (st.docs.length >= 5) { $('kPbMsg').textContent = 'Up to 5 files at a time.'; break; }
+      if (f.size > 15 * 1024 * 1024) { $('kPbMsg').textContent = `${f.name} is over 15 MB.`; continue; }
+      $('kPbMsg').textContent = `Reading ${f.name}…`;
+      try {
+        let text = await extractText(f);
+        text = text.replace(/\u0000/g, '').trim();
+        if (!text) throw new Error('no readable text (scanned images are not supported yet)');
+        const truncated = text.length > 12000;
+        st.docs.push({ name: f.name, text: text.slice(0, 12000), truncated });
+        $('kPbMsg').textContent = '';
+        if (!$('kPbInput').value) $('kPbInput').value = 'Use the attached file to build our plan.';
+      } catch (err) { $('kPbMsg').textContent = `Could not read ${f.name}: ${err.message}`; }
+    }
+    paint();
+  };
+  $('kPbAttach').onclick = () => $('kPbFile').click();
+  $('kPbFile').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
+  const drop = $('kPbDrop');
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files]); };
   $('kPbForm').onsubmit = async (e) => {
     e.preventDefault();
     const text = $('kPbInput').value.trim();
@@ -617,7 +698,7 @@ function openPlanBuilder({ team, current, onSaved }) {
     st.turns.push({ role: 'user', text });
     st.busy = true; $('kPbMsg').textContent = ''; paint();
     try {
-      const out = await planAsk(base, st.turns, st.plan);
+      const out = await planAsk(base, st.turns, st.plan, st.docs.map(({ name, text }) => ({ name, text })));
       st.turns.push({ role: 'kai', text: out.answer || 'Done.' });
       if (out.plan) { st.plan = out.plan; st.preview = out.preview || st.preview; }
     } catch (err) {
@@ -636,10 +717,10 @@ function openPlanBuilder({ team, current, onSaved }) {
 }
 
 // -> { answer, plan?, preview? }. Free Kestrel AI answers on the server; any other model is called from the browser.
-async function planAsk(base, turns, current) {
+async function planAsk(base, turns, current, documents = []) {
   const history = turns.map((t) => ({ role: t.role === 'user' ? 'user' : 'kai', text: t.text }));
-  if (K.ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current }) });
-  const chat = await api(`${base}/prompt`, { method: 'POST', body: JSON.stringify({ history, current }) });
+  if (K.ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
+  const chat = await api(`${base}/prompt`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
   const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the person reads; include "plan" only when you are giving or changing the plan.\n${JSON.stringify(chat.schema)}`;
   const text = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
   const out = parseLoose(text) || { answer: text };
@@ -658,11 +739,11 @@ window.kestrelRenderPersonalPlan = async (el) => {
   if (!r) { el.innerHTML = ''; return; }
   if (r.team_plan && !r.custom) { el.innerHTML = ''; return; }
   el.innerHTML = html`<section class="card">
-      <div class="card-title">${r.custom ? 'Your own plan' : 'Make your own plan'}</div>
+      <div class="card-title">${r.custom ? 'Your plan' : 'Set up your training plan'}</div>
       ${r.custom
         ? html`<p class="k-small"><b>${r.spec?.name || 'Custom plan'}</b>. ${r.spec?.summary || ''} Your coach adapts it each day.</p>`
-        : html`<p class="k-small">You are on Kestrel’s built-in plan for your level. Want something that fits your season? Describe it to Kestrel AI and refine it together.</p>`}
-      <div class="k-row"><button class="k-btn primary" type="button" id="kMyPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-link danger" type="button" id="kMyPlanReset">${r.team_plan ? 'Go back to the team plan' : 'Go back to the built-in plan'}</button>` : ''}</div>
+        : html`<p class="k-small">You do not have a plan yet. Tell Kestrel AI your goals, how many days you can run and what race you are working toward, and it will build one with you. You can refine it any time, or attach a plan you already have.</p>`}
+      <div class="k-row"><button class="k-btn primary" type="button" id="kMyPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-link danger" type="button" id="kMyPlanReset">${r.team_plan ? 'Go back to the team plan' : 'Remove my plan'}</button>` : ''}</div>
     </section>`.s;
   $('kMyPlanBuild').onclick = () => openPlanBuilder({ team: false, current: r.spec, onSaved: () => window.kestrelRenderPersonalPlan(el) });
   if ($('kMyPlanReset')) $('kMyPlanReset').onclick = (e) => attempt(async () => {

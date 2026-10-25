@@ -6096,7 +6096,14 @@ async function renderTraining(){
     const h = await loadKai();
     if(h?.week){ renderPlanSide(); return; }
   }
-  // No plan of your own (guest, coach, or no class year): browse the plans.
+  // No plan yet: the card above (Set up your training plan) is the way in. Nothing is preloaded.
+  if(own){
+    $('tpTitle').textContent = 'No plan yet';
+    $('tpHint').textContent = 'Tell Kestrel AI your goals and it will build your plan with you.';
+    $('tpGrades').style.display = 'none'; $('tpWeeks').style.display = 'none';
+    $('tpWeeks').innerHTML = ''; $('tpDays').innerHTML = ''; $('tpTotal').textContent = '';
+    return;
+  }
   const levels = window.KESTREL?.levels || [];
   const grade = levels.some(l=> l.level === trainingGrade) ? trainingGrade : (levels[0]?.level || 1);
   const plan = await fetchPlan('l:' + grade, 'level=' + grade);

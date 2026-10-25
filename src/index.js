@@ -354,13 +354,15 @@ const canEdit = (e, me, role) => e.created_by === me.id || isLead(role);
 // ---- plan builder helpers
 function previewSpec(spec) {
   const { plans, spec: clean } = expandPlanSpec(spec);
-  return { spec: clean, levels: Object.entries(plans).map(([r, p]) => ({ level: Number(r), miles: p.weeks[0].miles, week: p.days.map((d) => ({ day: d.day, type: d.cells[0].type, miles: parseFloat(d.cells[0].miles) || 0, notes: d.cells[0].notes })) })) };
+  return { spec: clean, levels: Object.entries(plans).map(([r, p]) => ({ level: Number(r), miles: p.weeks[0].miles, weeks: Object.fromEntries(['normal', 'race', 'taper'].map((k, i) => [k, p.days.map((d) => ({ day: d.day, type: d.cells[i].type, miles: parseFloat(d.cells[i].miles) || 0, notes: d.cells[i].notes }))])) })) };
 }
 
 // Chat (server model) or the prompt for the browser to send to the person's own model. A plan in the reply is validated here.
 async function planChatRoute(env, db, me, b, scope, promptOnly, today) {
   const history = Array.isArray(b.history) ? b.history : [];
-  const sc = { ...scope, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
+  const documents = (Array.isArray(b.documents) ? b.documents : []).slice(0, 5)
+    .map((d) => ({ name: str(d?.name, 80), text: String(d?.text || '').slice(0, 12000) })).filter((d) => d.text.trim());
+  const sc = { ...scope, documents, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
   if (promptOnly) return planChat(history, sc, today);
   const out = await askPlan(env, db, me, history, sc, today);
   return checkedPlanReply(out);
@@ -523,7 +525,7 @@ async function planView(db, me, level) {
   const fitness = await getFitness(db, me.id, todayInTz());
   plan = JSON.parse(JSON.stringify(plan));
   if (fitness?.vo2r) for (const sec of plan.ref.sessions) sec.targets = sec.items.map((item) => workoutTargets({ main: item, paces: item, type: 'vo2' }, fitness));
-  return { ...plan, level: rank, mine: rank === rankOf(person), levels: Object.keys(plans).map((r) => ({ level: Number(r), miles: plans[r].weeks[0].miles })), source: person.plans ? 'team' : 'kestrel' };
+  return { ...plan, level: rank, mine: rank === rankOf(person), levels: Object.keys(plans).map((r) => ({ level: Number(r), miles: plans[r].weeks[0].miles })), source: 'custom' };
 }
 
 // ------------------------------------------------------------------ Kestrel Lab
@@ -928,7 +930,7 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [] });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));
@@ -1038,7 +1040,8 @@ async function route(request, env, url) {
   }
   if ((path === '/api/me/plan/chat' || path === '/api/me/plan/prompt') && method === 'POST') {
     const own = settingsOf(me).personal_plan?.spec || null;
-    return json(await planChatRoute(env, db, me, await readJson(request), { team: false, current: own }, path.endsWith('prompt'), today));
+    const athlete = { class_year: me.class_year, sex: me.sex, prs: me.prs, five_k_time: me.five_k_time, profile: settingsOf(me).profile || {} };
+    return json(await planChatRoute(env, db, me, await readJson(request), { team: false, current: own, athlete }, path.endsWith('prompt'), today));
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
 
@@ -1151,7 +1154,7 @@ async function route(request, env, url) {
     if (sub.startsWith('plan')) {
       if (sub === 'plan' && method === 'GET') {
         const row = await db.prepare('SELECT data, spec, updated_at FROM team_plans WHERE team_id = ?').bind(teamId).first();
-        return json({ plans: row ? JSON.parse(row.data) : PLANS, custom: !!row, spec: row?.spec ? JSON.parse(row.spec) : null, updated_at: row?.updated_at || null, can_edit: isLead(role) });
+        return json({ plans: row ? JSON.parse(row.data) : null, custom: !!row, spec: row?.spec ? JSON.parse(row.spec) : null, updated_at: row?.updated_at || null, can_edit: isLead(role) });
       }
       if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change the team plan.');
       if (sub === 'plan/chat' || sub === 'plan/prompt') return json(await planChatRoute(env, db, me, await readJson(request), await teamPlanScope(db, teamId), sub.endsWith('prompt'), today));

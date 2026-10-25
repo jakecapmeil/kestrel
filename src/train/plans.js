@@ -1,4 +1,4 @@
-// Kestrel's built-in training plans: levels by weekly miles (15 to 60), each with three
+// The Hunter Hawks training plan, and the nine mileage levels every other plan is scaled to: levels by weekly miles (15 to 60), each with three
 // week shapes (no race, race week, taper) and a menu of sessions. A team owner can publish their own plan
 // in the same format (team_plans); athletes on that team start from it. Which level an athlete is on is
 // their plan_rank, set at sign-up from their weekly miles and moved by the AI coach's level gates.
@@ -28,8 +28,10 @@ export const DEFAULT_RANK = 1;
 // The workout library names its variants by the original six levels ("plans 3-5"); this maps a level onto them.
 export const libraryRank = (rank) => Math.max(1, Number(rank) - 3);
 
-// The plan levels an athlete trains from: their team's template if it has one, else the built-in plans.
-export const plansOf = (person) => person?.plans || PLANS;
+// The plan levels an athlete trains from: their own plan or their team's. There is no default: the built-in PLANS
+// below are the Hunter Hawks plan (seeded into that team's team_plans) and the scale every AI-built plan uses.
+export const plansOf = (person) => person?.plans || {};
+export const hasPlan = (person) => Object.keys(plansOf(person)).length > 0;
 
 export function rankOf(person) {
   const plans = plansOf(person);

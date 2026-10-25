@@ -189,3 +189,7 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-planday small{color:var(--text-2);}
 .k-sess{font-size:13.5px;margin:4px 0;}
 #kPbForm{flex-wrap:nowrap;}#kPbForm .k-input{width:auto;flex:1;min-width:0;}
+.k-drop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;border:1.5px dashed var(--line);border-radius:var(--r-md);padding:8px 12px;margin:0 0 10px;}
+.k-drop.over{border-color:var(--accent);background:var(--accent-subtle);}
+.k-drop .k-small{margin:0;}
+.k-chip.doc button{border:0;background:transparent;padding:0 0 0 4px;font-size:15px;cursor:pointer;color:var(--text-2);}
