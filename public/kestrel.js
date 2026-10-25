@@ -62,6 +62,9 @@ async function attempt(fn, btn) {
 // ---------- the gate: everything before the app (landing, sign-in, onboarding, first team)
 
 function gate(content) {
+  // Hide landing page sections when showing the sign-in gate
+  const landingSections = document.querySelectorAll('.k-header, .k-landing-hero, .k-features, .k-demo, .k-cta, .k-about');
+  landingSections.forEach(s => s.hidden = true);
   $('kApp').hidden = true;
   $('kGate').hidden = false;
   $('kGate').innerHTML = content.s;

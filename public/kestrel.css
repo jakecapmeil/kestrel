@@ -241,3 +241,26 @@ select.k-input{background:var(--card);border:1.5px solid var(--ink);padding:8px;
 @media (min-width:900px){
   .k-landing{grid-template-columns:1.35fr 1fr;gap:64px;padding-top:24px;}
 }
+
+/* ---- AI Settings Dialog enhancements ---- */
+.k-dialog form{display:flex;flex-direction:column;gap:16px;margin-top:10px;}
+.k-dialog label.k-label{font:600 12px var(--font-ui);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);display:block;margin:0 0 4px;}
+.k-dialog select.k-input{padding:6px 10px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:var(--r-control);font:400 14px var(--font-ui);}
+.k-dialog input.k-input{padding:8px 10px;border:1px solid var(--line);background:var(--field);color:var(--ink);border-radius:var(--r-control);font:400 14px var(--font-ui);}
+.k-dialog input.k-input:focus{border-color:var(--gold);outline:none;}
+.k-dialog select.k-input:focus{border-color:var(--gold);outline:none;}
+.k-dialog .k-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.k-dialog .k-row .k-btn{flex-shrink:0;}
+.k-dialog p.k-small{color:var(--ink-soft);font-size:13px;line-height:1.4;margin:4px 0 0;}
+.k-dialog #kAiMsg{color:var(--red);font-size:12.5px;margin-top:8px;min-height:1.2em;}
+
+/* Model input row */
+.k-dialog .k-row > div{display:flex;gap:8px;flex:1;min-width:0;}
+.k-dialog .k-row input.grow{flex:1;min-width:0;}
+
+/* Enhanced toasts */
+.k-toast{border-radius:12px;box-shadow:var(--shadow);}
+.k-toast.bad{border-radius:12px;box-shadow:0 4px 12px var(--shadow);}
+
+/* Focus visible for all interactive elements */
+button.k-btn:focus-visible,a.k-btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:6px;}

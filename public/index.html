@@ -1637,6 +1637,325 @@
     .chip-scroll{flex-wrap:wrap;overflow:visible;margin:0;padding:0;}
   }
 
+/* ---- Kestrel Button System ----- */
+.k-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:0;
+  border-radius:var(--r-pill);
+  font:700 14px var(--font-ui);
+  text-transform:none;
+  letter-spacing:.02em;
+  color:var(--ink);
+  background:transparent;
+  cursor:pointer;
+  text-decoration:none;
+  min-height:44px;
+  padding:0 20px;
+  border:2px solid transparent;
+  outline:none;
+  position:relative;
+  transition:background .15s, border-color .15s, color .15s, transform .15s;
+}
+.k-btn:focus-visible{
+  outline:2px solid var(--gold);
+  outline-offset:2px;
+  border-radius:8px;
+}
+.k-btn:hover{
+  background:var(--press);
+}
+.k-btn.primary{
+  background:var(--fill);
+  color:var(--on-fill);
+  border-color:transparent;
+}
+.k-btn.primary:hover{
+  opacity:0.9;
+}
+.k-btn.wide{width:100%;}
+.k-btn.small{
+  font-size:13px;
+  padding:6px 14px;
+  min-height:34px;
+}
+.k-btn.danger{
+  color:var(--red);
+  border-color:var(--red);
+}
+.k-btn.danger:hover{background:var(--red-bg);}
+.k-btn.k-btn-primary{
+  background:var(--ink);
+  color:var(--on-fill);
+}
+/* Sticky Header with Logo */
+.k-header{
+  position:sticky;
+  top:0;
+  z-index:100;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:14px 20px;
+  background:var(--bg);
+  border-bottom:2px solid var(--line);
+  margin-bottom:0;
+}
+.k-header .k-brand{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  text-decoration:none;
+  font-weight:800;
+  font-size:clamp(1.25rem, 4vw, 1.5rem);
+  letter-spacing:-.03em;
+  color:var(--ink);
+  flex-shrink:0;
+}
+.k-header .k-brand img{
+  width:28px;
+  height:28px;
+  flex-shrink:0;
+}
+.k-header .k-brand span{
+  font-weight:900;
+  letter-spacing:.02em;
+  color:var(--k-red);
+}
+.k-header .k-nav{
+  display:flex;
+  gap:24px;
+  flex:1;
+  font:700 12px var(--font-ui);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  color:var(--ink-soft);
+}
+.k-header .k-nav a{
+  color:var(--ink-soft);
+  text-decoration:none;
+  position:relative;
+  padding-bottom:4px;
+  border-bottom:2px solid transparent;
+  transition:border-color .2s;
+}
+.k-header .k-nav a:hover{
+  color:var(--ink);
+  border-bottom-color:var(--k-red);
+}
+.k-header .k-nav .k-current{
+  color:var(--ink);
+  border-bottom-color:var(--k-red);
+}
+.k-header .k-auth-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+/* Landing Hero */
+.k-landing-hero{
+  text-align:center;
+  padding:96px 20px 48px;
+  max-width:1200px;
+  margin:0 auto;
+}
+.k-landing-hero .k-kicker{
+  font:700 12px var(--font-ui);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+  color:var(--k-red);
+  margin-bottom:8px;
+  display:inline-block;
+}
+.k-landing-hero .k-display{
+  font-size:clamp(48px, 16vw, 112px);
+  line-height:.92;
+  letter-spacing:-.055em;
+  margin:12px 0 24px;
+  font-weight:800;
+  color:var(--ink);
+}
+.k-landing-hero .k-display .k-hand-under{
+  display:inline-block;
+  margin-left:6px;
+  vertical-align:bottom;
+  width:140px;
+  height:14px;
+}
+.k-landing-hero .k-lede{
+  font-size:1.25rem;
+  line-height:1.6;
+  max-width:48ch;
+  color:var(--ink-soft);
+  margin:0 auto 32px;
+  font-weight:400;
+}
+/* Feature Sections */
+.k-features{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 20px;
+}
+.k-section{
+  padding:48px 0;
+  border-top:1px solid var(--line);
+}
+.k-section:first-child{border-top:none;}
+.k-section-title{
+  font-size:clamp(1.5rem, 3vw, 2rem);
+  line-height:1.1;
+  letter-spacing:-.03em;
+  margin-bottom:24px;
+  padding-bottom:12px;
+  border-bottom:2px solid var(--k-red);
+  display:inline-block;
+}
+.k-section-subtitle{
+  font-size:1.125rem;
+  line-height:1.6;
+  color:var(--ink-soft);
+  max-width:40ch;
+  margin:0 auto 32px;
+}
+/* Feature cards grid */
+.k-feature-cards{
+  max-width:1200px;
+  margin:0 auto;
+  display:grid;
+  gap:24px;
+  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+  padding:20px 0;
+}
+.k-feature-card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-top:3px solid var(--ink);
+  padding:24px;
+  color:var(--ink);
+  transition:border-color .2s, transform .2s, box-shadow .2s;
+}
+.k-feature-card:hover{
+  border-top-color:var(--k-red);
+  transform:translateY(-4px);
+  box-shadow:var(--shadow);
+}
+.k-feature-card .k-card-title{
+  font-size:1.125rem;
+  line-height:1.3;
+  margin:0 0 8px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+.k-feature-card .k-card-meta{
+  font-size:0.875rem;
+  color:var(--ink-soft);
+  margin:0 0 12px;
+  display:block;
+}
+.k-feature-card .k-card-desc{
+  font-size:0.9375rem;
+  line-height:1.55;
+  color:var(--ink-soft);
+  margin:0;
+}
+/* Interactive Demos */
+.k-demo{
+  max-width:1200px;
+  margin:0 auto;
+  padding:0 20px;
+}
+.k-demo .k-section-title{
+  text-align:center;
+  margin-bottom:40px;
+}
+.k-demo-grid{
+  max-width:1200px;
+  margin:0 auto;
+  display:grid;
+  gap:24px;
+  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
+}
+.k-demo-box{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-top:3px solid var(--ink);
+  padding:24px;
+  text-align:center;
+  transition:border-color .2s;
+  cursor:default;
+}
+.k-demo-box:hover{border-top-color:var(--k-red);}
+.k-demo-box .k-demo-icon{
+  width:48px;
+  height:48px;
+  margin:0 auto 16px;
+  font-size:32px;
+  line-height:1;
+  display:block;
+}
+.k-demo-box .k-demo-title{
+  font-size:1.125rem;
+  line-height:1.3;
+  margin:0 0 8px;
+  font-weight:700;
+  letter-spacing:-.02em;
+}
+.k-demo-box .k-demo-desc{
+  font-size:0.9375rem;
+  color:var(--ink-soft);
+  margin:0;
+}
+/* CTA Section */
+.k-cta{
+  max-width:1200px;
+  margin:0 auto 48px;
+  padding:64px 20px;
+  text-align:center;
+  background:var(--fill);
+}
+.k-cta .k-section-title{
+  font-size:clamp(2rem, 5vw, 2.5rem);
+  margin-bottom:16px;
+}
+.k-cta .k-section-subtitle{
+  font-size:1.25rem;
+  color:var(--ink-soft);
+  margin-bottom:32px;
+  max-width:48ch;
+  margin-left:auto;
+  margin-right:auto;
+}
+/* About Section */
+.k-about{
+  max-width:1200px;
+  margin:0 auto 64px;
+  padding:0 20px;
+}
+.k-about .k-about-content{
+  max-width:720px;
+  margin:0 auto;
+  text-align:left;
+}
+.k-about h2{
+  font-size:clamp(1.5rem, 3vw, 2rem);
+  line-height:1.2;
+  letter-spacing:-.03em;
+  margin-bottom:24px;
+  padding-bottom:12px;
+  border-bottom:2px solid var(--k-red);
+  display:inline-block;
+}
+.k-about p{
+  font-size:1.0625rem;
+  line-height:1.6;
+  color:var(--ink-soft);
+  margin-bottom:24px;
+}
+/* Toast */
+.k-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:100;background:var(--ink);color:var(--on-fill);padding:11px 16px;font:500 14px var(--font-ui);max-width:calc(100% - 32px);border-radius:12px;}
+.k-toast.bad{background:var(--red);color:#fff;}
 </style>
 <link rel="stylesheet" href="/kestrel.css">
 </head>
@@ -1644,6 +1963,137 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
   <filter id="rough" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.8"/></filter>
 </svg>
+
+<!-- Sticky Header with Logo -->
+<header class="k-header" id="kHeader">
+  <a class="k-brand" href="/">
+    <img src="/kestrel.svg" alt="Kestrel" width="28" height="28">
+    <span>KESTREL</span>
+  </a>
+  <nav class="k-nav" aria-label="Main navigation">
+    <a href="/lab#/" data-nav="home" class="k-current">Lab</a>
+    <a href="#features" data-nav="features">Features</a>
+    <a href="#about" data-nav="about">About</a>
+  </nav>
+  <div class="k-auth-actions">
+    <button class="k-btn k-btn-primary" id="kSignInBtn">Sign In</button>
+    <button class="k-btn" id="kTryDemoBtn">Try Demo</button>
+  </div>
+</header>
+
+<!-- Landing Hero -->
+<main class="k-landing-hero">
+  <div class="k-kicker">Open-source AI running coaching</div>
+  <h1 class="k-display">Train together.<br><span class="k-u">Race smarter.</span><svg class="k-hand-under" viewBox="0 0 260 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 48 3, 112 11, 170 6 S 236 6, 257 4"/><path d="M14 11 C 80 8, 150 12, 250 8"/></svg></h1>
+  <p class="k-lede">AI coaching that running apps charge for, free and open source. Kestrel builds your plan and changes it day to day, syncs your watch, predicts your races, and keeps your whole team on one calendar.</p>
+</main>
+
+<!-- Features Section -->
+<section id="features" class="k-features">
+  <div class="k-section">
+    <h2 class="k-section-title">Adaptive Training Plans</h2>
+    <p class="k-section-subtitle">Plans by weekly mileage that move with how you feel, sleep, and race. Change a day by telling it you can't make it. Every change checked by fixed guardrails — no big jumps, no back-to-back hard days, week stays within 10%.</p>
+    <div class="k-feature-cards">
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Six plan levels</h3>
+        <span class="k-card-meta">Adaptive mileage</span>
+        <p class="k-card-desc">From 20 to 80+ miles per week. The AI coach moves days when you can't make them and eases off when readiness or soreness says so.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Guardrails built in</h3>
+        <span class="k-card-meta">Safety first</span>
+        <p class="k-card-desc">No big jumps in volume. No back-to-back hard days. Every plan change respects your limits.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Fitness tracking</h3>
+        <span class="k-card-meta">VO2max & zones</span>
+        <p class="k-card-desc">Race estimates from 100m to marathon with 80% ranges, pace zones, and fitness/fatigue/form scores.</p>
+      </div>
+    </div>
+  </div>
+  <div class="k-section">
+    <h2 class="k-section-title">Any AI, Open Models</h2>
+    <p class="k-section-subtitle">Free built-in AI, your own API key (OpenAI, Anthropic, Gemini, OpenRouter, Groq), or a model on your laptop. Race predictions come from open models anyone can publish in Kestrel Lab.</p>
+    <div class="k-feature-cards">
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Kestrel AI</h3>
+        <span class="k-card-meta">Free default</span>
+        <p class="k-card-desc">Powered by Gemini with open-weight Llama fallback. Every model gets the same prompt and guardrails.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Bring your own key</h3>
+        <span class="k-card-meta">OpenAI · Anthropic · Gemini</span>
+        <p class="k-card-desc">OpenRouter, Groq, Ollama, LM Studio — keys stay in your browser, never sent to Kestrel's server.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Kestrel Lab</h3>
+        <span class="k-card-meta">Open model hub</span>
+        <p class="k-card-desc">Browse, try, and publish open running models. Like Hugging Face for running AI.</p>
+      </div>
+    </div>
+  </div>
+  <div class="k-section">
+    <h2 class="k-section-title">Team Calendar</h2>
+    <p class="k-section-subtitle">Anyone can start a school team: calendar, meets, RSVPs, availability, posts and team mileage. Names appear on the leaderboard only for athletes who choose to share.</p>
+    <div class="k-feature-cards">
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Team management</h3>
+        <span class="k-card-meta">Invite codes</span>
+        <p class="k-card-desc">Start a team for your school. Others join with an invite code or link. Owner manages the calendar.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Privacy by default</h3>
+        <span class="k-card-meta">Health stays private</span>
+        <p class="k-card-desc">No coach view of training, teammates never see health, log, or contact details.</p>
+      </div>
+      <div class="k-feature-card">
+        <h3 class="k-card-title">Watch sync</h3>
+        <span class="k-card-meta">Intervals.icu</span>
+        <p class="k-card-desc">Garmin and COROS sync through intervals.icu. Each run gets difficulty from pace and heart rate.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Interactive Demos -->
+<section id="demo" class="k-demo">
+  <h2 class="k-section-title">Try It</h2>
+  <div class="k-demo-grid">
+    <a href="/lab#/" class="k-demo-box">
+      <span class="k-demo-icon">🏭</span>
+      <h3 class="k-demo-title">Kestrel Lab</h3>
+      <p class="k-demo-desc">Browse, try, and publish open running models. Model cards, tags, API access.</p>
+    </a>
+    <a href="#predict" class="k-demo-box">
+      <span class="k-demo-icon">📊</span>
+      <h3 class="k-demo-title">Race Predictor</h3>
+      <p class="k-demo-desc">Enter your recent times to predict your next race with 80% confidence intervals.</p>
+    </a>
+    <a href="#coach" class="k-demo-box">
+      <span class="k-demo-icon">🤖</span>
+      <h3 class="k-demo-title">AI Coach</h3>
+      <p class="k-demo-desc">Chat about your plan, log, fitness, and next meet. Free default AI or your own key.</p>
+    </a>
+  </div>
+</section>
+
+<!-- CTA Section -->
+<section class="k-cta">
+  <h2 class="k-section-title">Start Your Free AI Coach Today</h2>
+  <p class="k-section-subtitle">No paywall. No premium tier. Just advanced running analytics for everyone. Sign in with Google or create an account to get started.</p>
+  <button class="k-btn k-btn-primary" id="kStartNowBtn">Get Started →</button>
+</section>
+
+<!-- About Section -->
+<section id="about" class="k-about">
+  <div class="k-about-content">
+    <h2>About Kestrel</h2>
+    <p>Kestrel was created to democratize high-tier fitness metrics and coaching features typically paywalled by platforms like Strava Premium. Our mission is to make advanced running analytics accessible to everyone — especially school teams with limited budgets.</p>
+    <p>Built as an open-source project, Kestrel gives you full control over your data, your models, and your coaching experience. Every feature that premium apps charge for is available here for free: from adaptive training plans and race predictions to AI-powered coaching and team management.</p>
+    <p>Whether you're a high school cross-country runner or a marathon trainee, Kestrel provides the insights you need to train smarter and race faster.</p>
+  </div>
+</section>
+
 <div id="kGate"></div>
 <div class="wrap" id="kApp" hidden>
 
@@ -6276,5 +6726,92 @@ window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script type="module" src="/kestrel.js"></script>
+<script>
+// ---- Kestrel Landing Page Interactions ----
+(() => {
+  const kHeader = document.getElementById('kHeader');
+  const kGate = document.getElementById('kGate');
+  let lastScroll = 0;
+
+  // Header hide/show on scroll
+  if (kHeader) {
+    window.addEventListener('scroll', () => {
+      const currentScroll = window.pageYOffset;
+      if (currentScroll > lastScroll && currentScroll > 100) {
+        kHeader.style.transform = 'translateY(-100%)';
+      } else {
+        kHeader.style.transform = 'translateY(0)';
+      }
+      lastScroll = currentScroll <= 0 ? 0 : currentScroll;
+    });
+  }
+
+  // Smooth scroll for nav links
+  document.querySelectorAll('.k-nav a').forEach(link => {
+    link.addEventListener('click', (e) => {
+      const targetMap = {
+        'home': '/lab#/',
+        'features': '#features',
+        'about': '#about'
+      };
+      const targetId = link.getAttribute('data-nav');
+      const target = targetMap[targetId];
+      if (target && target.startsWith('#')) {
+        e.preventDefault();
+        const targetElement = document.querySelector(target);
+        if (targetElement) {
+          window.scrollTo({
+            top: Math.max(0, targetElement.offsetTop - 90),
+            behavior: 'smooth'
+          });
+        }
+      }
+    });
+  });
+
+  // Helper to reveal sign-in gate
+  function revealGate() {
+    if (kGate) {
+      kGate.hidden = false;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  // Sign In button
+  const kSignInBtn = document.getElementById('kSignInBtn');
+  if (kSignInBtn && kGate) {
+    kSignInBtn.addEventListener('click', () => {
+      revealGate();
+    });
+  }
+
+  // Start Now / Get Started button
+  const kStartNowBtn = document.getElementById('kStartNowBtn');
+  if (kStartNowBtn && kGate) {
+    kStartNowBtn.addEventListener('click', () => {
+      revealGate();
+    });
+  }
+
+  // Try Demo button - go to Lab
+  const kTryDemoBtn = document.getElementById('kTryDemoBtn');
+  if (kTryDemoBtn) {
+    kTryDemoBtn.addEventListener('click', () => {
+      const labLink = document.querySelector('.k-nav a[data-nav="home"]');
+      if (labLink) {
+        window.location.href = labLink.href;
+      }
+    });
+  }
+
+  // When sign-in completes, hide landing page sections
+  const origOpenApp = window.openApp;
+  window.openApp = function() {
+    if (origOpenApp) origOpenApp();
+    const landingSections = document.querySelectorAll('.k-header, .k-landing-hero, .k-features, .k-demo, .k-cta, .k-about');
+    landingSections.forEach(s => s.hidden = true);
+  };
+})();
+</script>
 </body>
 </html>
