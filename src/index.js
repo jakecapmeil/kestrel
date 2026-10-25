@@ -23,6 +23,8 @@ import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { hawkyState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/hawky.js';
 import { aiEnabled, askCoach, coachChat, AiError } from './train/gemini.js';
+import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
+import { getTrack } from './train/tracks.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -900,6 +902,21 @@ async function route(request, env, url) {
         fitness, five_k_time: await fiveKFor(db, me.id), prs: await getPrs(db, me.id),
       });
     }
+    if (path === '/api/courses') {
+      const courses = await listCourses(db, me.id);
+      return json({ courses, tracked: trackedOf(settingsOf(me)), stats: await courseStats(db, courses.map((c) => c.id)), distances: COURSE_DISTANCES });
+    }
+    // Records: fitness is recomputed first when it is stale, so any PR a new run set is already in the list.
+    if (path === '/api/records') {
+      await getFitness(db, me.id, today);
+      const prs = await getPrs(db, me.id);
+      const courses = await coursesById(db, [...Object.keys(prs).map((k) => parseCourseKey(k)?.id).filter(Boolean), ...trackedOf(settingsOf(me)).map((t) => t.course)]);
+      return json({ prs, tracked: trackedOf(settingsOf(me)), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])) });
+    }
+    if (path === '/api/runs/track') {
+      const r = await getTrack(env, me.id, str(q.get('id'), 80));
+      return json(r, r.error === 'not_found' ? 404 : 200);
+    }
     if (path === '/api/fitness') return json({ fitness: await getFitness(db, me.id, today), history: await fitnessHistory(db, me.id) });
     if (path === '/api/predict') { try { return json(await racePredictions(env, me.id, today)); } catch (e) { return json({ enabled: false, error: String(e?.message || e) }); } }
     if (path === '/api/hawky') return json(await hawkyState(db, me.id));
@@ -1062,6 +1079,20 @@ async function route(request, env, url) {
   }
   if (path === '/api/fitness/refresh') return json({ fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/people/prs') return json({ ...(await setPrs(db, me.id, b.prs)), fitness: await recomputeFitness(db, me.id, today) });
+  if (path === '/api/courses') return json(await createCourse(db, me.id, { name: b.name, place: b.place, distances: b.distances }));
+  if (path === '/api/courses/track') {
+    const tracked = await setTracked(db, me.id, b.tracked);
+    return json({ tracked, fitness: await recomputeFitness(db, me.id, today) });
+  }
+  // Pick (or clear) the course a run was on. Its PRs are searched again straight away.
+  if (path === '/api/runs/course') {
+    const id = str(b.course_id, 40);
+    if (id && !(await getCourse(db, id))) throw new BadRequest('That course is not in the list.');
+    const res = await db.prepare('UPDATE workouts SET course_id = ? WHERE person_id = ? AND strava_id = ?').bind(id, me.id, str(b.strava_id, 80)).run();
+    if (!res.meta.changes) throw new NotFound('Unknown run.');
+    const fitness = await recomputeFitness(db, me.id, today);
+    return json({ ok: true, course_id: id, new_prs: fitness?.new_prs || [], prs: await getPrs(db, me.id), fitness });
+  }
   if (path === '/api/people/5k') return json({ ...(await setFiveK(db, me.id, b.time)), fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/log/day') {
     // Watch days are locked: their miles, minutes, runs and difficulty come from the synced activities.
@@ -1123,7 +1154,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

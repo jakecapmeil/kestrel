@@ -6,7 +6,9 @@
 <meta name="color-scheme" content="light dark">
 <title>Kestrel</title>
 <meta name="description" content="Kestrel: free, open-source AI running coaching for school teams. Team calendar, training plans that adapt, watch sync, race predictions from open models, and an AI coach you can power with any model.">
-<link rel="icon" href="/kestrel.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
@@ -1560,6 +1562,58 @@
      column widens, and from 1024px the app becomes a two-column dashboard:
      identity + section tabs on top, each page laid out as a grid.
      ===================================================================== */
+  /* You: one column, grouped */
+  .you-stack{display:flex;flex-direction:column;gap:var(--sp-4);max-width:760px;}
+  .you-stack > .card,.you-sec > .card{margin-bottom:0;}
+  .you-sec{display:flex;flex-direction:column;gap:var(--sp-3);}
+  .you-sec + .you-sec{margin-top:var(--sp-4);}
+  .you-h{margin:0;font-family:var(--font-display);font-size:var(--fs-title3,20px);font-weight:700;letter-spacing:-.01em;}
+  .you-sub{margin:-6px 0 0;font-size:var(--fs-subhead);color:var(--ink-soft);}
+  details.fold > summary{list-style:none;cursor:pointer;}
+  details.fold > summary::-webkit-details-marker{display:none;}
+  details.fold > summary::after{content:'';flex-shrink:0;width:8px;height:8px;margin:6px 4px 0 var(--sp-3);border-right:2px solid var(--ink-soft);border-bottom:2px solid var(--ink-soft);transform:rotate(45deg);transition:transform var(--t-fast) var(--ease);align-self:flex-start;}
+  details.fold[open] > summary::after{transform:rotate(-135deg);margin-top:10px;}
+  details.fold[open] > summary{margin-bottom:var(--sp-3);}
+  details.fold > summary .badge{margin-left:auto;}
+  /* Records */
+  .rec-row{grid-template-columns:minmax(86px,1.1fr) minmax(0,1fr) minmax(0,1.3fr) 48px;}
+  .rec-row .pr-ev small{display:block;font-weight:500;font-size:var(--fs-caption);color:var(--ink-soft);}
+  .rec-flag{justify-self:end;}
+  @media (max-width:560px){
+    .rec-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:'ev flag' 'time date';row-gap:var(--sp-1);padding:var(--sp-2) 0;border-top:1px solid var(--line);}
+    .rec-row.head{display:none;}
+    .rec-row .pr-ev{grid-area:ev;}
+    .rec-row [data-pr]{grid-area:time;}
+    .rec-row [data-prdate]{grid-area:date;}
+    .rec-row .rec-flag{grid-area:flag;}
+    .rec-course{align-items:start;}
+    .rec-course .rec-x{margin-top:var(--sp-2);}
+  }
+  .rec-course{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:var(--sp-2);align-items:center;}
+  .rec-x{width:28px;height:28px;padding:0;border-radius:50%;background:transparent;border:1px solid var(--line);color:var(--ink-soft);font-size:16px;line-height:1;}
+  .rec-status{min-height:1.4em;margin-top:var(--sp-3);}
+  .chip-wrap{display:flex;flex-wrap:wrap;gap:var(--sp-2);}
+  .course-list{display:flex;flex-direction:column;gap:var(--sp-2);max-height:320px;overflow-y:auto;}
+  .course-opt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;height:auto;padding:var(--sp-3);border-radius:var(--r-md);background:var(--surface-2);color:var(--ink);text-align:left;}
+  .course-opt small{font-weight:500;color:var(--ink-soft);font-size:var(--fs-caption);}
+  /* A run: course and route */
+  .act-extra{margin-top:var(--sp-3);padding-top:var(--sp-3);border-top:1px solid var(--line);}
+  .act-course-row{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;}
+  .act-k{font-size:var(--fs-caption);font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;margin-right:var(--sp-1);}
+  .link-quiet{background:none;border:0;padding:0;height:auto;color:var(--ink-soft);font-size:var(--fs-footnote);text-decoration:underline;}
+  .act-course-msg{margin-top:var(--sp-2);}
+  .route{display:flex;flex-direction:column;gap:var(--sp-2);margin-top:var(--sp-3);}
+  .route-map,.route-prof{width:100%;max-width:440px;background:var(--surface-2);border-radius:var(--r-md);}
+  .route-path{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;}
+  .route-start{fill:var(--positive);stroke:var(--surface);stroke-width:2;}
+  .route-end{fill:var(--accent);stroke:var(--surface);stroke-width:2;}
+  .route-fill{fill:var(--accent-subtle);}
+  .route-line{fill:none;stroke:var(--accent);stroke-width:1.5;}
+  .route-stats{display:flex;gap:var(--sp-4);font-size:var(--fs-subhead);color:var(--ink-soft);}
+  .route-stats b{color:var(--ink);font-variant-numeric:tabular-nums;}
+  .route-3d{height:320px;max-width:440px;border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);}
+  .route-3d[hidden]{display:none;}
+
   @media (min-width:720px){
     body{padding:calc(28px + env(safe-area-inset-top)) 28px 56px;}
     .wrap{max-width:760px;}
@@ -1571,6 +1625,7 @@
     .page-tab{padding:0 var(--sp-3);white-space:nowrap;}
     body .wrap{grid-template-columns:auto minmax(150px,200px) minmax(300px,1fr) auto;column-gap:var(--sp-3);}
   }
+
   @media (min-width:1024px){
     /* One top bar: wordmark, who you are, sections, sync and contacts. */
     body{padding:calc(16px + env(safe-area-inset-top)) 24px 40px;}
@@ -1618,9 +1673,6 @@
     #calGrid .day .dots{justify-content:flex-start;}
     #schMeetsView > .card{margin-bottom:0;}
 
-    .you-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-5);align-items:start;}
-    .you-grid > .card{margin-bottom:0;}
-    #youSettingsView > #setupCard{grid-row:span 2;}
     .split-team{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);}
     .split-fit{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);}
     .split-hawky{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);}
@@ -2237,11 +2289,12 @@
       </div>
       <div class="seg" id="youViews" role="tablist" aria-label="You view">
         <button type="button" class="seg-btn active" role="tab" data-yview="profile">Profile</button>
+        <button type="button" class="seg-btn" role="tab" data-yview="records">Records</button>
         <button type="button" class="seg-btn" role="tab" data-yview="body">Body</button>
         <button type="button" class="seg-btn" role="tab" data-yview="settings">Settings</button>
       </div>
     </div>
-    <div id="youProfileView" class="you-grid">
+    <div id="youProfileView" class="you-stack">
       <div class="card">
         <div class="card-title">Profile</div>
         <div class="hint" id="personalHint" style="display:none;"></div>
@@ -2264,24 +2317,33 @@
           </div>
         </div>
       </div>
-      <div class="card" id="prCard">
-        <div class="section-head">
-          <div>
-            <div class="card-title">Personal records</div>
-            <div class="hint">These anchor your Fitness States, so add the date if you know it: recent PRs count more.</div>
+    </div>
+    <div id="youRecordsView" class="you-stack" style="display:none;">
+      <div class="hint" id="recHint">Reload and pick your name to see your records.</div>
+      <div id="recBody" class="you-stack">
+        <div class="card" id="prCard">
+          <div class="section-head">
+            <div>
+              <div class="card-title">Personal records</div>
+              <div class="hint">Kestrel finds these from your races and hard runs and updates them when a run beats one. Type one in if it isn't from a run Kestrel can see; it saves as you go.</div>
+            </div>
           </div>
+          <div class="pr-grid" id="recStd"></div>
+          <div class="hint rec-status" id="recStatus" role="status"></div>
         </div>
-        <div class="hint" id="prHint">Reload and pick your name to add your PRs.</div>
-        <div class="stack" id="prForm" style="display:none;">
-          <div class="pr-grid" id="prGrid"></div>
-          <div class="cluster">
-            <button id="savePrsBtn" type="button">Save PRs</button>
-            <span class="hint" id="prSaved" style="display:none;">Saved</span>
+        <div class="card" id="courseCard">
+          <div class="section-head">
+            <div>
+              <div class="card-title">Courses</div>
+              <div class="hint">Your times on a course you race again and again, like the 5K or the 2.5 at Van Cortlandt. A race there updates that course's PR, and a 5K also counts toward your XC 5K. Your track PRs are never touched.</div>
+            </div>
+            <button type="button" id="recAddCourse">Add a course</button>
           </div>
+          <div class="pr-grid" id="recCourseList"></div>
         </div>
       </div>
     </div>
-    <div id="youBodyView" class="you-grid" style="display:none;">
+    <div id="youBodyView" class="you-stack" style="display:none;">
       <div class="card">
         <div class="card-title">How do you feel?</div>
         <div class="event-type-picker" id="healthPicker">
@@ -2319,17 +2381,18 @@
         <button type="button" class="ghost full-btn" id="bodyHawkyBtn" style="margin-top:var(--sp-3);">Tell Kestrel AI how it feels</button>
       </div>
     </div>
-    <div id="youSettingsView" class="you-grid" style="display:none;">
-      <div class="card" id="kAiCard"><div class="card-title">Kestrel AI</div><div id="kAiBody"></div></div>
-      <div class="card" id="kModelsCard"><div class="card-title">Race models</div><div id="kModelsBody"></div></div>
-      <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
+    <div id="youSettingsView" class="you-stack" style="display:none;">
+      <section class="you-sec">
+        <h3 class="you-h">Watch and data</h3>
+        <p class="you-sub">Your runs flow in on their own once a watch is connected. Pick one way: Claude walks you through it, or do the steps yourself.</p>
       <div class="card setup-card" id="coachCard" style="display:none;">
-        <div class="section-head">
+        <details class="fold">
+        <summary class="section-head">
           <div>
             <div class="card-title">Set up with Claude <span class="badge tone-int-1" style="vertical-align:3px;">Easiest</span></div>
             <div class="hint">Two copy-pastes. Claude (a free account works) walks you through the rest and connects your watch to Kestrel for you.</div>
           </div>
-        </div>
+        </summary>
         <ol class="setup-steps">
           <li>
             <div class="setup-num">1</div>
@@ -2375,15 +2438,17 @@
             </div>
           </div>
         </details>
+      </details>
       </div>
       <div class="card setup-card" id="setupCard">
-        <div class="section-head">
+        <details class="fold" id="watchFold">
+        <summary class="section-head">
           <div>
-            <div class="card-title">Or set up your watch yourself</div>
+            <div class="card-title">Connect your watch</div>
             <div class="hint">About 5 minutes, once. After that your runs, splits and Fitness States update on their own every time you open Kestrel.</div>
           </div>
           <span id="icuBadge"></span>
-        </div>
+        </summary>
         <ol class="setup-steps" id="setupSteps">
           <li data-step="1">
             <div class="setup-num">1</div>
@@ -2439,15 +2504,8 @@
               <div class="cluster"><button class="ghost" id="icuImportBtn" type="button">Import full history</button><span class="hint" id="importMsg"></span></div>
             </div>
           </li>
-          <li data-step="5">
-            <div class="setup-num">5</div>
-            <div class="setup-body">
-              <b>Add your PRs</b>
-              <p>PRs anchor your Fitness States until your watch has enough races. Add the date if you remember it.</p>
-              <button class="ghost" id="setupPrsBtn" type="button">Add PRs</button>
-            </div>
-          </li>
         </ol>
+      </details>
       </div>
       <div class="card" id="calendarFeedCard" style="display:none;">
         <div class="card-title">Meets in your calendar app</div>
@@ -2457,7 +2515,17 @@
           <button id="copyCalendarFeedBtn">Copy</button>
         </div>
       </div>
-    </div>
+      </section>
+      <section class="you-sec">
+        <h3 class="you-h">Kestrel AI and predictions</h3>
+      <div class="card" id="kAiCard"><div class="card-title">Kestrel AI</div><div id="kAiBody"></div></div>
+      <div class="card" id="kModelsCard"><div class="card-title">Race models</div><div id="kModelsBody"></div></div>
+      <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
+      </section>
+      <section class="you-sec">
+        <h3 class="you-h">Account</h3>
+      <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
+      </section>
   </div>
 
 </div>
@@ -2473,6 +2541,16 @@
       <button type="button" class="welcome-opt" id="welcomeGuest">Continue as guest</button>
       <select class="welcome-select" id="welcomeSelect" aria-label="Select user"></select>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="courseModalOverlay">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="courseModalTitle">
+    <div class="modal-head">
+      <h3 id="courseModalTitle">Courses</h3>
+      <button class="ghost" id="courseModalClose" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-list stack" id="courseModalBody"></div>
   </div>
 </div>
 
@@ -3891,21 +3969,21 @@ function setScheduleView(v){
 
 function renderYou(){
   paintSeg('youViews', 'yview', youView);
-  ['profile','body','settings'].forEach(v=>{ $('you' + v[0].toUpperCase() + v.slice(1) + 'View').style.display = v === youView ? '' : 'none'; });
+  ['profile','records','body','settings'].forEach(v=>{ $('you' + v[0].toUpperCase() + v.slice(1) + 'View').style.display = v === youView ? '' : 'none'; });
   const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
   $('youTitle').textContent = p ? (p.first_name || p.name) : activePersonId === COACH_ID ? 'Coach' : 'Guest';
-  if(youView !== 'body') renderPersonal();
+  if(youView === 'records') window.kRecords?.render();
+  else if(youView !== 'body') renderPersonal();
   else renderBodyMap();
 }
 
 function setYouView(v){
-  youView = ['profile','body','settings'].includes(v) ? v : 'profile';
+  youView = ['profile','records','body','settings'].includes(v) ? v : 'profile';
   renderYou();
 }
 
 function goToPrs(){
-  setPage('you'); setYouView('profile');
-  setTimeout(()=> $('prCard').scrollIntoView({ behavior:'smooth', block:'start' }), 60);
+  setPage('you'); setYouView('records');
 }
 
 function currentHealthStatus(){
@@ -4126,7 +4204,6 @@ function renderPersonal(){
 
   fetch('/api/calendar-link').then(r=>r.json()).then(d=>{ if(d.url) $('calendarFeedUrl').value = d.url; }).catch(()=>{});
   renderCoachSetup(p);
-  renderPrs(p);
   renderSetup(p);
 }
 
@@ -4190,12 +4267,15 @@ function renderSyncPill(){
   $('syncSetupItem').textContent = st?.connected ? 'Watch settings' : 'Set up watch sync';
 }
 
+let watchFoldSet = false;
 async function renderSetup(p){
   if(!p) return;
   const st = await fetchIcuStatus(p.id);
   if(!st || activePersonId !== p.id) return;
   const err = st.status && st.status.startsWith('error');
   $('icuBadge').innerHTML = st.connected ? `<span class="badge ${err ? 'tone-int-4' : 'tone-int-1'}">${err ? 'Needs attention' : 'Connected'}</span>` : '';
+  // Collapsed once the watch is connected; open for someone who has not set it up yet.
+  if(!watchFoldSet){ watchFoldSet = true; $('watchFold').open = !st.connected; }
   $('icuSetup').style.display = st.connected ? 'none' : '';
   $('icuLinked').style.display = st.connected ? '' : 'none';
   if(st.connected){
@@ -4213,6 +4293,7 @@ async function renderSetup(p){
 // Fresh data from the watch: everything that reads the log or fitness reloads.
 function afterNewRuns(){
   library = null; fitnessData = null;
+  if(currentPage === 'you' && youView === 'records') window.kRecords?.render();
   if(currentPage === 'training') renderTraining();
   if(currentPage === 'team') renderTeam();
 }
@@ -4395,47 +4476,9 @@ function miniMarkdown(text){
     .replace(/^\s*[*-]\s+/gm, '• ');
 }
 
-const PR_EVENTS = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC','XC 5K','VC 2.5 mi'];
 function parsePrsClient(raw){ try{ const o = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); return o && typeof o === 'object' ? o : {}; }catch(e){ return {}; } }
-
-function renderPrs(p){
-  $('prHint').style.display = p ? 'none' : '';
-  $('prForm').style.display = p ? '' : 'none';
-  if(!p) return;
-  const prs = parsePrsClient(p.prs);
-  const ph = { '100':'ss.s', '200':'ss.s', '400':'ss.s', '600':'m:ss.s', '1000':'m:ss', '2000 SC':'m:ss', '3000 SC':'mm:ss', '800':'m:ss', '1600':'m:ss', '3200':'mm:ss', '5K':'mm:ss', 'XC 5K':'mm:ss', 'VC 2.5 mi':'mm:ss' };
-  $('prGrid').innerHTML = `<div class="pr-row head"><span>Event</span><span>Time</span><span>When</span></div>` + PR_EVENTS.map(e=>`<div class="pr-row">
-    <span class="pr-ev">${e}</span>
-    <input type="text" data-pr="${e}" value="${escapeHtml(prs[e]?.time || '')}" placeholder="${ph[e]}" maxlength="10" inputmode="decimal" autocomplete="off" aria-label="${e} time">
-    <input type="date" data-prdate="${e}" value="${escapeHtml(prs[e]?.date || '')}" aria-label="${e} date">
-  </div>`).join('');
-  $('prSaved').style.display = 'none';
-}
-
-async function savePrs(){
-  const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
-  if(!p) return;
-  const current = parsePrsClient(p.prs);
-  const prs = {};
-  $('prGrid').querySelectorAll('[data-pr]').forEach(inp=>{
-    const time = inp.value.trim();
-    const e = inp.dataset.pr;
-    const date = $('prGrid').querySelector(`[data-prdate="${e}"]`).value;
-    if(time !== (current[e]?.time || '') || date !== (current[e]?.date || '')){
-      const next = { ...(current[e] || {}), time };
-      if(date) next.date = date; else delete next.date;
-      prs[e] = time ? next : { time: '' };
-    }
-  });
-  if(!Object.keys(prs).length){ $('prSaved').style.display = ''; return; }
-  const res = await apiPost('/api/people/prs', { personId: p.id, prs });
-  if(!res || res.error){ alert(res?.error || 'Couldn’t save. Check your connection.'); return; }
-  p.prs = JSON.stringify(res.prs);
-  library = null; fitnessData = null;
-  const est = res.fitness?.estimates?.find(x=>x.event === '5K');
-  $('prSaved').textContent = est ? `Saved. Fitness updated: 5K now ${est.time}.` : 'Saved';
-  $('prSaved').style.display = '';
-}
+// Standard events for the setup prompt; the Records view (records.js) owns the PR editor.
+const PR_EVENTS = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC','XC 5K'];
 
 // --- Kestrel AI in Claude ---------------------------------------------------------
 // The runner's own Claude does the work: their watch's connector in (COROS,
@@ -4484,7 +4527,7 @@ function coachPrompt(name){
 
 STEP 1 - CONTEXT. Call the Kestrel AI tool get_coach_context. It tells you today's date, my plan for this week day by day, my recent training log, which activity ids are already logged (already_logged, per source), my PRs and paces, and the scoring rubric. Read the rubric and follow it.
 
-STEP 1b - PRs AND GOALS (first run, or whenever prs comes back empty). Before anything else, ask me in one message: my PRs for ${PR_LIST} (time, and roughly when/where if I remember), which race I'm training for next, and my goal time for it. Wait for my answer. Save the PRs with set_prs (skip events I've never run). If five_k_time is empty, set it with set_5k_time from my best recent 5K or XC 5K; if I have no 5K, estimate it (3200 time x 1.65, or 1600 time x 3.5) and tell me it's an estimate. Mention I can update PRs any time on the Kestrel Personal tab or by telling you a new PR.
+STEP 1b - PRs AND GOALS (first run, or whenever prs comes back empty). Before anything else, ask me in one message: my PRs for ${PR_LIST} (time, and roughly when/where if I remember), which race I'm training for next, and my goal time for it. Wait for my answer. Save the PRs with set_prs (skip events I've never run). If five_k_time is empty, set it with set_5k_time from my best recent 5K or XC 5K; if I have no 5K, estimate it (3200 time x 1.65, or 1600 time x 3.5) and tell me it's an estimate. Kestrel also finds PRs by itself from synced races, so only the ones it is missing matter. Mention I can update PRs any time on the Kestrel You > Records tab or by telling you a new PR.
 
 ${key === 'intervals' ? `STEP 2 - REVIEW RUNS. ${src.pull} (last 14 days the first time, otherwise since your last review); ${src.detail}` : `STEP 2 - PULL RUNS. ${src.pull} from the last 14 days (the first time) or since the newest logged run (after that). Skip any activity whose id is already in already_logged.${key}. For each new one, get: ${src.detail}`}
 
@@ -4528,7 +4571,7 @@ SETUP. Do these one at a time, in plain friendly language, and wait for me after
 
 5. IMPORT HISTORY. Call sync_watch with full_history: true and keep calling it until done is true. Tell me roughly how far back my runs go. If it says activities came from Strava, explain step 3 again.
 
-6. PRs. Call get_coach_context. If missing_prs isn't empty, ask me in one message for my PRs (time, and roughly when) for 400, 800, 1600, 3200, 5K, XC 5K and the 2.5 mi at Van Cortlandt (VC 2.5 mi), plus my next goal race and goal time. Save them with set_prs, including dates (YYYY-MM-DD; first of the month is fine if I only know the month).
+6. PRs. Call get_coach_context. If missing_prs isn't empty, ask me in one message for my PRs (time, and roughly when) for 400, 800, 1600, 3200, 5K, XC 5K and the 2.5 mi at Van Cortlandt (course:vc:4023) and the 5K at Van Cortlandt (course:vc:5000), plus my next goal race and goal time. Save them with set_prs, including dates (YYYY-MM-DD; first of the month is fine if I only know the month).
 
 7. FITNESS STATES. Call get_fitness and explain it simply: what I could race right now from 400 m to half marathon, my VO2max estimate, my weekly mileage, and my training paces (what each pace is for). Say what it's based on and how confident it is.
 
@@ -5159,7 +5202,9 @@ function wireUI(){
   $('teamSort').querySelectorAll('[data-sort]').forEach(b=> b.addEventListener('click', ()=>{ teamSort = b.dataset.sort; renderTeam(); }));
   ['libRace','libPhase','libLen','libLevel'].forEach(id=> $(id).addEventListener('change', renderLibrary));
 
-  $('savePrsBtn').addEventListener('click', savePrs);
+  $('recAddCourse').addEventListener('click', ()=> window.kRecords.openPicker('follow'));
+  $('courseModalClose').addEventListener('click', ()=> window.kRecords.closePicker());
+  $('courseModalOverlay').addEventListener('click', e=>{ if(e.target === $('courseModalOverlay')) window.kRecords.closePicker(); });
   $('icuConnectBtn').addEventListener('click', async ()=>{
     const btn = $('icuConnectBtn');
     btn.disabled = true; btn.textContent = 'Checking…'; $('icuMsg').textContent = '';
@@ -5229,7 +5274,6 @@ function wireUI(){
     await apiPost('/api/intervals/disconnect', { personId: activePersonId });
     const p = people.find(x=>x.id===activePersonId); if(p) renderSetup(p);
   });
-  $('setupPrsBtn').addEventListener('click', goToPrs);
   $('syncPill').addEventListener('click', e=>{
     e.stopPropagation();
     const open = !$('syncMenu').classList.contains('show');
@@ -5543,7 +5587,7 @@ function activityHtml(a){
   const meta = [a.start && a.end && a.end !== a.start ? `${a.start}–${a.end}` : a.start, a.miles != null && `${Math.round(a.miles * 100) / 100} mi`, a.pace && `${a.pace}/mi`, a.avg_hr && `${a.avg_hr} bpm`, heat].filter(Boolean).join(' · ');
   return `<div class="act ${open ? 'open' : ''}" data-id="${escapeHtml(a.id)}">
     <button type="button" class="act-btn" aria-expanded="${open}"><span><span class="act-name">${escapeHtml(name)}</span> <span class="badge ${toneOf(a.category)}">${escapeHtml(a.role ? ROLE_LABEL[a.role] : cap(a.category))}</span><br><span class="act-meta num">${escapeHtml(meta)}</span></span><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></button>
-    <div class="act-body"><div class="act-grid">${stats}</div>${notes ? `<div class="act-note">${escapeHtml(notes)}</div>` : ''}${zones}</div>
+    <div class="act-body"><div class="act-grid">${stats}</div>${notes ? `<div class="act-note">${escapeHtml(notes)}</div>` : ''}${zones}${a.category !== 'crosstrain' && !a.track ? `<div class="act-extra" data-id="${escapeHtml(a.id)}" data-course="${escapeHtml(a.course_id || '')}" data-gps="${a.can_track ? 1 : 0}"></div>` : ''}</div>
   </div>`;
 }
 
@@ -5650,7 +5694,9 @@ async function renderTrainingDay(){
     b.closest('.act').classList.toggle('open', tlOpenActivity === id);
     b.setAttribute('aria-expanded', String(tlOpenActivity === id));
     $('tlSessions').querySelectorAll('.act').forEach(a=>{ if(a.dataset.id !== tlOpenActivity) a.classList.remove('open'); });
+    if(tlOpenActivity === id) window.kRecords?.mountActivity(b.closest('.act'));
   }));
+  if(tlOpenActivity) $('tlSessions').querySelectorAll('.act').forEach(el=>{ if(el.dataset.id === tlOpenActivity) window.kRecords?.mountActivity(el); });
   $('tlSessions').querySelectorAll('.session-btn').forEach(b=> b.addEventListener('click', ()=>{
     const key = b.closest('.session').dataset.key;
     if(tlSplitDirty && key !== tlOpenSession && !confirm('Your split changes in the open session aren’t saved. Switch anyway?')) return;
@@ -6298,6 +6344,7 @@ window.hawksReload = async ()=>{ planCache = {}; hawkyData = null; fitnessData =
 window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
+<script src="/records.js"></script>
 <script type="module" src="/kestrel.js"></script>
 </body>
 </html>
