@@ -2,9 +2,9 @@
 // ("my 5K at Van Cortlandt"), the course picker, and the GPS route of a run (2D, elevation, 3D terrain).
 // Runs after the main script, which owns $, escapeHtml, apiPost and the people list.
 (function(){
-  const STD = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC','XC 5K'];
-  const PH = { '100':'ss.s', '200':'ss.s', '400':'ss.s', '600':'m:ss.s', '800':'m:ss', '1000':'m:ss', '1600':'m:ss', '3200':'mm:ss', '5K':'mm:ss', '2000 SC':'m:ss', '3000 SC':'mm:ss', 'XC 5K':'mm:ss' };
-  const NAME = { '100':'100 m', '200':'200 m', '400':'400 m', '600':'600 m', '800':'800 m', '1000':'1000 m', '1600':'1600 m', '3200':'3200 m', '5K':'5K', '2000 SC':'2000 m steeple', '3000 SC':'3000 m steeple', 'XC 5K':'XC 5K (any course)' };
+  const STD = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC'];
+  const PH = { '100':'ss.s', '200':'ss.s', '400':'ss.s', '600':'m:ss.s', '800':'m:ss', '1000':'m:ss', '1600':'m:ss', '3200':'mm:ss', '5K':'mm:ss', '2000 SC':'m:ss', '3000 SC':'mm:ss' };
+  const NAME = { '100':'100 m', '200':'200 m', '400':'400 m', '600':'600 m', '800':'800 m', '1000':'1000 m', '1600':'1600 m', '3200':'3200 m', '5K':'5K', '2000 SC':'2000 m steeple', '3000 SC':'3000 m steeple' };
   const esc = (s)=> escapeHtml(String(s ?? ''));
 
   const S = { prs:{}, tracked:[], courses:{}, catalogue:null, stats:{}, distances:[], loaded:false };
@@ -233,11 +233,11 @@
       const cid = box.dataset.course;
       box.innerHTML = `<div class="act-course-row"><span class="act-k">Course</span>
         <button type="button" class="chip${cid ? ' on' : ''}" data-pick>${cid ? esc(courseName(cid)) : 'Choose course'}</button>
-        ${cid ? '<button type="button" class="link-quiet" data-clear>Clear</button>' : ''}
+        ${cid ? '<button type="button" class="link-quiet" data-clear>Not a course run</button>' : ''}
         ${box.dataset.gps === '1' ? '<button type="button" class="chip" data-route>Route</button>' : ''}</div>
         <div class="act-course-msg hint"></div><div class="act-route"></div>`;
       box.querySelector('[data-pick]').onclick = ()=> openPicker('tag', (course)=> setCourse(course));
-      const clear = box.querySelector('[data-clear]'); if(clear) clear.onclick = ()=> setCourse('');
+      const clear = box.querySelector('[data-clear]'); if(clear) clear.onclick = ()=> setCourse('none');
       const rb = box.querySelector('[data-route]'); if(rb) rb.onclick = ()=> toggleRoute(box, id);
     };
     const setCourse = async (course)=>{
@@ -245,19 +245,21 @@
       msg.textContent = 'Saving…';
       const res = await apiPost('/api/runs/course', { strava_id: id, course_id: course });
       if(!res || res.error){ msg.textContent = res?.error || 'Couldn’t save. Check your connection.'; return; }
-      box.dataset.course = course;
+      box.dataset.course = course === 'none' ? '' : course;
       adopt(res.prs);
       await draw();
       const found = (res.new_prs || []).map(x=> `${x.event.startsWith('course:') ? distLabel(parseKey(x.event).m) + ' at ' + courseName(parseKey(x.event).id) : x.event} ${x.time}`);
-      box.querySelector('.act-course-msg').textContent = found.length ? `New PR: ${found.join(', ')}.` : course ? 'Saved. Fitness and PRs updated.' : 'Cleared.';
+      box.querySelector('.act-course-msg').textContent = found.length ? `New PR: ${found.join(', ')}.` : course === 'none' ? 'Saved. PRs from this run were rechecked.' : 'Saved. Fitness and PRs updated.';
     };
-    draw();
+    draw().then(()=> { if(routeOpenId === id) toggleRoute(box, id); });
   }
 
+  // Which run's route is open, so it comes back when the log redraws (a sync does that).
+  let routeOpenId = null;
   async function toggleRoute(box, id){
     const out = box.querySelector('.act-route');
-    if(out.dataset.open){ out.innerHTML = ''; delete out.dataset.open; return; }
-    out.dataset.open = '1';
+    if(out.dataset.open){ out.innerHTML = ''; delete out.dataset.open; routeOpenId = null; return; }
+    out.dataset.open = '1'; routeOpenId = id;
     out.innerHTML = '<div class="hint">Loading the route…</div>';
     try{
       const r = await getJson('/api/runs/track?id=' + encodeURIComponent(id));

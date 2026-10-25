@@ -60,6 +60,8 @@ const eventText = (e) => [e.title, e.location, e.description, e.loc_name].filter
 // are ruled out first.
 export function courseOf(w, events = []) {
   if (w.surface === 'track') return '';
+  // 'none' is the runner saying it was not on a course.
+  if (w.course_id === 'none') return '';
   // A course the runner picked is final: Van Cortlandt is 'vc', any other is a cross-country course.
   if (w.course_id) return w.course_id === 'vc' ? 'vc' : 'xc';
   // A run named after the park is there. Otherwise Hawky's read of it (from
@@ -82,6 +84,7 @@ export function courseOf(w, events = []) {
 // The id of the course a run was on ('vc', 'franklin-park', ...), or '' when it was on none that Kestrel knows.
 // Van Cortlandt is also inferred (GPS, name, calendar); every other course only comes from the runner's pick.
 export function courseIdOf(w, events = []) {
+  if (w.course_id === 'none') return '';
   if (w.course_id) return w.course_id;
   return courseOf(w, events) === 'vc' ? 'vc' : '';
 }

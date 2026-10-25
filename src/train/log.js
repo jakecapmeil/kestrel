@@ -12,7 +12,7 @@ const staleFitness = (db, personId) => db.prepare('UPDATE fitness_states SET com
 export class LogError extends Error {}
 
 export const DAY_TYPES = ['easy', 'recovery', 'long', 'tempo', 'threshold', 'intervals', 'track', 'fartlek', 'hills', 'strides', 'race', 'shakeout', 'crosstrain', 'strength', 'rest'];
-export const PR_EVENTS = ['100', '200', '400', '600', '800', '1000', '1600', '3200', '5K', '2000 SC', '3000 SC', 'XC 5K'];
+export const PR_EVENTS = ['100', '200', '400', '600', '800', '1000', '1600', '3200', '5K', '2000 SC', '3000 SC'];
 // Course PRs ("course:vc:5000", the 5K at Van Cortlandt) are accepted as well: see courses.js.
 export const DAY_STATUSES = ['as_planned', 'harder', 'easier', 'missed', 'adjusted', 'rest'];
 

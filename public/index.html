@@ -2335,7 +2335,7 @@
           <div class="section-head">
             <div>
               <div class="card-title">Courses</div>
-              <div class="hint">Your times on a course you race again and again, like the 5K or the 2.5 at Van Cortlandt. A race there updates that course's PR, and a 5K also counts toward your XC 5K. Your track PRs are never touched.</div>
+              <div class="hint">Your times on a course you race again and again, like the 5K or the 2.5 at Van Cortlandt. A race there updates that course's PR. Your track PRs are never touched.</div>
             </div>
             <button type="button" id="recAddCourse">Add a course</button>
           </div>
@@ -4478,7 +4478,7 @@ function miniMarkdown(text){
 
 function parsePrsClient(raw){ try{ const o = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); return o && typeof o === 'object' ? o : {}; }catch(e){ return {}; } }
 // Standard events for the setup prompt; the Records view (records.js) owns the PR editor.
-const PR_EVENTS = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC','XC 5K'];
+const PR_EVENTS = ['100','200','400','600','800','1000','1600','3200','5K','2000 SC','3000 SC'];
 
 // --- Kestrel AI in Claude ---------------------------------------------------------
 // The runner's own Claude does the work: their watch's connector in (COROS,
@@ -4527,7 +4527,7 @@ function coachPrompt(name){
 
 STEP 1 - CONTEXT. Call the Kestrel AI tool get_coach_context. It tells you today's date, my plan for this week day by day, my recent training log, which activity ids are already logged (already_logged, per source), my PRs and paces, and the scoring rubric. Read the rubric and follow it.
 
-STEP 1b - PRs AND GOALS (first run, or whenever prs comes back empty). Before anything else, ask me in one message: my PRs for ${PR_LIST} (time, and roughly when/where if I remember), which race I'm training for next, and my goal time for it. Wait for my answer. Save the PRs with set_prs (skip events I've never run). If five_k_time is empty, set it with set_5k_time from my best recent 5K or XC 5K; if I have no 5K, estimate it (3200 time x 1.65, or 1600 time x 3.5) and tell me it's an estimate. Kestrel also finds PRs by itself from synced races, so only the ones it is missing matter. Mention I can update PRs any time on the Kestrel You > Records tab or by telling you a new PR.
+STEP 1b - PRs AND GOALS (first run, or whenever prs comes back empty). Before anything else, ask me in one message: my PRs for ${PR_LIST} (time, and roughly when/where if I remember), which race I'm training for next, and my goal time for it. Wait for my answer. Save the PRs with set_prs (skip events I've never run). If five_k_time is empty, set it with set_5k_time from my best recent 5K (track, road or a course); if I have no 5K, estimate it (3200 time x 1.65, or 1600 time x 3.5) and tell me it's an estimate. Kestrel also finds PRs by itself from synced races, so only the ones it is missing matter. Mention I can update PRs any time on the Kestrel You > Records tab or by telling you a new PR.
 
 ${key === 'intervals' ? `STEP 2 - REVIEW RUNS. ${src.pull} (last 14 days the first time, otherwise since your last review); ${src.detail}` : `STEP 2 - PULL RUNS. ${src.pull} from the last 14 days (the first time) or since the newest logged run (after that). Skip any activity whose id is already in already_logged.${key}. For each new one, get: ${src.detail}`}
 
@@ -4571,7 +4571,7 @@ SETUP. Do these one at a time, in plain friendly language, and wait for me after
 
 5. IMPORT HISTORY. Call sync_watch with full_history: true and keep calling it until done is true. Tell me roughly how far back my runs go. If it says activities came from Strava, explain step 3 again.
 
-6. PRs. Call get_coach_context. If missing_prs isn't empty, ask me in one message for my PRs (time, and roughly when) for 400, 800, 1600, 3200, 5K, XC 5K and the 2.5 mi at Van Cortlandt (course:vc:4023) and the 5K at Van Cortlandt (course:vc:5000), plus my next goal race and goal time. Save them with set_prs, including dates (YYYY-MM-DD; first of the month is fine if I only know the month).
+6. PRs. Call get_coach_context. If missing_prs isn't empty, ask me in one message for my PRs (time, and roughly when) for 400, 800, 1600, 3200, 5K and the 2.5 mi at Van Cortlandt (course:vc:4023) and the 5K at Van Cortlandt (course:vc:5000), plus my next goal race and goal time. Save them with set_prs, including dates (YYYY-MM-DD; first of the month is fine if I only know the month).
 
 7. FITNESS STATES. Call get_fitness and explain it simply: what I could race right now from 400 m to half marathon, my VO2max estimate, my weekly mileage, and my training paces (what each pace is for). Say what it's based on and how confident it is.
 

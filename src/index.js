@@ -15,7 +15,7 @@ import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, 
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
-import { getFitness, recomputeFitness, fitnessHistory } from './train/fitness.js';
+import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
 import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
 import { cohortReport } from './train/cohorts.js';
@@ -491,8 +491,8 @@ async function syncBudget(db, me) {
 // Leave-one-out on your own PRs: hide each result, ask the model for it from the others, compare. Nothing is saved.
 async function workbench(db, me, ids) {
   const prs = await getPrs(db, me.id);
-  // PRs are stored under the app's names (5K, 2000 SC, XC 5K); the Lab's events use metres.
-  const PR_TO_EVENT = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5000', '2000 SC': 'S2000', '3000 SC': 'S3000', 'XC 5K': 'xc5k' };
+  // PRs are stored under the app's names (5K, 2000 SC); the Lab's events use metres.
+  const PR_TO_EVENT = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5000', '2000 SC': 'S2000', '3000 SC': 'S3000' };
   const have = Object.entries(PR_TO_EVENT).filter(([k]) => prs[k]?.time).map(([k, key]) => {
     const e = EVENT.get(key);
     return { key: e.key, m: e.m, surf: e.surf, steeple: !!e.steeple, sec: parseTime(prs[k].time), ev: e };
@@ -1087,9 +1087,12 @@ async function route(request, env, url) {
   // Pick (or clear) the course a run was on. Its PRs are searched again straight away.
   if (path === '/api/runs/course') {
     const id = str(b.course_id, 40);
-    if (id && !(await getCourse(db, id))) throw new BadRequest('That course is not in the list.');
-    const res = await db.prepare('UPDATE workouts SET course_id = ? WHERE person_id = ? AND strava_id = ?').bind(id, me.id, str(b.strava_id, 80)).run();
+    // '' goes back to Kestrel's own guess; 'none' says it was on no known course.
+    if (id && id !== 'none' && !(await getCourse(db, id))) throw new BadRequest('That course is not in the list.');
+    const run = str(b.strava_id, 80);
+    const res = await db.prepare('UPDATE workouts SET course_id = ? WHERE person_id = ? AND strava_id = ?').bind(id, me.id, run).run();
     if (!res.meta.changes) throw new NotFound('Unknown run.');
+    await dropAutoPrsFrom(db, me.id, run);
     const fitness = await recomputeFitness(db, me.id, today);
     return json({ ok: true, course_id: id, new_prs: fitness?.new_prs || [], prs: await getPrs(db, me.id), fitness });
   }

@@ -1,15 +1,15 @@
 // Courses: named places people race (Van Cortlandt, Franklin Park, ...), and PRs on them.
 //
 //   A course PR is stored in people.prs under "course:<id>:<metres>" ("course:vc:5000" is the 5K at Van Cortlandt),
-//   next to the standard events. A race on a course updates its course PR and, for a 5K, the generic "XC 5K" too.
-//   It never touches a track PR.
+//   next to the standard events. A race on a course updates its course PR only: there is no generic XC PR,
+//   and a track PR is never touched.
 //
 //   Built-in courses ship here, user-added ones live in the courses table. Only a course with `geo` is matched
 //   from GPS; every other course is chosen by hand on the run (or from the calendar event) because Kestrel does
 //   not guess where a park is. Elevation is not stored on a course: it is read off the runs people tagged there
 //   (courseStats), so it is real rather than remembered.
 
-import { VC_FACTOR } from './conditions.js';
+import { VC_FACTOR, VC_RE } from './conditions.js';
 
 const MILE = 1609.344;
 export const MAX_CUSTOM_COURSES = 25;
@@ -53,11 +53,20 @@ export const courseKey = (id, m) => `course:${id}:${Math.round(m)}`;
 // PR keys that predate courses: the 2.5 mile PR was Van Cortlandt's.
 const LEGACY = { 'VC 2.5 mi': courseKey('vc', Math.round(2.5 * MILE)) };
 
+// "XC 5K" was a PR of its own, always raced at Van Cortlandt unless it named another meet. Those become the 5K at
+// Van Cortlandt; one that names some other meet has no course to move to, so it stays where it is (it still counts
+// toward fitness, it just is not listed).
+const isVcXc5k = (v) => !v?.meet || VC_RE.test(v.meet) || /^Found by (Kestrel|Hawks)(: Van Cortlandt)?$/i.test(v.meet);
+
 // A PR blob with legacy keys renamed. A key already in the new form wins.
 export function normalizePrs(prs) {
   const out = {};
-  for (const [k, v] of Object.entries(prs || {})) if (!LEGACY[k]) out[k] = v;
-  for (const [k, v] of Object.entries(prs || {})) if (LEGACY[k] && !out[LEGACY[k]]) out[LEGACY[k]] = v;
+  const vc5k = courseKey('vc', 5000);
+  for (const [k, v] of Object.entries(prs || {})) if (!LEGACY[k] && !(k === 'XC 5K' && isVcXc5k(v))) out[k] = v;
+  for (const [k, v] of Object.entries(prs || {})) {
+    if (LEGACY[k] && !out[LEGACY[k]]) out[LEGACY[k]] = v;
+    if (k === 'XC 5K' && isVcXc5k(v) && !out[vc5k]) out[vc5k] = v;
+  }
   return out;
 }
 
@@ -141,7 +150,7 @@ export async function createCourse(db, personId, { name, place, distances }) {
     || await db.prepare('SELECT id, name, place, distances FROM courses WHERE lower(name) = lower(?) AND lower(place) = lower(?)').bind(name, place).first();
   if (same) return { course: same.builtin ? same : shape(same), existing: true };
   const mine = (await db.prepare('SELECT COUNT(*) AS n FROM courses WHERE created_by = ?').bind(personId).first())?.n || 0;
-  if (mine >= MAX_CUSTOM_COURSES) throw new CourseError(`You have added ${MAX_CUSTOM_COURSES} courses already. Pick one that is there, or ask for one to be removed.`);
+  if (mine >= MAX_CUSTOM_COURSES) throw new CourseError(`You have added ${MAX_CUSTOM_COURSES} courses already. Pick one that is already in the list.`);
   let id = `${base}-${Math.random().toString(36).slice(2, 6)}`;
   if (BUILTIN.has(id)) id += 'x';
   await db.prepare('INSERT INTO courses (id, name, place, distances, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)')
