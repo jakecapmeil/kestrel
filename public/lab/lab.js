@@ -29,8 +29,7 @@ function html(strings, ...vals) {
   return raw(out);
 }
 const render = (r) => { $lab.innerHTML = r.s; window.scrollTo(0, 0); };
-const HAND_UNDER = '<svg class="k-hand-under" viewBox="0 0 260 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 48 3, 112 11, 170 6 S 236 6, 257 4"/><path d="M14 11 C 80 8, 150 12, 250 8"/></svg>';
-const title = (text) => html`<h1 class="k-title"><span class="k-u">${text}${raw(HAND_UNDER)}</span></h1>`;
+const title = (text) => html`<h1 class="k-title">${text}</h1>`;
 const fmtSize = (n) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : n > 1e3 ? `${Math.round(n / 1e3)} KB` : `${n} B`);
 function fmtTime(sec) {
   if (!Number.isFinite(sec)) return '–';
@@ -265,7 +264,7 @@ async function viewModel(id, tab = 'card') {
         const out = await api('/api/lab/try', { method: 'POST', body: JSON.stringify({ model: m.id, event: $('tryEvent').value, sex: $('trySex').value, prs }) });
         const ev = (L.cfg.labEvents || []).find((x) => x.key === out.event);
         $('tryOut').innerHTML = out.prediction
-          ? html`<div class="lab-result"><span class="k-u">${fmtTime(out.prediction.sec)}${raw(HAND_UNDER)}</span></div><p class="k-small">${ev?.label || out.event}, 80% range ${fmtTime(out.prediction.lo)} to ${fmtTime(out.prediction.hi)}</p>`.s
+          ? html`<div class="lab-result">${fmtTime(out.prediction.sec)}</div><p class="k-small">${ev?.label || out.event}, 80% range ${fmtTime(out.prediction.lo)} to ${fmtTime(out.prediction.hi)}</p>`.s
           : html`<p class="k-small">${out.note}</p>`.s;
       }, e.submitter);
     };

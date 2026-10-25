@@ -1,0 +1,10 @@
+/* Kestrel base: type, focus, motion. Applies to every page that loads the design system. */
+*,*::before,*::after{box-sizing:border-box;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--font-ui);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+h1,h2,h3,h4,.k-display,.k-title{font-family:var(--font-display);letter-spacing:-.025em;font-weight:700;}
+code,kbd,pre,.k-mono{font-family:var(--font-mono);}
+[hidden]{display:none !important;}
+:where(a,button,input,select,textarea,[tabindex]):focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 50%,transparent);outline-offset:2px;}
+::selection{background:var(--accent-subtle);color:var(--text);}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;transition-duration:.01ms !important;}}

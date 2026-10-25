@@ -9,7 +9,7 @@
 <link rel="icon" href="/kestrel.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Inter+Tight:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme:light dark;
@@ -1637,468 +1637,19 @@
     .chip-scroll{flex-wrap:wrap;overflow:visible;margin:0;padding:0;}
   }
 
-/* ---- Kestrel Button System ----- */
-.k-btn{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  border:0;
-  border-radius:var(--r-pill);
-  font:700 14px var(--font-ui);
-  text-transform:none;
-  letter-spacing:.02em;
-  color:var(--ink);
-  background:transparent;
-  cursor:pointer;
-  text-decoration:none;
-  min-height:44px;
-  padding:0 20px;
-  border:2px solid transparent;
-  outline:none;
-  position:relative;
-  transition:background .15s, border-color .15s, color .15s, transform .15s;
-}
-.k-btn:focus-visible{
-  outline:2px solid var(--gold);
-  outline-offset:2px;
-  border-radius:8px;
-}
-.k-btn:hover{
-  background:var(--press);
-}
-.k-btn.primary{
-  background:var(--fill);
-  color:var(--on-fill);
-  border-color:transparent;
-}
-.k-btn.primary:hover{
-  opacity:0.9;
-}
-.k-btn.wide{width:100%;}
-.k-btn.small{
-  font-size:13px;
-  padding:6px 14px;
-  min-height:34px;
-}
-.k-btn.danger{
-  color:var(--red);
-  border-color:var(--red);
-}
-.k-btn.danger:hover{background:var(--red-bg);}
-.k-btn.k-btn-primary{
-  background:var(--ink);
-  color:var(--on-fill);
-}
-/* Sticky Header with Logo */
-.k-header{
-  position:sticky;
-  top:0;
-  z-index:100;
-  display:flex;
-  align-items:center;
-  gap:12px;
-  padding:14px 20px;
-  background:var(--bg);
-  border-bottom:2px solid var(--line);
-  margin-bottom:0;
-}
-.k-header .k-brand{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  text-decoration:none;
-  font-weight:800;
-  font-size:clamp(1.25rem, 4vw, 1.5rem);
-  letter-spacing:-.03em;
-  color:var(--ink);
-  flex-shrink:0;
-}
-.k-header .k-brand img{
-  width:28px;
-  height:28px;
-  flex-shrink:0;
-}
-.k-header .k-brand span{
-  font-weight:900;
-  letter-spacing:.02em;
-  color:var(--k-red);
-}
-.k-header .k-nav{
-  display:flex;
-  gap:24px;
-  flex:1;
-  font:700 12px var(--font-ui);
-  text-transform:uppercase;
-  letter-spacing:.1em;
-  color:var(--ink-soft);
-}
-.k-header .k-nav a{
-  color:var(--ink-soft);
-  text-decoration:none;
-  position:relative;
-  padding-bottom:4px;
-  border-bottom:2px solid transparent;
-  transition:border-color .2s;
-}
-.k-header .k-nav a:hover{
-  color:var(--ink);
-  border-bottom-color:var(--k-red);
-}
-.k-header .k-nav .k-current{
-  color:var(--ink);
-  border-bottom-color:var(--k-red);
-}
-.k-header .k-auth-actions{
-  display:flex;
-  gap:10px;
-  align-items:center;
-}
-/* Landing Hero */
-.k-landing-hero{
-  text-align:center;
-  padding:96px 20px 48px;
-  max-width:1200px;
-  margin:0 auto;
-}
-.k-landing-hero .k-kicker{
-  font:700 12px var(--font-ui);
-  text-transform:uppercase;
-  letter-spacing:.12em;
-  color:var(--k-red);
-  margin-bottom:8px;
-  display:inline-block;
-}
-.k-landing-hero .k-display{
-  font-size:clamp(48px, 16vw, 112px);
-  line-height:.92;
-  letter-spacing:-.055em;
-  margin:12px 0 24px;
-  font-weight:800;
-  color:var(--ink);
-}
-.k-landing-hero .k-display .k-hand-under{
-  display:inline-block;
-  margin-left:6px;
-  vertical-align:bottom;
-  width:140px;
-  height:14px;
-}
-.k-landing-hero .k-lede{
-  font-size:1.25rem;
-  line-height:1.6;
-  max-width:48ch;
-  color:var(--ink-soft);
-  margin:0 auto 32px;
-  font-weight:400;
-}
-/* Feature Sections */
-.k-features{
-  max-width:1200px;
-  margin:0 auto;
-  padding:0 20px;
-}
-.k-section{
-  padding:48px 0;
-  border-top:1px solid var(--line);
-}
-.k-section:first-child{border-top:none;}
-.k-section-title{
-  font-size:clamp(1.5rem, 3vw, 2rem);
-  line-height:1.1;
-  letter-spacing:-.03em;
-  margin-bottom:24px;
-  padding-bottom:12px;
-  border-bottom:2px solid var(--k-red);
-  display:inline-block;
-}
-.k-section-subtitle{
-  font-size:1.125rem;
-  line-height:1.6;
-  color:var(--ink-soft);
-  max-width:40ch;
-  margin:0 auto 32px;
-}
-/* Feature cards grid */
-.k-feature-cards{
-  max-width:1200px;
-  margin:0 auto;
-  display:grid;
-  gap:24px;
-  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
-  padding:20px 0;
-}
-.k-feature-card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-top:3px solid var(--ink);
-  padding:24px;
-  color:var(--ink);
-  transition:border-color .2s, transform .2s, box-shadow .2s;
-}
-.k-feature-card:hover{
-  border-top-color:var(--k-red);
-  transform:translateY(-4px);
-  box-shadow:var(--shadow);
-}
-.k-feature-card .k-card-title{
-  font-size:1.125rem;
-  line-height:1.3;
-  margin:0 0 8px;
-  font-weight:700;
-  letter-spacing:-.02em;
-}
-.k-feature-card .k-card-meta{
-  font-size:0.875rem;
-  color:var(--ink-soft);
-  margin:0 0 12px;
-  display:block;
-}
-.k-feature-card .k-card-desc{
-  font-size:0.9375rem;
-  line-height:1.55;
-  color:var(--ink-soft);
-  margin:0;
-}
-/* Interactive Demos */
-.k-demo{
-  max-width:1200px;
-  margin:0 auto;
-  padding:0 20px;
-}
-.k-demo .k-section-title{
-  text-align:center;
-  margin-bottom:40px;
-}
-.k-demo-grid{
-  max-width:1200px;
-  margin:0 auto;
-  display:grid;
-  gap:24px;
-  grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));
-}
-.k-demo-box{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-top:3px solid var(--ink);
-  padding:24px;
-  text-align:center;
-  transition:border-color .2s;
-  cursor:default;
-}
-.k-demo-box:hover{border-top-color:var(--k-red);}
-.k-demo-box .k-demo-icon{
-  width:48px;
-  height:48px;
-  margin:0 auto 16px;
-  font-size:32px;
-  line-height:1;
-  display:block;
-}
-.k-demo-box .k-demo-title{
-  font-size:1.125rem;
-  line-height:1.3;
-  margin:0 0 8px;
-  font-weight:700;
-  letter-spacing:-.02em;
-}
-.k-demo-box .k-demo-desc{
-  font-size:0.9375rem;
-  color:var(--ink-soft);
-  margin:0;
-}
-/* CTA Section */
-.k-cta{
-  max-width:1200px;
-  margin:0 auto 48px;
-  padding:64px 20px;
-  text-align:center;
-  background:var(--fill);
-}
-.k-cta .k-section-title{
-  font-size:clamp(2rem, 5vw, 2.5rem);
-  margin-bottom:16px;
-}
-.k-cta .k-section-subtitle{
-  font-size:1.25rem;
-  color:var(--ink-soft);
-  margin-bottom:32px;
-  max-width:48ch;
-  margin-left:auto;
-  margin-right:auto;
-}
-/* About Section */
-.k-about{
-  max-width:1200px;
-  margin:0 auto 64px;
-  padding:0 20px;
-}
-.k-about .k-about-content{
-  max-width:720px;
-  margin:0 auto;
-  text-align:left;
-}
-.k-about h2{
-  font-size:clamp(1.5rem, 3vw, 2rem);
-  line-height:1.2;
-  letter-spacing:-.03em;
-  margin-bottom:24px;
-  padding-bottom:12px;
-  border-bottom:2px solid var(--k-red);
-  display:inline-block;
-}
-.k-about p{
-  font-size:1.0625rem;
-  line-height:1.6;
-  color:var(--ink-soft);
-  margin-bottom:24px;
-}
-/* Toast */
-.k-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:100;background:var(--ink);color:var(--on-fill);padding:11px 16px;font:500 14px var(--font-ui);max-width:calc(100% - 32px);border-radius:12px;}
-.k-toast.bad{background:var(--red);color:#fff;}
 </style>
+<link rel="stylesheet" href="/ds/tokens.css">
+<link rel="stylesheet" href="/ds/base.css">
+<link rel="stylesheet" href="/ds/components.css">
 <link rel="stylesheet" href="/kestrel.css">
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <filter id="rough" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.8"/></filter>
-</svg>
-
-<!-- Sticky Header with Logo -->
-<header class="k-header" id="kHeader">
-  <a class="k-brand" href="/">
-    <img src="/kestrel.svg" alt="Kestrel" width="28" height="28">
-    <span>KESTREL</span>
-  </a>
-  <nav class="k-nav" aria-label="Main navigation">
-    <a href="/lab#/" data-nav="home" class="k-current">Lab</a>
-    <a href="#features" data-nav="features">Features</a>
-    <a href="#about" data-nav="about">About</a>
-  </nav>
-  <div class="k-auth-actions">
-    <button class="k-btn k-btn-primary" id="kSignInBtn">Sign In</button>
-    <button class="k-btn" id="kTryDemoBtn">Try Demo</button>
-  </div>
-</header>
-
-<!-- Landing Hero -->
-<main class="k-landing-hero">
-  <div class="k-kicker">Open-source AI running coaching</div>
-  <h1 class="k-display">Train together.<br><span class="k-u">Race smarter.</span><svg class="k-hand-under" viewBox="0 0 260 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 48 3, 112 11, 170 6 S 236 6, 257 4"/><path d="M14 11 C 80 8, 150 12, 250 8"/></svg></h1>
-  <p class="k-lede">AI coaching that running apps charge for, free and open source. Kestrel builds your plan and changes it day to day, syncs your watch, predicts your races, and keeps your whole team on one calendar.</p>
-</main>
-
-<!-- Features Section -->
-<section id="features" class="k-features">
-  <div class="k-section">
-    <h2 class="k-section-title">Adaptive Training Plans</h2>
-    <p class="k-section-subtitle">Plans by weekly mileage that move with how you feel, sleep, and race. Change a day by telling it you can't make it. Every change checked by fixed guardrails — no big jumps, no back-to-back hard days, week stays within 10%.</p>
-    <div class="k-feature-cards">
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Six plan levels</h3>
-        <span class="k-card-meta">Adaptive mileage</span>
-        <p class="k-card-desc">From 20 to 80+ miles per week. The AI coach moves days when you can't make them and eases off when readiness or soreness says so.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Guardrails built in</h3>
-        <span class="k-card-meta">Safety first</span>
-        <p class="k-card-desc">No big jumps in volume. No back-to-back hard days. Every plan change respects your limits.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Fitness tracking</h3>
-        <span class="k-card-meta">VO2max & zones</span>
-        <p class="k-card-desc">Race estimates from 100m to marathon with 80% ranges, pace zones, and fitness/fatigue/form scores.</p>
-      </div>
-    </div>
-  </div>
-  <div class="k-section">
-    <h2 class="k-section-title">Any AI, Open Models</h2>
-    <p class="k-section-subtitle">Free built-in AI, your own API key (OpenAI, Anthropic, Gemini, OpenRouter, Groq), or a model on your laptop. Race predictions come from open models anyone can publish in Kestrel Lab.</p>
-    <div class="k-feature-cards">
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Kestrel AI</h3>
-        <span class="k-card-meta">Free default</span>
-        <p class="k-card-desc">Powered by Gemini with open-weight Llama fallback. Every model gets the same prompt and guardrails.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Bring your own key</h3>
-        <span class="k-card-meta">OpenAI · Anthropic · Gemini</span>
-        <p class="k-card-desc">OpenRouter, Groq, Ollama, LM Studio — keys stay in your browser, never sent to Kestrel's server.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Kestrel Lab</h3>
-        <span class="k-card-meta">Open model hub</span>
-        <p class="k-card-desc">Browse, try, and publish open running models. Like Hugging Face for running AI.</p>
-      </div>
-    </div>
-  </div>
-  <div class="k-section">
-    <h2 class="k-section-title">Team Calendar</h2>
-    <p class="k-section-subtitle">Anyone can start a school team: calendar, meets, RSVPs, availability, posts and team mileage. Names appear on the leaderboard only for athletes who choose to share.</p>
-    <div class="k-feature-cards">
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Team management</h3>
-        <span class="k-card-meta">Invite codes</span>
-        <p class="k-card-desc">Start a team for your school. Others join with an invite code or link. Owner manages the calendar.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Privacy by default</h3>
-        <span class="k-card-meta">Health stays private</span>
-        <p class="k-card-desc">No coach view of training, teammates never see health, log, or contact details.</p>
-      </div>
-      <div class="k-feature-card">
-        <h3 class="k-card-title">Watch sync</h3>
-        <span class="k-card-meta">Intervals.icu</span>
-        <p class="k-card-desc">Garmin and COROS sync through intervals.icu. Each run gets difficulty from pace and heart rate.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Interactive Demos -->
-<section id="demo" class="k-demo">
-  <h2 class="k-section-title">Try It</h2>
-  <div class="k-demo-grid">
-    <a href="/lab#/" class="k-demo-box">
-      <span class="k-demo-icon">🏭</span>
-      <h3 class="k-demo-title">Kestrel Lab</h3>
-      <p class="k-demo-desc">Browse, try, and publish open running models. Model cards, tags, API access.</p>
-    </a>
-    <a href="#predict" class="k-demo-box">
-      <span class="k-demo-icon">📊</span>
-      <h3 class="k-demo-title">Race Predictor</h3>
-      <p class="k-demo-desc">Enter your recent times to predict your next race with 80% confidence intervals.</p>
-    </a>
-    <a href="#coach" class="k-demo-box">
-      <span class="k-demo-icon">🤖</span>
-      <h3 class="k-demo-title">AI Coach</h3>
-      <p class="k-demo-desc">Chat about your plan, log, fitness, and next meet. Free default AI or your own key.</p>
-    </a>
-  </div>
-</section>
-
-<!-- CTA Section -->
-<section class="k-cta">
-  <h2 class="k-section-title">Start Your Free AI Coach Today</h2>
-  <p class="k-section-subtitle">No paywall. No premium tier. Just advanced running analytics for everyone. Sign in with Google or create an account to get started.</p>
-  <button class="k-btn k-btn-primary" id="kStartNowBtn">Get Started →</button>
-</section>
-
-<!-- About Section -->
-<section id="about" class="k-about">
-  <div class="k-about-content">
-    <h2>About Kestrel</h2>
-    <p>Kestrel was created to democratize high-tier fitness metrics and coaching features typically paywalled by platforms like Strava Premium. Our mission is to make advanced running analytics accessible to everyone — especially school teams with limited budgets.</p>
-    <p>Built as an open-source project, Kestrel gives you full control over your data, your models, and your coaching experience. Every feature that premium apps charge for is available here for free: from adaptive training plans and race predictions to AI-powered coaching and team management.</p>
-    <p>Whether you're a high school cross-country runner or a marathon trainee, Kestrel provides the insights you need to train smarter and race faster.</p>
-  </div>
-</section>
 
 <div id="kGate"></div>
 <div class="wrap" id="kApp" hidden>
 
   <header>
-    <h1 class="wordmark"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="28" height="28"><span id="secretTapZone">KESTREL</span></a></h1>
+    <h1 class="wordmark"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="28" height="28"><span id="secretTapZone">kestrel</span></a></h1>
     <div class="k-team" id="kTeam"></div>
     <div class="head-right">
     <div class="sync-wrap" id="syncWrap" hidden>
@@ -2371,7 +1922,7 @@
       <section class="card hawky-chat">
         <div class="section-head">
           <div class="cluster" style="gap:var(--sp-2);flex-wrap:nowrap;">
-            <span class="hawky-mark" aria-hidden="true">K</span>
+            <img class="k-hawk md hawky-mark" src="/kestrel.svg" alt="" width="32" height="32">
             <div>
               <div class="card-title">Kestrel AI</div>
               <div class="hint">Your coach for every day. Tell it how runs felt, what hurts, or what you can't make, and it adjusts your plan.</div>
@@ -2958,6 +2509,16 @@
 <!-- Body Muscles — Apache-2.0, self-hosted (vendor/body-muscles/): https://github.com/vulovix/body-muscles -->
 <script src="/vendor/body-muscles/body-muscles.umd.min.js"></script>
 <script>
+// Hawks-era storage keys became kestrel.*; carry each value across once.
+try{
+  ['ScheduleView','LastUser','ShowAvailability','PracticeTime','Page','CoachSource','TrainingView','WoGroup','FitEvents'].forEach(function(n){
+    var old = localStorage.getItem('hawks' + n), key = 'kestrel.' + n.charAt(0).toLowerCase() + n.slice(1);
+    if(old !== null && localStorage.getItem(key) === null) localStorage.setItem(key, old);
+    localStorage.removeItem('hawks' + n);
+  });
+}catch(e){}
+</script>
+<script>
 // Kestrel: every API call carries the Supabase sign-in and the team on screen (kestrel.js keeps window.KESTREL current).
 (function(){
   const plain = window.fetch.bind(window);
@@ -3018,8 +2579,8 @@ let currentPage = 'schedule';
 const PAGES = ['schedule','training','team','you'];
 let scheduleView = 'calendar';
 let youView = 'profile';
-try{ const v = localStorage.getItem('hawksScheduleView'); scheduleView = ['meets','places'].includes(v) ? v : 'calendar'; }catch(e){}
-const LAST_USER_KEY = 'hawksLastUser';
+try{ const v = localStorage.getItem('kestrel.scheduleView'); scheduleView = ['meets','places'].includes(v) ? v : 'calendar'; }catch(e){}
+const LAST_USER_KEY = 'kestrel.lastUser';
 let trainingGrade = null;
 let trainingWeek = null;
 let bodyMapView = 'front';
@@ -3027,7 +2588,7 @@ let bodyMapView = 'front';
 // The per-person availability dots are the noisiest thing on the grid, so the
 // calendar starts on the schedule alone and the toggle opts back in.
 let showAvailability = false;
-try{ showAvailability = localStorage.getItem('hawksShowAvailability') === '1'; }catch(e){}
+try{ showAvailability = localStorage.getItem('kestrel.showAvailability') === '1'; }catch(e){}
 
 const $ = id => document.getElementById(id);
 
@@ -3410,7 +2971,7 @@ function onDayClick(dateKey){
 function setAvailabilityVisible(on){
   showAvailability = on;
   $('availToggle').setAttribute('aria-pressed', on ? 'true' : 'false');
-  try{ localStorage.setItem('hawksShowAvailability', on ? '1' : '0'); }catch(e){}
+  try{ localStorage.setItem('kestrel.showAvailability', on ? '1' : '0'); }catch(e){}
   renderCalendar();
 }
 
@@ -3978,7 +3539,7 @@ const WEEKS_SHOWN = 8;
 const FALLBACK_PRACTICE_TIME = '4:00 PM';
 
 let weekPracticeTime = FALLBACK_PRACTICE_TIME;
-try{ weekPracticeTime = localStorage.getItem('hawksPracticeTime') || FALLBACK_PRACTICE_TIME; }catch(e){}
+try{ weekPracticeTime = localStorage.getItem('kestrel.practiceTime') || FALLBACK_PRACTICE_TIME; }catch(e){}
 
 function mondayOf(date){
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -4245,7 +3806,7 @@ function renderAdminModal(){
   });
   $('weekPracticeTime').addEventListener('input', e=>{
     weekPracticeTime = e.target.value;
-    try{ localStorage.setItem('hawksPracticeTime', weekPracticeTime); }catch(err){}
+    try{ localStorage.setItem('kestrel.practiceTime', weekPracticeTime); }catch(err){}
   });
   $('adminModalList').querySelectorAll('.week-check').forEach(box=>{
     box.addEventListener('change', async ()=>{
@@ -4291,7 +3852,7 @@ function setPage(page){
     $('pageTab' + cap).setAttribute('aria-selected', String(on));
     $('page' + cap).style.display = on ? '' : 'none';
   });
-  try{ localStorage.setItem('hawksPage', page); }catch(e){}
+  try{ localStorage.setItem('kestrel.page', page); }catch(e){}
   if(page === 'schedule') renderSchedule();
   if(page === 'you') renderYou();
   if(page === 'training') renderTraining();
@@ -4317,7 +3878,7 @@ function renderSchedule(){
 
 function setScheduleView(v){
   scheduleView = ['meets','places'].includes(v) ? v : 'calendar';
-  try{ localStorage.setItem('hawksScheduleView', scheduleView); }catch(e){}
+  try{ localStorage.setItem('kestrel.scheduleView', scheduleView); }catch(e){}
   renderSchedule();
 }
 
@@ -4875,7 +4436,7 @@ async function savePrs(){
 // out. The server does the scoring math.
 let coachLinks = {};
 let coachSource = 'coros';
-try{ coachSource = localStorage.getItem('hawksCoachSource') || 'intervals'; }catch(e){}
+try{ coachSource = localStorage.getItem('kestrel.coachSource') || 'intervals'; }catch(e){}
 
 const COACH_SOURCES = {
   coros: {
@@ -4912,7 +4473,7 @@ function coachPrompt(name){
   const PR_LIST = PR_EVENTS.join(', ');
   const src = COACH_SOURCES[coachSource] || COACH_SOURCES.coros;
   const key = COACH_SOURCES[coachSource] ? coachSource : 'coros';
-  return `You are Kestrel AI, my running coach for the Kestrel cross country team. You have two connectors: ${src.label} (my runs) and Kestrel AI (my team training plan, training log, workout library, and the place my graded runs go). Follow these steps exactly, every time I say "coach me" (or when this runs as a scheduled task).
+  return `You are Kestrel AI, my running coach on Kestrel. You have two connectors: ${src.label} (my runs) and Kestrel AI (my training plan, training log, workout library, and the place my graded runs go). Follow these steps exactly, every time I say "coach me" (or when this runs as a scheduled task).
 
 STEP 1 - CONTEXT. Call the Kestrel AI tool get_coach_context. It tells you today's date, my plan for this week day by day, my recent training log, which activity ids are already logged (already_logged, per source), my PRs and paces, and the scoring rubric. Read the rubric and follow it.
 
@@ -4943,7 +4504,7 @@ My name is ${name}.`;
 // intervals.icu (their logins), connects the watch with Kestrel AI's tools, imports
 // history, saves PRs and explains Fitness States. Then the "coach me" routine.
 function setupPrompt(name, url){
-  return `You are Kestrel AI, my running coach for the Kestrel cross country team. Kestrel is our team app. The "Kestrel AI" connector is my private link into it: my training plan, training log, workout library, Fitness States, and my watch sync.
+  return `You are Kestrel AI, my running coach on Kestrel, my running and team app. The "Kestrel AI" connector is my private link into it: my training plan, training log, workout library, Fitness States, and my watch sync.
 
 SETUP. Do these one at a time, in plain friendly language, and wait for me after each step that needs me.
 
@@ -5069,7 +4630,7 @@ function openLogDay(date, sessionKey){
   const d = new Date(date + 'T12:00:00');
   tlYear = d.getFullYear(); tlMonthIdx = d.getMonth(); tlSelected = date;
   trainingView = 'log';
-  try{ localStorage.setItem('hawksTrainingView', 'log'); }catch(e){}
+  try{ localStorage.setItem('kestrel.trainingView', 'log'); }catch(e){}
   setPage('training');
   tlOpenSession = sessionKey || null;
   tlOpenActivity = null;
@@ -5681,7 +5242,7 @@ function wireUI(){
   $('bodyHawkyBtn').addEventListener('click', ()=> openHawky());
   $('coachSource').querySelectorAll('[data-src]').forEach(b=> b.addEventListener('click', ()=>{
     coachSource = b.dataset.src;
-    try{ localStorage.setItem('hawksCoachSource', coachSource); }catch(e){}
+    try{ localStorage.setItem('kestrel.coachSource', coachSource); }catch(e){}
     const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
     if(p) renderCoachSetup(p);
   }));
@@ -5734,7 +5295,7 @@ async function fetchPlan(key, query){
 
 // --- Training views: Plan / Log / Workouts -----------------------------------
 let trainingView = 'plan';
-try{ trainingView = localStorage.getItem('hawksTrainingView') || 'plan'; }catch(e){}
+try{ trainingView = localStorage.getItem('kestrel.trainingView') || 'plan'; }catch(e){}
 let tlYear = null, tlMonthIdx = null, tlSelected = null, tlDays = {};
 let library = null, libOpen = '';
 const TL_TYPES = ['easy','recovery','long','tempo','threshold','intervals','track','fartlek','hills','strides','race','shakeout','crosstrain','strength','rest'];
@@ -5743,7 +5304,7 @@ const TL_STATUS = { as_planned:'As planned', harder:'Harder', easier:'Easier', a
 function setTrainingView(v){
   trainingView = v;
   document.body.classList.remove('tl-sheet');
-  try{ localStorage.setItem('hawksTrainingView', v); }catch(e){}
+  try{ localStorage.setItem('kestrel.trainingView', v); }catch(e){}
   renderTraining();
 }
 
@@ -6168,7 +5729,7 @@ async function saveTrainingDay(){
 // --- Workouts: pick a kind, then customize ------------------------------------
 let libType = '';
 let woGroup = 'all';
-try{ woGroup = localStorage.getItem('hawksWoGroup') || 'all'; }catch(e){}
+try{ woGroup = localStorage.getItem('kestrel.woGroup') || 'all'; }catch(e){}
 const WO_ICON = {
   tempo: '<svg viewBox="0 0 24 24"><path d="M3 17c3 0 4-10 9-10s6 10 9 10"/><path d="M3 21h18"/></svg>',
   short: '<svg viewBox="0 0 24 24"><path d="M4 17V9M9 17V7M14 17V9M19 17V7"/><path d="M3 21h18"/></svg>',
@@ -6199,7 +5760,7 @@ function setWoGroup(g){
     return;
   }
   woGroup = g; libType = '';
-  try{ localStorage.setItem('hawksWoGroup', g); }catch(e){}
+  try{ localStorage.setItem('kestrel.woGroup', g); }catch(e){}
   renderLibrary();
 }
 
@@ -6316,8 +5877,8 @@ function drawSparks(){
 // Which Race fitness rows to show (a per-device choice) and the edit mode that changes it.
 const FIT_DEFAULT = ['400','800','1600','3200','5K','10K','half'];
 let fitShown = FIT_DEFAULT.slice(), fitEditing = false, fitLast = null;
-try{ const v = JSON.parse(localStorage.getItem('hawksFitEvents') || 'null'); if(Array.isArray(v) && v.length) fitShown = v; }catch(e){}
-function saveFitShown(){ try{ localStorage.setItem('hawksFitEvents', JSON.stringify(fitShown)); }catch(e){} }
+try{ const v = JSON.parse(localStorage.getItem('kestrel.fitEvents') || 'null'); if(Array.isArray(v) && v.length) fitShown = v; }catch(e){}
+function saveFitShown(){ try{ localStorage.setItem('kestrel.fitEvents', JSON.stringify(fitShown)); }catch(e){} }
 // Shortest to longest; a steeplechase or a course row follows the flat race of the same length.
 function byDistance(list){ const tie = e=> e.course ? 2 : e.group === 'steeple' ? 1 : 0; return [...list].sort((a,b)=> a.meters - b.meters || tie(a) - tie(b)); }
 function drawFitTable(){
@@ -6421,6 +5982,12 @@ async function renderPredictor(){
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
 async function renderTeam(){
+  if(!(window.KESTREL && window.KESTREL.teamId)){
+    $('teamStats').innerHTML = ''; $('teamBars').innerHTML = '';
+    $('teamHint').textContent = 'Start or join a team to see how your miles add up.';
+    $('teamLeader').innerHTML = '<div class="hint">No team yet. Your training works on its own; a team adds a shared calendar and mileage board.</div>';
+    return;
+  }
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
   if(currentPage !== 'team') return;
@@ -6697,7 +6264,7 @@ async function init(){
   setAvailabilityVisible(showAvailability);
   renderEventTypePicker();
   let startPage = 'schedule';
-  try{ startPage = localStorage.getItem('hawksPage') || 'schedule'; }catch(e){}
+  try{ startPage = localStorage.getItem('kestrel.page') || 'schedule'; }catch(e){}
   setPage(startPage);
   activePersonId = window.KESTREL?.me?.user?.id || null;
   await loadState();
@@ -6726,92 +6293,5 @@ window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script type="module" src="/kestrel.js"></script>
-<script>
-// ---- Kestrel Landing Page Interactions ----
-(() => {
-  const kHeader = document.getElementById('kHeader');
-  const kGate = document.getElementById('kGate');
-  let lastScroll = 0;
-
-  // Header hide/show on scroll
-  if (kHeader) {
-    window.addEventListener('scroll', () => {
-      const currentScroll = window.pageYOffset;
-      if (currentScroll > lastScroll && currentScroll > 100) {
-        kHeader.style.transform = 'translateY(-100%)';
-      } else {
-        kHeader.style.transform = 'translateY(0)';
-      }
-      lastScroll = currentScroll <= 0 ? 0 : currentScroll;
-    });
-  }
-
-  // Smooth scroll for nav links
-  document.querySelectorAll('.k-nav a').forEach(link => {
-    link.addEventListener('click', (e) => {
-      const targetMap = {
-        'home': '/lab#/',
-        'features': '#features',
-        'about': '#about'
-      };
-      const targetId = link.getAttribute('data-nav');
-      const target = targetMap[targetId];
-      if (target && target.startsWith('#')) {
-        e.preventDefault();
-        const targetElement = document.querySelector(target);
-        if (targetElement) {
-          window.scrollTo({
-            top: Math.max(0, targetElement.offsetTop - 90),
-            behavior: 'smooth'
-          });
-        }
-      }
-    });
-  });
-
-  // Helper to reveal sign-in gate
-  function revealGate() {
-    if (kGate) {
-      kGate.hidden = false;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }
-
-  // Sign In button
-  const kSignInBtn = document.getElementById('kSignInBtn');
-  if (kSignInBtn && kGate) {
-    kSignInBtn.addEventListener('click', () => {
-      revealGate();
-    });
-  }
-
-  // Start Now / Get Started button
-  const kStartNowBtn = document.getElementById('kStartNowBtn');
-  if (kStartNowBtn && kGate) {
-    kStartNowBtn.addEventListener('click', () => {
-      revealGate();
-    });
-  }
-
-  // Try Demo button - go to Lab
-  const kTryDemoBtn = document.getElementById('kTryDemoBtn');
-  if (kTryDemoBtn) {
-    kTryDemoBtn.addEventListener('click', () => {
-      const labLink = document.querySelector('.k-nav a[data-nav="home"]');
-      if (labLink) {
-        window.location.href = labLink.href;
-      }
-    });
-  }
-
-  // When sign-in completes, hide landing page sections
-  const origOpenApp = window.openApp;
-  window.openApp = function() {
-    if (origOpenApp) origOpenApp();
-    const landingSections = document.querySelectorAll('.k-header, .k-landing-hero, .k-features, .k-demo, .k-cta, .k-about');
-    landingSections.forEach(s => s.hidden = true);
-  };
-})();
-</script>
 </body>
 </html>

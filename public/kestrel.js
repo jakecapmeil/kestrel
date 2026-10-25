@@ -34,8 +34,6 @@ const store = {
   del: (k) => { try { localStorage.removeItem(k); } catch { /* private mode */ } },
 };
 const form = (el) => Object.fromEntries(new FormData(el).entries());
-const HAND_UNDER = '<svg class="k-hand-under" viewBox="0 0 260 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3 8 C 48 3, 112 11, 170 6 S 236 6, 257 4"/><path d="M14 11 C 80 8, 150 12, 250 8"/></svg>';
-const HAND_CIRCLE = '<svg class="k-hand-circle" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M34 9 C 86 0, 172 3, 193 23 C 206 41, 150 57, 94 56 C 38 55, 3 45, 6 29 C 9 14, 52 5, 124 8"/></svg>';
 
 let toastTimer;
 function toast(msg, bad = false) {
@@ -62,9 +60,6 @@ async function attempt(fn, btn) {
 // ---------- the gate: everything before the app (landing, sign-in, onboarding, first team)
 
 function gate(content) {
-  // Hide landing page sections when showing the sign-in gate
-  const landingSections = document.querySelectorAll('.k-header, .k-landing-hero, .k-features, .k-demo, .k-cta, .k-about');
-  landingSections.forEach(s => s.hidden = true);
   $('kApp').hidden = true;
   $('kGate').hidden = false;
   $('kGate').innerHTML = content.s;
@@ -79,7 +74,7 @@ function openApp() {
 function hero() {
   return html`<div class="k-hero">
     <div class="k-kicker">Open-source AI running coaching</div>
-    <h1 class="k-display">Train together.<br>Race <span class="k-u">smarter.${raw(HAND_UNDER)}</span></h1>
+    <h1 class="k-display">Train together.<br>Race <span class="k-accent-text">smarter.</span></h1>
     <p class="k-lede">AI coaching that running apps charge for, free and open source. Kestrel builds your plan and changes it day to day, syncs your watch, predicts your races, and keeps your whole team on one calendar.</p>
     <ol class="k-points">
       <li><span class="n">01</span><b>A coach that adapts</b>Plans by weekly mileage that move with how you feel, sleep and race. Change a day by telling it you can't make it.</li>
@@ -93,7 +88,7 @@ function renderLanding(mode = 'signin', message = '') {
   const signup = mode === 'signup';
   gate(html`<div class="k-landing">${hero()}
   <div class="k-auth">
-    <span class="k-note">free &amp; open source</span>
+    <span class="k-chip accent k-auth-chip">free &amp; open source</span>
     <h2>${signup ? 'Create your account' : 'Sign in'}</h2>
     <button class="k-btn wide" id="kGoogle" type="button"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
     <div class="k-or">or with email</div>
@@ -184,7 +179,7 @@ function renderTeamStart(back = false) {
   gate(html`<div class="k-start">
     ${back ? html`<button class="k-link" type="button" id="kBack">← Back to Kestrel</button>` : ''}
     <div class="k-kicker">Teams</div>
-    <h1 class="k-title"><span class="k-u">Your team${raw(HAND_UNDER)}</span></h1>
+    <h1 class="k-title">Your team</h1>
     <p class="k-lede">Kestrel works around a team calendar. Start one for your school, or join yours with the code a teammate sends you.</p>
     <div class="k-two">
       <section class="k-panel"><h2>Start a team</h2><p class="k-small">You'll get an invite code to share. As the owner you manage the calendar and the team's training plan; you never see anyone's training.</p>
@@ -298,7 +293,7 @@ window.kestrelRenderTeamCard = async (el) => {
   if ($('teamTitle')) $('teamTitle').textContent = team.name;
   el.innerHTML = html`
     ${team.school ? html`<div class="k-small">${team.school}</div>` : ''}
-    <div class="k-invite"><span class="k-circled"><span class="k-code">${team.invite_code}</span>${raw(HAND_CIRCLE)}</span>
+    <div class="k-invite"><span class="k-code">${team.invite_code}</span>
       <button class="k-btn small" type="button" id="kCopyInvite">Copy invite link</button>
       ${owner ? html`<button class="k-link" type="button" id="kNewCode">New code</button>` : ''}</div>
     <p class="k-small">Anyone with the code can join, so share it only with your team.</p>

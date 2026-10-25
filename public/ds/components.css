@@ -1,0 +1,70 @@
+/* Kestrel components. Read semantic tokens only (tokens.css). Every class is k-prefixed so it can sit beside the old app CSS. */
+
+/* hawk */
+.k-hawk{display:block;flex:none;color:var(--text);--hawk-eye:var(--accent);}
+.k-hawk.sm{width:20px;height:20px;} .k-hawk.md{width:32px;height:32px;} .k-hawk.lg{width:64px;height:64px;} .k-hawk.xl{width:160px;height:160px;}
+
+/* button */
+.k-btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--s-2);height:44px;padding:0 var(--s-5);border:0;border-radius:var(--r-pill);background:var(--surface-2);color:var(--text);font:600 15px/1 var(--font-ui);cursor:pointer;text-decoration:none;white-space:nowrap;transition:transform var(--t-fast) var(--ease),background var(--t-fast),box-shadow var(--t-fast);}
+.k-btn:hover{transform:translateY(-1px);}
+.k-btn:active{transform:scale(.97);}
+.k-btn:disabled{opacity:.45;pointer-events:none;}
+.k-btn.primary{background:var(--inverse);color:var(--on-inverse);}
+.k-btn.accent{background:var(--accent);color:var(--on-accent);}
+.k-btn.accent:hover{background:var(--accent-hover);}
+.k-btn.ghost{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line);}
+.k-btn.ghost:hover{background:var(--surface-2);}
+.k-btn.danger{background:var(--danger-subtle);color:var(--danger);}
+.k-btn.small{height:34px;padding:0 var(--s-4);font-size:13px;}
+.k-btn.wide{width:100%;}
+.k-link{background:none;border:0;padding:4px 0;color:var(--text);font:500 14px var(--font-ui);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px;cursor:pointer;}
+.k-link:hover{text-decoration-color:var(--accent);color:var(--accent-ink);}
+.k-link.danger{color:var(--danger);}
+
+/* chip */
+.k-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 var(--s-3);border-radius:var(--r-pill);background:var(--surface-2);color:var(--text-2);font:600 12px/1 var(--font-ui);white-space:nowrap;}
+.k-chip.accent{background:var(--accent-subtle);color:var(--accent-ink);}
+.k-chip.ok{background:var(--positive-subtle);color:var(--positive);}
+.k-chip.info{background:var(--info-subtle);color:var(--info);}
+.k-chip.ink{background:var(--inverse);color:var(--on-inverse);}
+
+/* card */
+.k-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s-5);box-shadow:var(--shadow-1);}
+.k-card.inverse{background:var(--inverse);color:var(--on-inverse);border-color:transparent;}
+
+/* segmented control */
+.k-seg{display:inline-flex;gap:2px;padding:4px;background:var(--surface-2);border-radius:var(--r-pill);}
+.k-seg button{height:34px;padding:0 var(--s-4);border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font:600 13px var(--font-ui);cursor:pointer;transition:background var(--t-fast),color var(--t-fast);}
+.k-seg button.on,.k-seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-1);}
+
+/* form */
+.k-label{display:block;margin:var(--s-4) 0 6px;font:600 13px var(--font-ui);color:var(--text-2);}
+.k-input{width:100%;height:48px;padding:0 var(--s-4);border:1.5px solid var(--line);border-radius:var(--r-md);background:var(--surface);color:var(--text);font:400 16px var(--font-ui);transition:border-color var(--t-fast);}
+textarea.k-input{height:auto;min-height:96px;padding:var(--s-3) var(--s-4);line-height:1.45;}
+.k-input:focus{outline:none;border-color:var(--accent);}
+.k-check{display:flex;gap:var(--s-3);align-items:flex-start;margin:var(--s-4) 0 var(--s-1);font-size:14.5px;}
+.k-check input{width:20px;height:20px;accent-color:var(--accent);margin-top:1px;flex:none;}
+
+/* avatar */
+.k-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--surface-2);color:#fff;font:700 13px var(--font-ui);overflow:hidden;}
+.k-avatar.tile{border-radius:var(--r-sm);} .k-avatar.lg{width:52px;height:52px;font-size:17px;}
+
+/* navigation: bottom bar on phones (the app shell in phase 2 uses it) */
+.k-tabbar{display:flex;justify-content:space-around;gap:var(--s-1);padding:var(--s-2) var(--s-3) calc(var(--s-3) + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line);}
+.k-tab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px var(--s-4);border:0;border-radius:var(--r-pill);background:none;color:var(--text-2);font:600 11px var(--font-ui);cursor:pointer;}
+.k-tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.k-tab.on{color:var(--text);background:var(--surface-2);}
+
+/* chat */
+.k-bubble{max-width:82%;padding:10px 14px;border-radius:20px;font-size:14.5px;line-height:1.4;}
+.k-bubble.them{align-self:flex-start;background:var(--surface);border-bottom-left-radius:6px;box-shadow:var(--shadow-1);}
+.k-bubble.me{align-self:flex-end;background:var(--inverse);color:var(--on-inverse);border-bottom-right-radius:6px;}
+.k-bubble.ai{align-self:flex-start;display:flex;gap:10px;background:var(--accent-subtle);border-bottom-left-radius:6px;}
+
+/* dialog, toast, empty state */
+.k-dialog{border:0;border-radius:var(--r-xl);background:var(--surface);color:var(--text);padding:var(--s-5);width:min(620px,calc(100% - 32px));box-shadow:var(--shadow-2);}
+.k-dialog::backdrop{background:var(--scrim);backdrop-filter:blur(2px);}
+.k-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom));z-index:100;max-width:calc(100% - 32px);padding:12px 18px;border-radius:var(--r-pill);background:var(--inverse);color:var(--on-inverse);font:500 14px var(--font-ui);box-shadow:var(--shadow-2);}
+.k-toast.bad{background:var(--danger);color:#fff;}
+.k-empty{display:flex;flex-direction:column;align-items:center;gap:var(--s-3);padding:var(--s-7) var(--s-4);text-align:center;color:var(--text-2);}
+.k-empty h3{margin:0;color:var(--text);font-size:20px;}
