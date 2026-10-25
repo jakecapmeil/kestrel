@@ -11,7 +11,7 @@ import { BODY_PARTS } from './body.js';
 import { weatherFor } from './conditions.js';
 import { gradeRun } from './grade.js';
 
-// Health, training status and the body map, as Hawky reads them.
+// Health, training status and the body map, as Kai reads them.
 export async function bodyStatus(db, personId) {
   const [p, marks] = await Promise.all([
     db.prepare('SELECT health_status, training_status FROM people WHERE id = ?').bind(personId).first(),
@@ -312,7 +312,7 @@ export async function personForToken(db, token) {
   return await withPlans(db, await db.prepare(`SELECT ${PERSON_COLS} FROM people WHERE coach_token = ?`).bind(token).first());
 }
 
-// What Hawky needs from Fitness States, without the bookkeeping.
+// What Kai needs from Fitness States, without the bookkeeping.
 export function compactFitness(f) {
   if (!f || !f.vo2r) return { note: f?.note || 'No fitness data yet', weekly_miles_last_4_weeks: f?.mpw ?? null };
   return {

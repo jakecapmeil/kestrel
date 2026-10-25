@@ -1,6 +1,6 @@
 // Fitness States: an up-to-date read on what each runner can race right now
 // (400 through half marathon), a VO2max estimate and recent mileage. Every
-// pace in Hawks (workout library, Hawky, the plan) comes from here.
+// pace in Hawks (workout library, Kai, the plan) comes from here.
 //
 // How it's worked out:
 //   1. Race-quality efforts: race results from the watch, PRs (with their

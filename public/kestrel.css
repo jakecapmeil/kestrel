@@ -48,11 +48,11 @@ input,select,textarea{border-radius:var(--r-md);}
 header .head-right{display:flex;align-items:center;gap:12px;}
 
 /* ---------- Kestrel AI */
-.hawky-mark{width:32px;height:32px;margin-right:var(--s-2);border-radius:var(--r-sm);background:none;}
+.kai-mark{width:32px;height:32px;margin-right:var(--s-2);border-radius:var(--r-sm);background:none;}
 .k-power{display:flex;align-items:center;gap:8px;font-size:var(--fs-footnote);color:var(--text-2);margin:-4px 0 10px;flex-wrap:wrap;}
 .k-power b{color:var(--text);}
-.hawky-msg{border-radius:20px;}
-.hawky-msg.hawky{background:var(--accent-subtle);border-bottom-left-radius:6px;}
+.kai-msg{border-radius:20px;}
+.kai-msg.kai{background:var(--accent-subtle);border-bottom-left-radius:6px;}
 
 /* ---------- Kestrel's own pieces */
 .k-btn.small{height:32px;}
@@ -141,3 +141,16 @@ header .head-right{display:flex;align-items:center;gap:12px;}
   .k-shots::-webkit-scrollbar{display:none;}
   .k-shot{scroll-snap-align:center;}
 }
+
+.k-steps{display:flex;gap:6px;margin-bottom:var(--s-4);}
+.k-steps i{flex:1;height:4px;border-radius:2px;background:var(--surface-2);}
+.k-steps i.done{background:var(--accent);opacity:.55;}
+.k-steps i.on{background:var(--accent);}
+.k-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.k-nav{display:flex;gap:10px;margin-top:16px;}
+.k-nav .k-btn.primary{margin-top:0;}
+.k-auth textarea.k-input{min-height:64px;resize:vertical;}
+.k-ai-fill{display:grid;gap:8px;padding:var(--s-3);border-radius:var(--r-lg,14px);background:var(--surface-2);margin-bottom:var(--s-4);}
+.k-ai-fill .k-label{margin:0;}
+.k-ai-fill .k-btn{justify-self:start;}
+.k-rule{display:none;}
