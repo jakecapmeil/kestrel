@@ -23,7 +23,8 @@
 // 2.5% plus their hills, and heat by temperature + dew point. Heart rate on
 // steady runs is read the same way. PRs stay the raw times.
 import { parseReps, snap100 } from './workouts.js';
-import { conditionsOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_RE } from './conditions.js';
+import { conditionsOf, courseIdOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_RE } from './conditions.js';
+import { normalizePrs, parseCourseKey, courseKey, courseLabel, trackedOf, coursesById } from './courses.js';
 // Race models come from Kestrel Lab: whichever the athlete picked for each task (HawksPredict by default).
 import { modelSet, pickedModels, SHORT_METERS } from '../models.js';
 const Z80 = 1.2816;
@@ -61,12 +62,11 @@ const SHORT_OWN = new Set(['100', '200', '600', '1000', 'S2000', 'S3000']);
 const PR_NAMES = { 100: '100m', 200: '200m', 400: '400m', 600: '600m', 800: '800m', 1000: '1000m', 1609: 'mile', 3000: '3000m', 5000: '5K', S2000: '2000m steeple', S3000: '3000m steeple' };
 const SHORT_ONLY_PR = { '100': '100', '200': '200', '2000 SC': 'S2000', '3000 SC': 'S3000' };
 
-const VC_MILE_2_5 = 2.5 * MILE;
 // Which PR each estimate row is compared with. The table reads `pr` off the
 // estimate itself, so a new event only needs adding here, in PR_METERS and in
-// PR_EVENTS (log.js); scripts/check-pr-events.mjs fails when they disagree.
-export const PR_FOR_ESTIMATE = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5K', '2000SC': '2000 SC', '3000SC': '3000 SC', vc5k: 'XC 5K', 'vc2.5': 'VC 2.5 mi' };
-export const PR_METERS = { '100': 100, '200': 200, '400': 400, '600': 600, '800': 800, '1000': 1000, '1600': 1600, '3200': 3200, '5K': 5000, '2000 SC': 2000, '3000 SC': 3000, 'XC 5K': 5000, 'VC 2.5 mi': VC_MILE_2_5 };
+// PR_EVENTS (log.js). Course rows ("course:vc:5000") are their own PR key.
+export const PR_FOR_ESTIMATE = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5K', '2000SC': '2000 SC', '3000SC': '3000 SC' };
+export const PR_METERS = { '100': 100, '200': 200, '400': 400, '600': 600, '800': 800, '1000': 1000, '1600': 1600, '3200': 3200, '5K': 5000, '2000 SC': 2000, '3000 SC': 3000 };
 
 // ------------------------------------------------------------------ Daniels
 
@@ -143,7 +143,7 @@ async function loadInputs(db, personId, today) {
   const [person, workouts, days, maxRow, events, efforts, well, model] = await Promise.all([
     db.prepare('SELECT id, prs, five_k_time, five_k_set_at, sex, settings FROM people WHERE id = ?').bind(personId).first(),
     db.prepare(
-      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, gps_vc, load, temp_f, dew_point_f
+      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, course_id, gps_vc, gps_course, load, temp_f, dew_point_f
        FROM workouts WHERE person_id = ? AND date >= ? ORDER BY date`
     ).bind(personId, since).all(),
     db.prepare(
@@ -157,18 +157,30 @@ async function loadInputs(db, personId, today) {
        LEFT JOIN locations l ON l.id = e.location_id WHERE e.date >= ?`
     ).bind(personId, since).all(),
     db.prepare(
-      `SELECT b.meters, b.sec, b.date, b.activity_id, w.category, w.laps, w.name, w.distance_mi, w.elev_gain_ft, w.surface, w.course, w.gps_vc, w.temp_f, w.dew_point_f FROM best_efforts b
+      `SELECT b.meters, b.sec, b.date, b.activity_id, w.category, w.laps, w.name, w.distance_mi, w.elev_gain_ft, w.surface, w.course, w.course_id, w.gps_vc, w.gps_course, w.temp_f, w.dew_point_f FROM best_efforts b
        LEFT JOIN workouts w ON w.person_id = b.person_id AND w.strava_id = 'intervals:' || b.activity_id WHERE b.person_id = ?`
     ).bind(personId).all(),
     db.prepare('SELECT date, vo2max, resting_hr, ctl, atl FROM wellness WHERE person_id = ? AND date >= ? ORDER BY date').bind(personId, since).all(),
     db.prepare('SELECT cs, d_prime, r2, updated_at FROM pace_models WHERE person_id = ?').bind(personId).first(),
   ]);
   const models = person ? modelSet(await pickedModels(db, personId, person.settings), person.sex) : modelSet();
+  // Every course the runner's PRs, followed distances and runs refer to.
+  const courseIds = [
+    ...Object.keys(normalizePrs(parsePrs(person?.prs))).map((k) => parseCourseKey(k)?.id).filter(Boolean),
+    ...trackedOf(parseSettings(person?.settings)).map((t) => t.course),
+    ...workouts.results.flatMap((w) => [w.course_id, w.gps_course]).filter((id) => id && id !== 'none'),
+    'vc',
+  ];
+  const courses = await coursesById(db, courseIds);
   return {
-    person, models, workouts: workouts.results, days: days.results, maxHr: maxRow?.m || null,
+    person, models, courses, workouts: workouts.results, days: days.results, maxHr: maxRow?.m || null,
     events: events.results, meets: new Set(events.results.filter((e) => e.type === 'meet').map((e) => e.date)),
     efforts: efforts.results, wellness: well.results, paceModel: model || null,
   };
+}
+
+function parseSettings(raw) {
+  try { const o = JSON.parse(raw || '{}'); return o && typeof o === 'object' ? o : {}; } catch { return {}; }
 }
 
 function parsePrs(raw) {
@@ -215,44 +227,55 @@ function rawReps(w, dayRow) {
 // Race distances a whole run can count as, by GPS distance (3%).
 // 2.5 mi before 4000 m: it's the high school course at Van Cortlandt.
 const RACE_METERS = [1600, MILE, 3200, 2 * MILE, 2.5 * MILE, 4000, 5000, 3 * MILE, 6000, 8000, 10000];
-function raceDistance(m) {
-  for (const d of RACE_METERS) if (Math.abs(m - d) / d <= 0.03) return d;
+// `extra`: distances raced on the course the run was on (a 6K course, say).
+function raceDistance(m, extra = []) {
+  for (const d of [...RACE_METERS, ...extra]) if (Math.abs(m - d) / d <= 0.03) return d;
   return null;
 }
 // PR events a race distance updates, and the time scaled to that event.
 const PR_FOR = { 1600: '1600', [MILE]: '1600', 3200: '3200', [2 * MILE]: '3200', 5000: '5K' };
 
-export function computeFitness({ person, models = modelSet(), workouts, days, maxHr, meets = new Set(), events = [], efforts = [], wellness = [], paceModel = null }, today) {
+export function computeFitness({ person, models = modelSet(), workouts, days, maxHr, meets = new Set(), events = [], efforts = [], wellness = [], paceModel = null, courses = new Map() }, today) {
   const RM = models;
   const sources = [];
-  const prs = parsePrs(person?.prs);
+  const prs = normalizePrs(parsePrs(person?.prs));
+  const tracked = trackedOf(parseSettings(person?.settings));
+  // What a course costs: Van Cortlandt has its own measured factor, every other course is a cross-country course.
+  const factorOf = (id) => courses.get(id)?.factor ?? (id === 'vc' ? VC_FACTOR : XC_FACTOR);
   const shortPrs = []; // PRs HawksPredict-Short can use: { ev, sec, age }
 
   // 1. Max efforts.
+  const seenCourse = new Set(); // one race can sit under two course PRs (a typed one and a found one): count it once
   for (const [event, v] of Object.entries(prs)) {
-    const m = PR_METERS[event];
+    const ck = parseCourseKey(event);
+    const m = ck ? ck.m : PR_METERS[event];
     const sec = parseTime(v?.time);
     if (!m || !sec) continue;
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(v?.date || '');
     const age = dated ? ageDays(v.date, today) : 240;
-    const shortSrc = SHORT_ONLY_PR[event] ? { ev: SHORT_ONLY_PR[event], sec } : RM.shortSource(m, sec);
+    const shortSrc = ck ? null : SHORT_ONLY_PR[event] ? { ev: SHORT_ONLY_PR[event], sec } : RM.shortSource(m, sec);
     if (shortSrc && !/XC|VC/.test(event)) shortPrs.push({ ...shortSrc, age });
     if (SHORT_ONLY_PR[event]) continue;
-    // XC courses run slower than the track. Hawks races are at Van Cortlandt
-    // unless the PR says it was somewhere else.
-    const onCourse = event === 'XC 5K' || event === 'VC 2.5 mi';
-    const vc = event === 'VC 2.5 mi' || (event === 'XC 5K' && (!v?.meet || VC_RE.test(v.meet)));
-    const t = onCourse ? sec / (vc ? VC_FACTOR : XC_FACTOR) : sec;
+    // XC courses run slower than the track: a course PR names its course.
+    const onCourse = !!ck;
+    if (onCourse) {
+      const key = `${m}|${Math.round(sec)}`;
+      if (seenCourse.has(key)) continue;
+      seenCourse.add(key);
+    }
+    const vc = !!ck && ck.id === 'vc';
+    const t = onCourse ? sec / factorOf(ck.id) : sec;
+    const name = ck ? courseLabel(courses.get(ck.id), m) : event;
     sources.push({
       kind: 'pr', max: true, event, m, s: t, age, date: dated ? v.date : null,
       quality: (dated ? 0.9 : 0.5) * (onCourse ? 0.8 : 1),
-      label: `${event} PR ${v.time}${v.meet ? ` (${v.meet})` : ''}${onCourse ? `: worth ${fmtTime(t)} on a flat course${vc ? ' (Van Cortlandt runs ~5.5% slow)' : ''}` : ''}`,
+      label: `${name} PR ${v.time}${v.meet && !/^Found by/.test(v.meet) ? ` (${v.meet})` : ''}${onCourse ? `: worth ${fmtTime(t)} on a flat course${vc ? ' (Van Cortlandt runs ~5.5% slow)' : ''}` : ''}`,
     });
   }
   // The runner's PR for an estimate row, for the table.
   const prOf = (key) => {
-    const event = PR_FOR_ESTIMATE[key];
-    const v = event && prs[event];
+    const event = PR_FOR_ESTIMATE[key] || key;
+    const v = prs[event];
     return v?.time ? { event, time: v.time, date: v.date || null } : null;
   };
   const fiveK = parseTime(person?.five_k_time);
@@ -268,7 +291,8 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   const prCandidates = [];
   for (const w of workouts) {
     if (!w.distance_mi || !w.moving_sec || w.category === 'crosstrain') continue;
-    const m = raceDistance((w.raw_distance_mi ?? w.distance_mi) * MILE);
+    const cid = courseIdOf(w, events);
+    const m = raceDistance((w.raw_distance_mi ?? w.distance_mi) * MILE, cid ? [...(courses.get(cid)?.distances || []), ...tracked.filter((t) => t.course === cid).map((t) => t.m)] : []);
     if (!m) continue;
     const hrPct = hrMax && w.avg_hr ? w.avg_hr / hrMax : null;
     const raceDay = w.category === 'race' || meets.has(w.date);
@@ -283,14 +307,10 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const credit = cond.factor > 1.004 ? `; ${cond.note}: worth ${fmtTime(adj)} flat and cool` : '';
     const label = `${raceDay ? 'Race' : 'Hard run'} ${m === MILE ? 'mile' : m === 2 * MILE ? '2 mi' : m === 2.5 * MILE ? '2.5 mi' : m === 3 * MILE ? '3 mi' : `${m >= 1000 && m % 1000 === 0 ? m / 1000 + 'K' : m + 'm'}`} in ${fmtTime(t)} (${w.date}${credit})`;
     sources.push({ kind: 'race', max: true, m, s: adj, age: ageDays(w.date, today), date: w.date, quality: raceDay ? 1 : 0.9, label });
-    // PRs are the raw time. A cross-country 5K is an XC PR, never a track one.
-    if (m === VC_MILE_2_5) {
-      // The 2.5 mile course is Van Cortlandt's; it counts there unless the run
-      // was somewhere else or on the track.
-      if (w.surface !== 'track' && cond.course !== 'xc') prCandidates.push({ event: 'VC 2.5 mi', sec: t, date: w.date, name: 'Van Cortlandt' });
-    } else if (cond.course) {
-      if (m === 5000) prCandidates.push({ event: 'XC 5K', sec: t, date: w.date, name: cond.course === 'vc' ? 'Van Cortlandt' : w.name || '' });
-    } else if (PR_FOR[m]) prCandidates.push({ event: PR_FOR[m], sec: t * (m === MILE ? 1600 / MILE : m === 2 * MILE ? 3200 / (2 * MILE) : 1), date: w.date, name: w.name || '' });
+    // PRs are the raw time. A race on a course is a PR for that course, never a track one.
+    const cname = cid ? courses.get(cid)?.name || '' : '';
+    if (cid && m >= 2000 && w.surface !== 'track') prCandidates.push({ event: courseKey(cid, m), sec: t, date: w.date, name: cname, run: w.strava_id });
+    if (!cond.course && PR_FOR[m]) prCandidates.push({ event: PR_FOR[m], sec: t * (m === MILE ? 1600 / MILE : m === 2 * MILE ? 3200 / (2 * MILE) : 1), date: w.date, name: w.name || '', run: w.strava_id });
   }
 
   // Fastest stretches inside any run (intervals.icu's pace curve). Real
@@ -305,9 +325,12 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const prEvent = { 400: '400', 800: '800', 1600: '1600', 1609: '1600', 3200: '3200', 5000: '5K' }[e.meters];
     if (prEvent && !stitched) {
       const pc = conditionsOf(e, events);
-      const ev = prEvent === '5K' && pc.course ? 'XC 5K' : prEvent;
       const sec = e.meters === 1609 ? (e.sec * 1600) / 1609.344 : e.sec;
-      prCandidates.push({ event: ev, sec, date: e.date || '', name: ev === 'XC 5K' ? (pc.course === 'vc' ? 'Van Cortlandt' : e.name || '') : `best nonstop ${prEvent === '5K' ? '5K' : prEvent + ' m'}`, fill: true });
+      const pcid = prEvent === '5K' ? courseIdOf(e, events) : '';
+      const pname = pcid ? courses.get(pcid)?.name || '' : '';
+      // A cross-country 5K is no track 5K: on a course it counts for the course only.
+      if (!(prEvent === '5K' && pc.course)) prCandidates.push({ event: prEvent, sec, date: e.date || '', name: `best nonstop ${prEvent === '5K' ? '5K' : prEvent + ' m'}`, fill: true, run: e.activity_id ? `intervals:${e.activity_id}` : '' });
+      if (pcid) prCandidates.push({ event: courseKey(pcid, 5000), sec, date: e.date || '', name: pname, fill: true, run: e.activity_id ? `intervals:${e.activity_id}` : '' });
     }
     // In an interval session the watch's moving time skips the rests, so a
     // "5K" stitched from reps isn't a 5K. Long best efforts count only from
@@ -611,13 +634,13 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
       from: [...(est.half ? [`your half marathon estimate scaled up would be ${fmtTime(est.half.sec * Math.pow(2, 1.06))}; the training below is what this row follows`] : []), `${mar.run_days} running days in the last 16 weeks`, `${Math.round(mar.feats.wk_mean / (MILE / 1000))} mi a week on average`, `longest run ${Math.round(mar.feats.longest / (MILE / 1000))} mi`] };
   }
 
-  // The same fitness on the team's home course: what to expect at Van
-  // Cortlandt (the 5K, and the 2.5-mile course by Riegel from the 5K).
-  const vc5 = est['5K'].sec * VC_FACTOR;
-  const courseEstimates = [
-    { key: 'vc5k', label: '5K at Van Cortlandt', meters: 5000, sec: Math.round(vc5 * 10) / 10 },
-    { key: 'vc2.5', label: '2.5 mi at Van Cortlandt', meters: 2.5 * MILE, sec: Math.round(vc5 * Math.pow((2.5 * MILE) / 5000, 1.06) * 10) / 10 },
-  ].map((c) => ({ ...c, time: fmtTime(c.sec), pace_mi: fmtPace((c.sec / c.meters) * MILE) }));
+  // The same fitness on the courses the runner follows (the 5K at Van Cortlandt,
+  // the 2.5 mi there, ...): the 5K estimate times the course's factor, other
+  // distances by Riegel from the 5K.
+  const courseEstimates = tracked.filter((t) => courses.has(t.course)).map((t) => {
+    const sec = est['5K'].sec * factorOf(t.course) * Math.pow(t.m / 5000, 1.06);
+    return { key: courseKey(t.course, t.m), label: courseLabel(courses.get(t.course), t.m), course: t.course, meters: t.m, sec: Math.round(sec * 10) / 10 };
+  }).map((c) => ({ ...c, time: fmtTime(c.sec), pace_mi: fmtPace((c.sec / c.meters) * MILE) }));
 
   // Zones: race paces from the estimates, aerobic zones from race VO2max (Daniels'
   // percentages: easy 62-70%, steady 81%, threshold 88%).
@@ -744,16 +767,26 @@ function shortFromMile(mileSec, meters) {
 // The PR search runs every time fitness is recomputed (every sync, PR edit
 // and log change): any race-effort run faster than the PR on file replaces it.
 function prsToUpdate(currentRaw, candidates) {
-  const cur = parsePrs(currentRaw);
+  const cur = normalizePrs(parsePrs(currentRaw));
   const out = {};
   for (const c of candidates) {
     const have = parseTime((out[c.event] || cur[c.event])?.time);
     if (have && have <= c.sec + 0.5) continue;
-    // A PR someone typed in stays; the nonstop-best search only fills blanks and Hawks' own finds.
+    // A PR someone typed in stays; the nonstop-best search only fills blanks and Kestrel's own finds.
     if (c.fill && cur[c.event] && !cur[c.event].auto && !out[c.event]) continue;
-    out[c.event] = { time: fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, meet: `Found by Hawks${c.name && !/running$|^run$/i.test(c.name) ? `: ${c.name}` : ''}`, auto: true };
+    out[c.event] = { time: fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, meet: `Found by Kestrel${c.name && !/running$|^run$/i.test(c.name) ? `: ${c.name}` : ''}`, auto: true, ...(c.run ? { run: c.run } : {}) };
   }
   return out;
+}
+
+// Takes back the PRs Kestrel found from one run (its course was changed or cleared). The recompute that follows
+// finds again whatever is still true. A PR this run had beaten, from more than a year ago, is not searched for again.
+export async function dropAutoPrsFrom(db, personId, run) {
+  const row = await db.prepare('SELECT prs FROM people WHERE id = ?').bind(personId).first();
+  const prs = normalizePrs(parsePrs(row?.prs));
+  let changed = false;
+  for (const [k, v] of Object.entries(prs)) if (v?.auto && v.run === run) { delete prs[k]; changed = true; }
+  if (changed) await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(prs), personId).run();
 }
 
 export async function recomputeFitness(db, personId, today) {
@@ -761,7 +794,7 @@ export async function recomputeFitness(db, personId, today) {
   if (!inputs.person) return null;
   const found = prsToUpdate(inputs.person.prs, computeFitness(inputs, today).pr_candidates || []);
   if (Object.keys(found).length) {
-    const prs = { ...parsePrs(inputs.person.prs), ...found };
+    const prs = { ...normalizePrs(parsePrs(inputs.person.prs)), ...found };
     await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(prs), personId).run();
     inputs.person.prs = JSON.stringify(prs);
   }

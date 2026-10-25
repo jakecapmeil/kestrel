@@ -15,7 +15,7 @@ import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, 
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
-import { getFitness, recomputeFitness, fitnessHistory } from './train/fitness.js';
+import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
 import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
 import { cohortReport } from './train/cohorts.js';
@@ -23,6 +23,8 @@ import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { hawkyState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/hawky.js';
 import { aiEnabled, askCoach, coachChat, AiError } from './train/gemini.js';
+import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
+import { getTrack } from './train/tracks.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -489,8 +491,8 @@ async function syncBudget(db, me) {
 // Leave-one-out on your own PRs: hide each result, ask the model for it from the others, compare. Nothing is saved.
 async function workbench(db, me, ids) {
   const prs = await getPrs(db, me.id);
-  // PRs are stored under the app's names (5K, 2000 SC, XC 5K); the Lab's events use metres.
-  const PR_TO_EVENT = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5000', '2000 SC': 'S2000', '3000 SC': 'S3000', 'XC 5K': 'xc5k' };
+  // PRs are stored under the app's names (5K, 2000 SC); the Lab's events use metres.
+  const PR_TO_EVENT = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5000', '2000 SC': 'S2000', '3000 SC': 'S3000' };
   const have = Object.entries(PR_TO_EVENT).filter(([k]) => prs[k]?.time).map(([k, key]) => {
     const e = EVENT.get(key);
     return { key: e.key, m: e.m, surf: e.surf, steeple: !!e.steeple, sec: parseTime(prs[k].time), ev: e };
@@ -688,7 +690,8 @@ async function route(request, env, url) {
   if (mcp) {
     if (method !== 'POST') return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
     const person = await personForToken(db, mcp[1]);
-    if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 401);
+    // 404, not 401: a 401 makes connectors go looking for an OAuth sign-in service, which this link does not use.
+    if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 404);
     return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS], (name, args) =>
       (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args) : callCoachTool(db, person, name, args)));
   }
@@ -900,6 +903,21 @@ async function route(request, env, url) {
         fitness, five_k_time: await fiveKFor(db, me.id), prs: await getPrs(db, me.id),
       });
     }
+    if (path === '/api/courses') {
+      const courses = await listCourses(db, me.id);
+      return json({ courses, tracked: trackedOf(settingsOf(me)), stats: await courseStats(db, courses.map((c) => c.id)), distances: COURSE_DISTANCES });
+    }
+    // Records: fitness is recomputed first when it is stale, so any PR a new run set is already in the list.
+    if (path === '/api/records') {
+      await getFitness(db, me.id, today);
+      const prs = await getPrs(db, me.id);
+      const courses = await coursesById(db, [...Object.keys(prs).map((k) => parseCourseKey(k)?.id).filter(Boolean), ...trackedOf(settingsOf(me)).map((t) => t.course)]);
+      return json({ prs, tracked: trackedOf(settingsOf(me)), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])) });
+    }
+    if (path === '/api/runs/track') {
+      const r = await getTrack(env, me.id, str(q.get('id'), 80));
+      return json(r, r.error === 'not_found' ? 404 : 200);
+    }
     if (path === '/api/fitness') return json({ fitness: await getFitness(db, me.id, today), history: await fitnessHistory(db, me.id) });
     if (path === '/api/predict') { try { return json(await racePredictions(env, me.id, today)); } catch (e) { return json({ enabled: false, error: String(e?.message || e) }); } }
     if (path === '/api/hawky') return json(await hawkyState(db, me.id));
@@ -1062,6 +1080,23 @@ async function route(request, env, url) {
   }
   if (path === '/api/fitness/refresh') return json({ fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/people/prs') return json({ ...(await setPrs(db, me.id, b.prs)), fitness: await recomputeFitness(db, me.id, today) });
+  if (path === '/api/courses') return json(await createCourse(db, me.id, { name: b.name, place: b.place, distances: b.distances }));
+  if (path === '/api/courses/track') {
+    const tracked = await setTracked(db, me.id, b.tracked);
+    return json({ tracked, fitness: await recomputeFitness(db, me.id, today) });
+  }
+  // Pick (or clear) the course a run was on. Its PRs are searched again straight away.
+  if (path === '/api/runs/course') {
+    const id = str(b.course_id, 40);
+    // '' goes back to Kestrel's own guess; 'none' says it was on no known course.
+    if (id && id !== 'none' && !(await getCourse(db, id))) throw new BadRequest('That course is not in the list.');
+    const run = str(b.strava_id, 80);
+    const res = await db.prepare('UPDATE workouts SET course_id = ? WHERE person_id = ? AND strava_id = ?').bind(id, me.id, run).run();
+    if (!res.meta.changes) throw new NotFound('Unknown run.');
+    await dropAutoPrsFrom(db, me.id, run);
+    const fitness = await recomputeFitness(db, me.id, today);
+    return json({ ok: true, course_id: id, new_prs: fitness?.new_prs || [], prs: await getPrs(db, me.id), fitness });
+  }
   if (path === '/api/people/5k') return json({ ...(await setFiveK(db, me.id, b.time)), fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/log/day') {
     // Watch days are locked: their miles, minutes, runs and difficulty come from the synced activities.
@@ -1114,6 +1149,8 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
+    // The Kestrel AI link is the login: there is no OAuth. Say so plainly when a connector probes for it.
+    if (url.pathname.startsWith('/.well-known/')) return json({ error: 'Kestrel AI uses a private link, not OAuth.' }, 404);
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/mcp/')) return env.ASSETS.fetch(request);
     try {
       return await route(request, env, url);
@@ -1123,7 +1160,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

@@ -4,11 +4,11 @@
 // Behind env.HAWKS_PREDICT === '1'.
 import { getPrs } from './log.js';
 import { getFitness, fmtTime } from './fitness.js';
-import { heatCost, hillCost, VC_FACTOR } from './conditions.js';
+import { heatCost, hillCost } from './conditions.js';
 
 const DAY = 86400000;
 const MILE = 1609.344;
-// The estimate rows the card shows, plus the two Van Cortlandt rows.
+// The estimate rows the card shows, plus a row for each course the runner follows.
 const ROWS = [
   { key: '800', label: '800m' },
   { key: '1600', label: '1600m' },
@@ -81,12 +81,12 @@ export async function racePredictions(env, personId, today) {
     const e = fitness.estimates.find((x) => x.event === r.key);
     if (e?.lo) rows.push({ key: r.key, label: r.label, sec: e.sec, lo: e.lo, hi: e.hi, pr: prs[r.key]?.time || null });
   }
-  // Van Cortlandt: the same fitness on the home course (x1.055, 2.5 mi by Riegel from the 5K).
+  // The courses the runner follows (the 5K at Van Cortlandt, ...): the same fitness times each course's factor.
   const five = fitness.estimates.find((x) => x.event === '5K');
   if (five?.lo) {
-    for (const [key, label, m] of [['VC 2.5 mi', '2.5 mi at Van Cortlandt', 2.5 * MILE], ['VC 5K', '5K at Van Cortlandt', 5000]]) {
-      const k = VC_FACTOR * Math.pow(m / 5000, 1.06);
-      rows.push({ key, label, sec: five.sec * k, lo: five.lo * k, hi: five.hi * k, pr: prs[key === 'VC 5K' ? 'XC 5K' : key]?.time || null });
+    for (const ce of fitness.course_estimates || []) {
+      const k = ce.sec / five.sec;
+      rows.push({ key: ce.key, label: ce.label, sec: five.sec * k, lo: five.lo * k, hi: five.hi * k, pr: ce.pr?.time || null });
     }
   }
   const predictions = rows.map((p) => {
