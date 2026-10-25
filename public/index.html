@@ -663,6 +663,8 @@
   .welcome-opt .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .welcome-select{width:100%;flex:none;}
 
+  .sch-add{display:flex;gap:var(--sp-2);flex-wrap:wrap;justify-content:flex-end;flex-shrink:0;}
+  .sch-add button{white-space:nowrap;}
   .meets-list{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
   .meets-label{font-family:var(--font-ui);font-size:var(--fs-caption2);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;font-weight:600;margin-top:6px;}
   .meets-label:first-child{margin-top:0;}
@@ -675,10 +677,6 @@
   .meet-card-date{font-family:var(--font-ui);font-size:var(--fs-footnote);color:var(--ink-soft);white-space:nowrap;}
   .meet-card-location{font-family:var(--font-ui);font-size:var(--fs-footnote);color:var(--ink-soft);margin-top:2px;}
   .meet-card-location a{color:inherit;}
-  .meet-stats{display:flex;gap:16px;margin-top:10px;}
-  .meet-stat{display:flex;flex-direction:column;gap:1px;}
-  .meet-stat-label{font-family:var(--font-ui);font-size:var(--fs-caption2);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.02em;}
-  .meet-stat-value{font-family:var(--font-ui);font-weight:700;font-size:var(--fs-subhead);}
   .meet-card-attending{margin-top:10px;font-family:var(--font-ui);font-size:var(--fs-footnote);}
   .meet-card-attending b{color:var(--ink-soft);font-weight:600;}
   .meets-empty{font-family:var(--font-ui);font-size:var(--fs-footnote);color:var(--ink-soft);padding:8px 0;}
@@ -688,8 +686,6 @@
     background:var(--gold-bg);color:var(--gold-ink);
     font-family:var(--font-ui);font-weight:600;font-size:var(--fs-caption2);display:inline-block;
   }
-  .meet-carpool{margin-top:6px;font-family:var(--font-ui);font-size:var(--fs-caption2);color:var(--ink-soft);}
-  .meet-carpool b{font-weight:600;}
   .meet-card-note{margin-top:8px;font-family:var(--font-ui);font-size:var(--fs-footnote);}
   .meet-card-note b{color:var(--ink-soft);font-weight:600;}
   .meet-card-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
@@ -1810,10 +1806,10 @@
       <div id="eventsList"></div>
       <button class="ghost" id="toggleEventForm">+ Add event</button>
       <div id="eventFormRow">
-        <input type="text" id="eventTitle" placeholder="Event title (e.g. Track practice, Meet vs. Xavier)">
+        <input type="text" id="eventTitle" placeholder="Event title (e.g. Track practice, County Invitational)">
         <input type="text" id="eventTime" placeholder="Time (e.g. 4:00 PM)">
         <input type="text" id="eventEndTime" placeholder="End time (optional, e.g. 5:30 PM)">
-        <input type="text" id="eventLocation" list="knownLocations" placeholder="Location (e.g. Van Cortlandt Park, or a full address)">
+        <input type="text" id="eventLocation" list="knownLocations" placeholder="Location (a saved place, or a full address)">
         <textarea id="eventDesc" placeholder="Details — who's expected, notes…"></textarea>
         <div>
           <div class="event-type-label">Event type</div>
@@ -1863,14 +1859,26 @@
             <div class="card-title">Places</div>
             <div class="hint" id="travelHint">Everywhere on the team calendar, with a map link.</div>
           </div>
+          <div class="sch-add">
+            <button type="button" class="ghost" id="addPlaceBtn" aria-label="Add a place">+ Place</button>
+            <button type="button" class="ghost" id="aiPlaceBtn">Kestrel AI</button>
+          </div>
         </div>
         <div id="travelList"></div>
       </div>
     </div>
     <div id="schMeetsView" style="display:none;">
       <div class="card">
-        <div class="card-title">Meets</div>
-        <div class="hint">Every meet on the team calendar: when, where, what to bring, who is going and the forecast.</div>
+        <div class="section-head">
+          <div>
+            <div class="card-title">Meets</div>
+            <div class="hint">Every meet on the team calendar: when, where, what to bring, who is going and the forecast.</div>
+          </div>
+          <div class="sch-add">
+            <button type="button" class="ghost" id="addMeetBtn" aria-label="Add a meet">+ Meet</button>
+            <button type="button" class="ghost" id="aiMeetBtn">Kestrel AI</button>
+          </div>
+        </div>
         <div id="meetsList" class="meets-list"></div>
       </div>
     </div>
@@ -2364,7 +2372,7 @@
           <div class="section-head">
             <div>
               <div class="card-title">Courses</div>
-              <div class="hint">Your times on a course you race again and again, like the 5K or the 2.5 at Van Cortlandt. A race there updates that course's PR. Your track PRs are never touched.</div>
+              <div class="hint">Your times on a course you race again and again, like the 5K at your home cross-country course. A race there updates that course's PR. Your track PRs are never touched.</div>
             </div>
             <button type="button" id="recAddCourse">Add a course</button>
           </div>
@@ -3595,7 +3603,7 @@ function renderAdminModal(){
           <input type="text" id="adminEditTitle" value="${escapeHtml(ev.title)}" placeholder="Event title">
           <input type="text" id="adminEditTime" value="${escapeHtml(ev.time)}" placeholder="Time (e.g. 4:00 PM)">
           <input type="text" id="adminEditEndTime" value="${escapeHtml(ev.endTime || '')}" placeholder="End time (optional, e.g. 5:30 PM)">
-          <input type="text" id="adminEditLocation" list="knownLocations" value="${escapeHtml(ev.location || resolvedMeetLocation(ev).name || '')}" placeholder="Location (e.g. Van Cortlandt Park, or a full address)">
+          <input type="text" id="adminEditLocation" list="knownLocations" value="${escapeHtml(ev.location || resolvedMeetLocation(ev).name || '')}" placeholder="Location (a saved place, or a full address)">
           <textarea id="adminEditDesc" placeholder="Details">${escapeHtml(ev.desc)}</textarea>
           <div>
             <div class="event-type-label">Event type</div>
@@ -3969,29 +3977,25 @@ function renderTeamStatus(){
 
 const DAYPART_LABEL = { weekday_practice: 'Weekday practice', weekend_meet: 'Weekend meet' };
 
-function mapsLink(origin, destination){
-  return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=transit`;
-}
-
 function mapsSearchLink(query){
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function renderTravelList(){
   const seen = new Map();
-  for(const loc of locations) seen.set(loc.name.trim().toLowerCase(), { name: loc.name, address: loc.address, kind: loc.kind, n: 0, next: null });
+  for(const loc of locations) seen.set(loc.name.trim().toLowerCase(), { id: loc.id, name: loc.name, address: loc.address, kind: loc.kind, n: 0, next: null });
   Object.values(events).flat().forEach(ev=>{
     const name = (ev.location || '').trim();
     if(!name) return;
     const k = name.toLowerCase();
-    const row = seen.get(k) || { name, address: '', kind: ev.type === 'meet' ? 'meet' : 'practice', n: 0, next: null };
+    const row = seen.get(k) || { id: '', name, address: '', kind: ev.type === 'meet' ? 'meet' : 'practice', n: 0, next: null };
     row.n++;
     if(ev.type === 'meet') row.kind = 'meet';
     if(ev.date >= todayKey() && (!row.next || ev.date < row.next.date)) row.next = ev;
     seen.set(k, row);
   });
   const rows = [...seen.values()].sort((a,b)=> a.kind === b.kind ? b.n - a.n : (a.kind === 'meet' ? 1 : -1));
-  if(!rows.length){ $('travelList').innerHTML = '<div class="admin-empty">Add a location to an event and it shows up here.</div>'; return; }
+  if(!rows.length){ $('travelList').innerHTML = '<div class="admin-empty">No places yet. Tap + Place to add one, or Kestrel AI to read a schedule. Places on events show up here too.</div>'; return; }
   let lastKind = null;
   $('travelList').innerHTML = rows.map(loc=>{
     const head = loc.kind !== lastKind ? `<div class="eyebrow places-group">${loc.kind === 'meet' ? 'Meet venues' : 'Practice'}</div>` : '';
@@ -4002,10 +4006,19 @@ function renderTravelList(){
         <div class="travel-row-main">
           <div class="travel-row-title">${escapeHtml(loc.name)}</div>
           <div class="travel-row-sub">${escapeHtml(loc.address || '')}${loc.address ? ' · ' : ''}${next}</div>
-          <div class="cluster place-links"><a class="link-btn" href="${escapeHtml(mapsSearchLink(loc.address || loc.name))}" target="_blank" rel="noopener">Open in Maps</a></div>
+          <div class="cluster place-links"><a class="link-btn" href="${escapeHtml(mapsSearchLink(loc.address || loc.name))}" target="_blank" rel="noopener">Open in Maps</a>${loc.id && canManagePlaces() ? `<button type="button" class="link-btn" data-edit-place="${escapeHtml(loc.id)}">Edit</button>` : ''}</div>
         </div>
       </div>`;
   }).join('');
+  $('travelList').querySelectorAll('[data-edit-place]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ const loc = locations.find(l=>l.id === btn.dataset.editPlace); if(loc && window.kestrelPlaceForm) window.kestrelPlaceForm(loc); });
+  });
+}
+
+// Captains and the team owner edit or delete saved places; anyone on the team can add one.
+function canManagePlaces(){
+  const r = window.KESTREL && window.KESTREL.role;
+  return r === 'owner' || r === 'captain';
 }
 
 function renderPersonal(){
@@ -4535,15 +4548,6 @@ function daysUntil(dateKey){
   return Math.round((target - today) / 86400000);
 }
 
-function carpoolGroups(attendees){
-  const groups = {};
-  attendees.forEach(p=>{
-    const b = (p.borough || '').trim() || 'No borough on file';
-    (groups[b] ??= []).push(p.name);
-  });
-  return groups;
-}
-
 function copyText(text, btn){
   try{ navigator.clipboard.writeText(text); }
   catch(e){
@@ -4560,19 +4564,6 @@ function copyText(text, btn){
   }
 }
 
-const meetsDistanceCache = new Map();
-
-function fetchMeetDistance(personId, locationId){
-  const key = `${personId}|${locationId}`;
-  if(!meetsDistanceCache.has(key)){
-    meetsDistanceCache.set(key, fetch(`/api/distance?personId=${encodeURIComponent(personId)}&locationId=${encodeURIComponent(locationId)}`)
-      .then(r=>r.json()).catch(()=>({configured:false, available:false})));
-  }
-  return meetsDistanceCache.get(key);
-}
-
-// Open-Meteo: free, keyless forecast API. Only meaningful within its ~16 day
-// forecast horizon, so callers skip anything further out.
 const meetsWeatherCache = new Map();
 
 function fetchMeetWeather(lat, lng, dateKey){
@@ -4586,30 +4577,19 @@ function fetchMeetWeather(lat, lng, dateKey){
 
 let showPastMeets = false;
 
-function meetCardHtml(ev, p, home){
+function meetCardHtml(ev, p){
     const loc = resolvedMeetLocation(ev);
     const timeRange = formatEventTimeRange(ev);
-    const est = (p && ev.locationId)
-      ? travelEstimates.find(t=> t.person_id===p.id && t.location_id===ev.locationId && t.daypart==='weekend_meet')
-      : null;
-    const etaLabel = !p ? 'Pick your name' : (!home ? 'Add home address' : (!ev.locationId ? '—' : (est ? `~${est.minutes} min` : '—')));
     const attendees = attendeesFor(ev);
     const attendingLabel = attendees.length ? attendees.map(a=>escapeHtml(a.name)).join(', ') : 'No one has RSVP’d yet';
-    const directionsHref = loc.address ? (home ? mapsLink(home, loc.address) : mapsSearchLink(loc.address)) : '';
-    const showDistance = p && home && ev.locationId;
+    const directionsHref = loc.address ? mapsSearchLink(loc.address) : '';
     const rsvpStatus = p ? getRsvp(ev.id) : 'unknown';
 
     const dUntil = daysUntil(ev.date);
     const evRsvps = rsvps[ev.id] || {};
-    const noResponseCount = people.filter(person => person.name !== 'Coach Johnson' && !(person.id in evRsvps)).length;
+    const noResponseCount = people.filter(person => !(person.id in evRsvps)).length;
     const nudge = (dUntil >= 0 && dUntil <= 3 && noResponseCount > 0)
       ? `<div class="meet-nudge">${noResponseCount} ${noResponseCount === 1 ? 'person hasn’t' : 'people haven’t'} responded — ${dUntil === 0 ? 'today' : dUntil === 1 ? 'tomorrow' : `in ${dUntil} days`}</div>`
-      : '';
-
-    const groups = carpoolGroups(attendees);
-    const groupNames = Object.keys(groups).sort((a,b)=> a === 'No borough on file' ? 1 : b === 'No borough on file' ? -1 : a.localeCompare(b));
-    const carpoolHtml = attendees.length
-      ? `<div class="meet-carpool"><b>By borough:</b> ${groupNames.map(g => `${escapeHtml(g)} (${groups[g].map(escapeHtml).join(', ')})`).join(' · ')}</div>`
       : '';
 
     const checklistHtml = ev.checklist ? `<div class="meet-card-note"><b>Bring:</b> ${escapeHtml(ev.checklist)}</div>` : '';
@@ -4624,20 +4604,9 @@ function meetCardHtml(ev, p, home){
         ? (directionsHref ? `<a href="${escapeHtml(directionsHref)}" target="_blank" rel="noopener">${escapeHtml(loc.name)}</a>` : escapeHtml(loc.name))
         : 'Location TBD'}<span class="meet-weather" id="meetWeather_${ev.id}"></span></div>
       ${nudge}
-      <div class="meet-stats">
-        <div class="meet-stat">
-          <div class="meet-stat-label">Time to arrive</div>
-          <div class="meet-stat-value">${escapeHtml(etaLabel)}</div>
-        </div>
-        <div class="meet-stat">
-          <div class="meet-stat-label">Distance</div>
-          <div class="meet-stat-value" id="meetDist_${ev.id}">${showDistance ? '…' : '—'}</div>
-        </div>
-      </div>
       ${checklistHtml}
       ${resultsHtml}
       <div class="meet-card-attending"><b>Attending:</b> ${attendingLabel}</div>
-      ${carpoolHtml}
       <div class="meet-card-actions">
         ${p ? `<button class="rsvp-btn tap44 ${rsvpStatus}" data-event="${ev.id}">${rsvpLabel[rsvpStatus]}</button>` : ''}
         <button class="rsvp-btn tap44 share-btn" data-copy-attendees="${ev.id}">Copy attendees</button>
@@ -4649,16 +4618,15 @@ function renderMeets(){
   const list = $('meetsList');
   const meets = allMeetsSorted();
   if(!meets.length){
-    list.innerHTML = '<div class="meets-empty">No meets on the calendar yet.</div>';
+    list.innerHTML = '<div class="meets-empty">No meets on the calendar yet. Tap + Meet to add one, or Kestrel AI to read a schedule.</div>';
     return;
   }
   const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
-  const home = p ? (p.home_address || '').trim() : '';
 
   const upcoming = meets.filter(ev=> daysUntil(ev.date) >= 0).sort((x,y)=> x.date < y.date ? -1 : x.date > y.date ? 1 : 0);
   const past = meets.filter(ev=> daysUntil(ev.date) < 0).sort((x,y)=> x.date < y.date ? 1 : x.date > y.date ? -1 : 0);
   const shown = showPastMeets ? upcoming.concat(past) : upcoming;
-  const card = ev=> meetCardHtml(ev, p, home);
+  const card = ev=> meetCardHtml(ev, p);
 
   const parts = [];
   if(upcoming.length){
@@ -4686,18 +4654,6 @@ function renderMeets(){
       copyText(names.length ? names.join(', ') : 'No one has RSVP’d yet', btn);
     });
   });
-
-  if(p && home){
-    shown.forEach(ev=>{
-      if(!ev.locationId) return;
-      fetchMeetDistance(p.id, ev.locationId).then(res=>{
-        const el = document.getElementById(`meetDist_${ev.id}`);
-        if(!el) return;
-        if(res && res.available) el.textContent = `${res.miles.toFixed(1)} mi`;
-        else el.textContent = '—';
-      });
-    });
-  }
 
   shown.forEach(ev=>{
     const loc = resolvedMeetLocation(ev);
@@ -4897,6 +4853,12 @@ function wireUI(){
     renderBodyMap();
   });
 
+  // + and Kestrel AI on the Meets and Places tabs
+  const hasTeam = ()=> !!(window.KESTREL && window.KESTREL.teamId);
+  const needTeamMsg = ()=> alert('Start or join a team first.');
+  $('addMeetBtn').addEventListener('click', ()=>{ if(!hasTeam()) return needTeamMsg(); window.kestrelAddEvent({ type:'meet', places:locations }); });
+  $('addPlaceBtn').addEventListener('click', ()=>{ if(!hasTeam()) return needTeamMsg(); window.kestrelPlaceForm(); });
+  [$('aiMeetBtn'), $('aiPlaceBtn')].forEach(b=> b.addEventListener('click', ()=>{ if(!hasTeam()) return needTeamMsg(); window.kestrelScheduleAi({ places:locations }); }));
   $('toggleEventForm').addEventListener('click', ()=>{
     $('eventFormRow').classList.add('show');
     resetEventForm();

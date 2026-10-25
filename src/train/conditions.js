@@ -20,7 +20,7 @@ export const XC_FACTOR = 1.025;
 const HILL_K = 1.5;
 const HEAT = [[100, 0], [110, 0.005], [120, 0.01], [130, 0.02], [140, 0.03], [150, 0.045], [160, 0.06], [170, 0.08], [180, 0.1], [200, 0.14]];
 
-// Weather is read for the team's home ground (Bronx/Manhattan).
+// Weather is read where the runner's team practices (a team place with coordinates); with none, the Bronx, where Kestrel began.
 const HOME = { lat: 40.85, lon: -73.9 };
 const DAY = 86400000;
 
@@ -124,9 +124,9 @@ export function conditionsBump(w) {
 
 const addDays = (dateKey, n) => new Date(Date.parse(dateKey + 'T12:00:00Z') + n * DAY).toISOString().slice(0, 10);
 
-async function hourly(base, from, to) {
-  const url = `${base}?latitude=${HOME.lat}&longitude=${HOME.lon}&hourly=temperature_2m,dew_point_2m&temperature_unit=fahrenheit`
-    + `&timezone=America%2FNew_York&start_date=${from}&end_date=${to}`;
+async function hourly(base, from, to, home) {
+  const url = `${base}?latitude=${home.lat}&longitude=${home.lon}&hourly=temperature_2m,dew_point_2m&temperature_unit=fahrenheit`
+    + `&timezone=auto&start_date=${from}&end_date=${to}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`open-meteo ${res.status}`);
   const j = await res.json();
@@ -151,7 +151,7 @@ function hourKey(w) {
 // Temperature and dew point for each run ({date, start_local, ...}), in the
 // same order; null where there's no reading. At most two requests: the
 // archive has everything up to a few days ago, the forecast API the last week.
-export async function weatherFor(runs, today) {
+export async function weatherFor(runs, today, home = HOME) {
   const dates = runs.map((w) => w.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '') && d <= today).sort();
   if (!dates.length) return runs.map(() => null);
   const cut = addDays(today, -7);
@@ -162,7 +162,7 @@ export async function weatherFor(runs, today) {
   const get = async (base, list) => {
     if (!list.length) return;
     try {
-      for (const [k, v] of await hourly(base, list[0], list[list.length - 1])) hours.set(k, v);
+      for (const [k, v] of await hourly(base, list[0], list[list.length - 1], home)) hours.set(k, v);
     } catch (err) {
       console.log('weather lookup failed', err.message);
     }

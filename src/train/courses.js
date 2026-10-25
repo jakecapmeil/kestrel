@@ -180,12 +180,14 @@ export async function createCourse(db, personId, { name, place, distances }) {
 // ------------------------------------------------------------------ tracked distances
 
 // The (course, distance) pairs a runner follows: "my 5K at Van Cortlandt". Stored in people.settings.courses.
-// Until they choose, Van Cortlandt's two courses show (what Kestrel always showed).
+// Until they choose, Van Cortlandt's two courses show, but only for a runner who already has a PR there (the course
+// Kestrel started with). Everyone else starts with none and adds the courses their team races on.
 const DEFAULT_TRACKED = [{ course: 'vc', m: 5000 }, { course: 'vc', m: 4023 }];
 
-export function trackedOf(settings) {
+// prs: the runner's normalized PRs. Leave it out to get the old default for everyone.
+export function trackedOf(settings, prs) {
   const raw = settings?.courses;
-  if (!Array.isArray(raw)) return DEFAULT_TRACKED;
+  if (!Array.isArray(raw)) return !prs || Object.keys(prs).some((k) => k.startsWith('course:vc:')) ? DEFAULT_TRACKED : [];
   return raw.filter((t) => t && typeof t.course === 'string' && Number.isFinite(t.m)).map((t) => ({ course: t.course, m: Math.round(t.m) })).slice(0, 20);
 }
 

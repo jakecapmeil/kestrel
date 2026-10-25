@@ -22,7 +22,7 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
-import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, AiError } from './train/gemini.js';
+import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
@@ -371,6 +371,46 @@ async function eventIn(db, teamId, eventId) {
   return e;
 }
 const canEdit = (e, me, role) => e.created_by === me.id || isLead(role);
+
+const PLACE_KINDS = ['practice', 'meet'];
+
+// A place on this team, by id or by name (names match without regard to case). null when there is none.
+async function placeFor(db, teamId, id, name) {
+  if (id) return (await db.prepare('SELECT id, name, address, kind, lat, lng FROM locations WHERE id = ? AND team_id = ?').bind(str(id, 100), teamId).first()) || null;
+  const n = str(name, 200).toLowerCase();
+  if (!n) return null;
+  return (await db.prepare('SELECT id, name, address, kind, lat, lng FROM locations WHERE team_id = ? AND lower(name) = ?').bind(teamId, n).first()) || null;
+}
+
+// Coordinates for an address, so a meet shows its forecast. Best effort: any failure leaves the place without them.
+async function geocode(query) {
+  const q = str(query, 200);
+  if (!q) return null;
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': 'Kestrel/1.0 (https://github.com/jakecapmeil/kestrel)' },
+      signal: AbortSignal.timeout(3000),
+    });
+    const hit = res.ok ? (await res.json())?.[0] : null;
+    const lat = Number(hit?.lat), lng = Number(hit?.lon);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch { return null; }
+}
+
+async function addPlaceNoGeo(db, teamId, b) { return addPlace(db, teamId, b, false); }
+async function addPlace(db, teamId, b, geocodeIt = true) {
+  const name = str(b.name, 120);
+  if (!name) throw new BadRequest('Give the place a name.');
+  const found = await placeFor(db, teamId, null, name);
+  if (found) return found;
+  const kind = PLACE_KINDS.includes(b.kind) ? b.kind : 'practice';
+  const address = str(b.address, 200);
+  // Only an address is looked up: a bare name like "Lincoln HS Track" can land in the wrong town and give the wrong forecast.
+  const geo = geocodeIt && address ? await geocode(address) : null;
+  const place = { id: 'loc_' + crypto.randomUUID(), name, address, kind, lat: geo?.lat ?? null, lng: geo?.lng ?? null };
+  await db.prepare('INSERT INTO locations (id, team_id, name, address, kind, lat, lng) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(place.id, teamId, name, address, kind, place.lat, place.lng).run();
+  return place;
+}
 
 // ---- plan builder helpers
 function previewSpec(spec) {
@@ -1245,14 +1285,14 @@ async function route(request, env, url) {
     }
     if (path === '/api/courses') {
       const courses = await listCourses(db, me.id);
-      return json({ courses, tracked: trackedOf(settingsOf(me)), stats: await courseStats(db, courses.map((c) => c.id)), distances: COURSE_DISTANCES });
+      return json({ courses, tracked: trackedOf(settingsOf(me), await getPrs(db, me.id)), stats: await courseStats(db, courses.map((c) => c.id)), distances: COURSE_DISTANCES });
     }
     // Records: fitness is recomputed first when it is stale, so any PR a new run set is already in the list.
     if (path === '/api/records') {
       await getFitness(db, me.id, today);
       const prs = await getPrs(db, me.id);
-      const courses = await coursesById(db, [...Object.keys(prs).map((k) => parseCourseKey(k)?.id).filter(Boolean), ...trackedOf(settingsOf(me)).map((t) => t.course)]);
-      return json({ prs, tracked: trackedOf(settingsOf(me)), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])) });
+      const courses = await coursesById(db, [...Object.keys(prs).map((k) => parseCourseKey(k)?.id).filter(Boolean), ...trackedOf(settingsOf(me), prs).map((t) => t.course)]);
+      return json({ prs, tracked: trackedOf(settingsOf(me), prs), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])) });
     }
     if (path === '/api/runs/track') {
       const r = await getTrack(env, me.id, str(q.get('id'), 80));
@@ -1331,9 +1371,10 @@ async function route(request, env, url) {
     if (!isDate(date) || !title) throw new BadRequest('Missing date or title.');
     const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
     const id = 'e_' + crypto.randomUUID();
-    const ev = { id, date, title, time: str(b.time, 40), endTime: str(b.endTime, 40), desc: str(b.desc, 2000), type, kind: kindFor(type, b.kind), location: str(b.location, 200), locationId: '', checklist: str(b.checklist, 1000), results: '', auto: false, createdBy: me.id };
-    await db.prepare('INSERT INTO events (id, team_id, date, title, time, end_time, description, type, kind, location, checklist, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, teamId, date, title, ev.time, ev.endTime, ev.desc, type, ev.kind, ev.location, ev.checklist, me.id, Date.now()).run();
+    const place = await placeFor(db, teamId, b.locationId, b.location);
+    const ev = { id, date, title, time: str(b.time, 40), endTime: str(b.endTime, 40), desc: str(b.desc, 2000), type, kind: kindFor(type, b.kind), location: str(b.location, 200) || place?.name || '', locationId: place?.id || '', checklist: str(b.checklist, 1000), results: '', auto: false, createdBy: me.id };
+    await db.prepare('INSERT INTO events (id, team_id, date, title, time, end_time, description, type, kind, location, location_id, checklist, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, teamId, date, title, ev.time, ev.endTime, ev.desc, type, ev.kind, ev.location, place?.id || null, ev.checklist, me.id, Date.now()).run();
     return json({ event: ev });
   }
   if (path === '/api/events/update') {
@@ -1343,8 +1384,12 @@ async function route(request, env, url) {
     const title = str(b.title, 200);
     if (!title) throw new BadRequest('Missing title.');
     const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
-    await db.prepare('UPDATE events SET title = ?, time = ?, end_time = ?, description = ?, type = ?, kind = ?, location = ?, checklist = ?, results = ? WHERE id = ?')
-      .bind(title, str(b.time, 40), str(b.endTime, 40), str(b.desc, 2000), type, kindFor(type, b.kind), str(b.location, 200),
+    // The venue link follows the location text: a known place links to it, new text unlinks, a blank field keeps what was there.
+    const location = str(b.location, 200);
+    const place = await placeFor(db, teamId, b.locationId, location);
+    const locationId = place ? place.id : location && location !== e.location ? null : e.location_id;
+    await db.prepare('UPDATE events SET title = ?, time = ?, end_time = ?, description = ?, type = ?, kind = ?, location = ?, location_id = ?, checklist = ?, results = ? WHERE id = ?')
+      .bind(title, str(b.time, 40), str(b.endTime, 40), str(b.desc, 2000), type, kindFor(type, b.kind), location, locationId, 
         b.checklist !== undefined ? str(b.checklist, 1000) : e.checklist, b.results !== undefined ? str(b.results, 2000) : e.results, e.id).run();
     return json({ ok: true });
   }
@@ -1354,6 +1399,67 @@ async function route(request, env, url) {
     if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can delete it.');
     await db.prepare('DELETE FROM events WHERE id = ?').bind(e.id).run();
     return json({ ok: true });
+  }
+  if (path === '/api/locations') {
+    needTeam();
+    return json({ place: await addPlace(db, teamId, b) });
+  }
+  if (path === '/api/locations/update' || path === '/api/locations/delete') {
+    needTeam();
+    if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change a place.');
+    const loc = await placeFor(db, teamId, b.locationId, null);
+    if (!loc) throw new NotFound('Place not found.');
+    if (path.endsWith('/delete')) { await db.prepare('DELETE FROM locations WHERE id = ?').bind(loc.id).run(); return json({ ok: true }); }
+    const name = str(b.name, 120);
+    if (!name) throw new BadRequest('Give the place a name.');
+    const address = str(b.address, 200);
+    const kind = PLACE_KINDS.includes(b.kind) ? b.kind : loc.kind;
+    // New coordinates only when the address changed; events keep their link, and their text follows the new name.
+    const geo = address !== loc.address ? (address ? await geocode(address) : null) : { lat: loc.lat, lng: loc.lng };
+    await db.prepare('UPDATE locations SET name = ?, address = ?, kind = ?, lat = ?, lng = ? WHERE id = ?').bind(name, address, kind, geo?.lat ?? null, geo?.lng ?? null, loc.id).run();
+    if (name !== loc.name) await db.prepare('UPDATE events SET location = ? WHERE location_id = ?').bind(name, loc.id).run();
+    return json({ ok: true });
+  }
+  // Kestrel AI reads a pasted or uploaded schedule into a list to confirm; the free model answers here, any other runs in the browser.
+  if (path === '/api/schedule/import' || path === '/api/schedule/import/prompt') {
+    needTeam();
+    const documents = (Array.isArray(b.documents) ? b.documents : []).slice(0, 5)
+      .map((d) => ({ name: str(d?.name, 80), text: String(d?.text || '').slice(0, 20000) })).filter((d) => d.text.trim());
+    const input = { text: str(b.text, 4000), documents };
+    const team = await db.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
+    const { results: places } = await db.prepare('SELECT name, address, kind FROM locations WHERE team_id = ?').bind(teamId).all();
+    const scope = { team: team?.name, places };
+    if (path.endsWith('/prompt')) return json(scheduleChat(input, scope, today));
+    return json(await askSchedule(env, db, me, input, scope, today));
+  }
+  // Save what the person confirmed from an import: places first, then the events linked to them. Repeats are skipped.
+  if (path === '/api/schedule/bulk') {
+    needTeam();
+    const places = (Array.isArray(b.places) ? b.places : []).slice(0, 30);
+    const evs = (Array.isArray(b.events) ? b.events : []).slice(0, 80);
+    let addedPlaces = 0, addedEvents = 0, skipped = 0, geocoded = 0;
+    for (const p of places) {
+      if (!str(p?.name, 120)) continue;
+      const had = await placeFor(db, teamId, null, p.name);
+      if (had) continue;
+      // Looking up coordinates is a free service with a one-a-second limit: only the first few places get one.
+      const withGeo = geocoded < 6 && !(Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)));
+      if (withGeo) geocoded++;
+      const place = withGeo ? await addPlace(db, teamId, p) : await addPlaceNoGeo(db, teamId, p);
+      if (place) addedPlaces++;
+    }
+    for (const x of evs) {
+      const date = str(x?.date, 10), title = str(x?.title, 200);
+      if (!isDate(date) || !title) { skipped++; continue; }
+      const dup = await db.prepare('SELECT 1 FROM events WHERE team_id = ? AND date = ? AND lower(title) = ?').bind(teamId, date, title.toLowerCase()).first();
+      if (dup) { skipped++; continue; }
+      const type = EVENT_TYPES.includes(x.type) ? x.type : 'practice';
+      const place = await placeFor(db, teamId, null, x.location);
+      await db.prepare('INSERT INTO events (id, team_id, date, title, time, end_time, description, type, kind, location, location_id, checklist, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind('e_' + crypto.randomUUID(), teamId, date, title, str(x.time, 40), str(x.endTime, 40), str(x.desc, 2000), type, kindFor(type, x.kind), str(x.location, 200) || place?.name || '', place?.id || null, str(x.checklist, 1000), me.id, Date.now()).run();
+      addedEvents++;
+    }
+    return json({ addedPlaces, addedEvents, skipped });
   }
   if (path === '/api/rsvp') {
     needTeam();

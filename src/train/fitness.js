@@ -167,7 +167,7 @@ async function loadInputs(db, personId, today) {
   // Every course the runner's PRs, followed distances and runs refer to.
   const courseIds = [
     ...Object.keys(normalizePrs(parsePrs(person?.prs))).map((k) => parseCourseKey(k)?.id).filter(Boolean),
-    ...trackedOf(parseSettings(person?.settings)).map((t) => t.course),
+    ...trackedOf(parseSettings(person?.settings), normalizePrs(parsePrs(person?.prs))).map((t) => t.course),
     ...workouts.results.flatMap((w) => [w.course_id, w.gps_course]).filter((id) => id && id !== 'none'),
     'vc',
   ];
@@ -241,7 +241,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   const RM = models;
   const sources = [];
   const prs = normalizePrs(parsePrs(person?.prs));
-  const tracked = trackedOf(parseSettings(person?.settings));
+  const tracked = trackedOf(parseSettings(person?.settings), prs);
   // What a course costs: Van Cortlandt has its own measured factor, every other course is a cross-country course.
   const factorOf = (id) => courses.get(id)?.factor ?? (id === 'vc' ? VC_FACTOR : XC_FACTOR);
   // A course runs on the model the athlete picked for that course or distance (slots `course:<id>[:<metres>]`),

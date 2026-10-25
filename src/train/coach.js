@@ -404,6 +404,16 @@ async function mergeDuplicates(db, personId, clean) {
   }
 }
 
+// Where the runner's team practices, for the weather: a practice place with coordinates, else any place with them.
+// null (the weather default) when their teams have none.
+async function homeGround(db, personId) {
+  const row = await db.prepare(
+    `SELECT l.lat, l.lng FROM locations l JOIN team_members m ON m.team_id = l.team_id AND m.person_id = ?
+     WHERE l.lat IS NOT NULL AND l.lng IS NOT NULL ORDER BY (l.kind = 'practice') DESC LIMIT 1`
+  ).bind(personId).first();
+  return row ? { lat: row.lat, lon: row.lng } : undefined;
+}
+
 export async function logWorkouts(db, person, list) {
   if (!Array.isArray(list) || !list.length) throw new CoachError('workouts must be a non-empty array');
   if (list.length > 60) throw new CoachError('Send at most 60 workouts per call');
@@ -412,7 +422,7 @@ export async function logWorkouts(db, person, list) {
   // Weather for every run, whichever way it arrived.
   const needWx = clean.filter((w) => w.temp_f == null && w.category !== 'crosstrain');
   if (needWx.length) {
-    const wx = await weatherFor(needWx, todayInTz());
+    const wx = await weatherFor(needWx, todayInTz(), await homeGround(db, person.id));
     needWx.forEach((w, i) => { if (wx[i]) Object.assign(w, wx[i]); });
   }
 
@@ -480,7 +490,7 @@ export async function backfillConditions(db, personId, limit = 150) {
      WHERE person_id = ? AND COALESCE(weather_checked, 0) = 0 AND category != 'crosstrain' AND date <= ? ORDER BY date DESC LIMIT ?`
   ).bind(personId, todayInTz(), limit).all()).results;
   if (!rows.length) return 0;
-  const wx = await weatherFor(rows, todayInTz());
+  const wx = await weatherFor(rows, todayInTz(), await homeGround(db, personId));
   if (!wx.some(Boolean)) return 0;
   const gctx = { maxHr: await maxHrFor(db, personId), vo2r: await vo2rFor(db, personId) };
   const stmts = rows.map((w, i) => {

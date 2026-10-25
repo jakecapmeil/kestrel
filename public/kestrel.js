@@ -863,6 +863,153 @@ window.kestrelRenderPersonalPlan = async (el) => {
   }, e.currentTarget);
 };
 
+// ---------- Schedule: add a meet or a place by hand (+), or have Kestrel AI read a schedule
+
+const PLACE_KIND_LABEL = { meet: 'Meet venue', practice: 'Practice' };
+const isLeadRole = () => ['owner', 'captain'].includes(K.role);
+const localToday = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
+
+// A meet (or practice, or other event) from the Meets tab: the same fields as the day panel, plus the date.
+window.kestrelAddEvent = ({ type = 'meet', date, places = [] } = {}) => {
+  const d = dialog();
+  d.innerHTML = html`<h2>${type === 'meet' ? 'Add a meet' : 'Add an event'}</h2>
+    <form id="kEvForm" class="k-stack">
+      <label class="k-label" for="kEvTitle">Name</label><input class="k-input" id="kEvTitle" name="title" maxlength="200" required placeholder="e.g. County Invitational">
+      <div class="k-row">
+        <div class="grow"><label class="k-label" for="kEvDate">Date</label><input class="k-input" id="kEvDate" name="date" type="date" required value="${date || localToday()}"></div>
+        <div class="grow"><label class="k-label" for="kEvType">Type</label><select class="k-input" id="kEvType" name="type">${[['meet', 'Meet'], ['practice', 'Practice'], ['other', 'Other']].map(([v, l]) => html`<option value="${v}" ${v === type ? 'selected' : ''}>${l}</option>`)}</select></div>
+      </div>
+      <div class="k-row">
+        <div class="grow"><label class="k-label" for="kEvTime">Start time</label><input class="k-input" id="kEvTime" name="time" maxlength="40" placeholder="e.g. 9:00 AM"></div>
+        <div class="grow"><label class="k-label" for="kEvEnd">End time</label><input class="k-input" id="kEvEnd" name="endTime" maxlength="40" placeholder="optional"></div>
+      </div>
+      <label class="k-label" for="kEvPlace">Place</label><input class="k-input" id="kEvPlace" name="location" list="kEvPlaces" maxlength="200" placeholder="A saved place, or any name or address">
+      <datalist id="kEvPlaces">${places.map((p) => html`<option value="${p.name}">`)}</datalist>
+      <label class="k-label" for="kEvBring">What to bring</label><input class="k-input" id="kEvBring" name="checklist" maxlength="1000" placeholder="e.g. spikes, singlet, water">
+      <label class="k-label" for="kEvDesc">Details</label><textarea class="k-input" id="kEvDesc" name="desc" maxlength="2000" rows="2" placeholder="Who is expected, notes"></textarea>
+      <div class="k-row"><button class="k-btn primary" type="submit">Add to calendar</button><button class="k-btn" type="button" id="kEvClose">Cancel</button></div>
+    </form>`.s;
+  d.showModal();
+  $('kEvClose').onclick = () => d.close();
+  $('kEvForm').onsubmit = (e) => { e.preventDefault(); attempt(async () => {
+    const f = form(e.currentTarget);
+    await api('/api/events', { method: 'POST', body: JSON.stringify({ ...f, kind: '' }) });
+    d.close(); toast('Added to the calendar.');
+    await window.kesslerReload();
+  }, e.submitter); };
+};
+
+// A place from the Places tab. Passing `place` edits it (captains and the owner), with a delete.
+window.kestrelPlaceForm = (place = null) => {
+  const d = dialog();
+  d.innerHTML = html`<h2>${place ? 'Edit place' : 'Add a place'}</h2>
+    <form id="kPlForm" class="k-stack">
+      <label class="k-label" for="kPlName">Name</label><input class="k-input" id="kPlName" name="name" maxlength="120" required value="${place?.name || ''}" placeholder="e.g. Memorial Park">
+      <label class="k-label" for="kPlAddr">Address</label><input class="k-input" id="kPlAddr" name="address" maxlength="200" value="${place?.address || ''}" placeholder="Street address, or town and state">
+      <p class="k-small">The address gives the map link and the weather forecast on meet cards.</p>
+      <label class="k-label" for="kPlKind">What it is</label><select class="k-input" id="kPlKind" name="kind">${Object.entries(PLACE_KIND_LABEL).map(([v, l]) => html`<option value="${v}" ${v === (place?.kind || 'practice') ? 'selected' : ''}>${l}</option>`)}</select>
+      <div class="k-row"><button class="k-btn primary" type="submit">${place ? 'Save' : 'Add place'}</button><button class="k-btn" type="button" id="kPlClose">Cancel</button>${place ? html`<button class="k-link danger" type="button" id="kPlDel">Delete</button>` : ''}</div>
+    </form>`.s;
+  d.showModal();
+  $('kPlClose').onclick = () => d.close();
+  $('kPlForm').onsubmit = (e) => { e.preventDefault(); attempt(async () => {
+    const f = form(e.currentTarget);
+    await api(place ? '/api/locations/update' : '/api/locations', { method: 'POST', body: JSON.stringify({ ...f, locationId: place?.id }) });
+    d.close(); toast(place ? 'Place saved.' : 'Place added.');
+    await window.kesslerReload();
+  }, e.submitter); };
+  if (place) $('kPlDel').onclick = (e) => attempt(async () => {
+    if (!confirm(`Delete ${place.name}? Events there stay on the calendar.`)) return;
+    await api('/api/locations/delete', { method: 'POST', body: JSON.stringify({ locationId: place.id }) });
+    d.close(); toast('Place deleted.');
+    await window.kesslerReload();
+  }, e.currentTarget);
+};
+
+// -> { answer, events, places }. The free Kestrel AI answers on the server; any other model is called from the browser.
+async function scheduleAsk(text, documents) {
+  const body = JSON.stringify({ text, documents });
+  if (K.ai.provider === 'kestrel') return await api('/api/schedule/import', { method: 'POST', body });
+  const chat = await api('/api/schedule/import/prompt', { method: 'POST', body });
+  const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema.\n${JSON.stringify(chat.schema)}`;
+  const out = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const obj = parseLoose(out) || {};
+  return { answer: typeof obj.answer === 'string' ? obj.answer : '', events: Array.isArray(obj.events) ? obj.events : [], places: Array.isArray(obj.places) ? obj.places : [] };
+}
+
+// Describe the schedule or attach a file; Kestrel AI turns it into events and places, and nothing is saved until the list is confirmed.
+window.kestrelScheduleAi = ({ places = [] } = {}) => {
+  const st = { docs: [], busy: false, found: null };
+  const d = dialog();
+  d.classList.add('k-wide');
+  d.innerHTML = html`<h2>Add to the schedule with Kestrel AI</h2>
+    <p class="k-small">Paste your season schedule, describe it in a few sentences ("practice Mon/Wed/Fri 3:30 at the track until Nov 15, county meet Oct 12 at Memorial Park"), or attach a PDF, Word, Excel, CSV or text file. You check the list before anything is added.</p>
+    <textarea class="k-input" id="kSaText" rows="4" maxlength="4000" placeholder="Describe or paste the schedule"></textarea>
+    <div class="k-drop" id="kSaDrop"><input type="file" id="kSaFile" multiple hidden accept=".txt,.md,.csv,.tsv,.json,.pdf,.docx,.xlsx,.xls">
+      <button class="k-btn small" type="button" id="kSaAttach">Attach files</button><span class="k-small" id="kSaDocs">No file attached.</span></div>
+    <div class="k-row"><button class="k-btn primary" type="button" id="kSaRead">Read the schedule</button><button class="k-btn" type="button" id="kSaClose">Close</button></div>
+    <p class="k-small" id="kSaMsg" role="status"></p>
+    <div id="kSaFound"></div>`.s;
+  d.showModal();
+  $('kSaClose').onclick = () => d.close();
+  const known = new Set(places.map((p) => p.name.trim().toLowerCase()));
+  const paint = () => {
+    $('kSaDocs').textContent = st.docs.length ? st.docs.map((x) => x.name + (x.truncated ? ' (first part only)' : '')).join(', ') : 'No file attached.';
+    $('kSaRead').disabled = st.busy;
+    const f = st.found;
+    if (!f) { $('kSaFound').innerHTML = ''; return; }
+    const evRows = f.events.map((e, i) => html`<label class="k-check"><input type="checkbox" data-ev="${i}" checked><span><b>${e.title}</b> · ${e.date}${e.time ? ' · ' + e.time : ''}${e.location ? ' · ' + e.location : ''} <small>(${e.type})</small></span></label>`);
+    const plRows = f.places.filter((p) => !known.has(String(p.name).trim().toLowerCase())).map((p, i) => html`<label class="k-check"><input type="checkbox" data-pl="${i}" checked><span><b>${p.name}</b>${p.address ? ' · ' + p.address : ''} <small>(${PLACE_KIND_LABEL[p.kind] || 'Practice'})</small></span></label>`);
+    f.newPlaces = f.places.filter((p) => !known.has(String(p.name).trim().toLowerCase()));
+    $('kSaFound').innerHTML = html`${f.answer ? html`<p>${f.answer}</p>` : ''}
+      ${evRows.length ? html`<h3>Events (${evRows.length})</h3>${evRows}` : ''}
+      ${plRows.length ? html`<h3>New places (${plRows.length})</h3>${plRows}` : ''}
+      ${evRows.length || plRows.length ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kSaAdd">Add checked items</button></div>` : html`<p class="k-small">Nothing to add yet. Say more, or attach the file again.</p>`}`.s;
+    if ($('kSaAdd')) $('kSaAdd').onclick = (e) => attempt(async () => {
+      const events = f.events.filter((_, i) => d.querySelector(`[data-ev="${i}"]`)?.checked).map((x) => ({ date: x.date, title: x.title, type: x.type, time: x.time, endTime: x.end_time, location: x.location, checklist: x.bring, desc: x.notes }));
+      const pls = f.newPlaces.filter((_, i) => d.querySelector(`[data-pl="${i}"]`)?.checked);
+      // An unchecked place leaves its events with the venue name only, unlinked.
+      const out = await api('/api/schedule/bulk', { method: 'POST', body: JSON.stringify({ events, places: pls }) });
+      d.close();
+      toast(`Added ${out.addedEvents} event${out.addedEvents === 1 ? '' : 's'}${out.addedPlaces ? ` and ${out.addedPlaces} place${out.addedPlaces === 1 ? '' : 's'}` : ''}${out.skipped ? `. Skipped ${out.skipped} already on the calendar.` : '.'}`);
+      await window.kesslerReload();
+    }, e.currentTarget);
+  };
+  paint();
+  const addFiles = async (files) => {
+    for (const f of files) {
+      if (st.docs.length >= 5) { $('kSaMsg').textContent = 'Up to 5 files at a time.'; break; }
+      if (f.size > 15 * 1024 * 1024) { $('kSaMsg').textContent = `${f.name} is over 15 MB.`; continue; }
+      $('kSaMsg').textContent = `Reading ${f.name}…`;
+      try {
+        const text = (await extractText(f)).replace(/\u0000/g, '').trim();
+        if (!text) throw new Error('no readable text (scanned images are not supported yet)');
+        st.docs.push({ name: f.name, text: text.slice(0, 20000), truncated: text.length > 20000 });
+        $('kSaMsg').textContent = '';
+      } catch (err) { $('kSaMsg').textContent = `Could not read ${f.name}: ${err.message}`; }
+    }
+    paint();
+  };
+  $('kSaAttach').onclick = () => $('kSaFile').click();
+  $('kSaFile').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
+  const drop = $('kSaDrop');
+  drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
+  drop.ondragleave = () => drop.classList.remove('over');
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files]); };
+  $('kSaRead').onclick = async () => {
+    const text = $('kSaText').value.trim();
+    if (!text && !st.docs.length) { $('kSaMsg').textContent = 'Describe the schedule or attach a file first.'; return; }
+    st.busy = true; st.found = null; $('kSaMsg').textContent = 'Reading…'; paint();
+    try {
+      const out = await scheduleAsk(text, st.docs.map(({ name, text }) => ({ name, text })));
+      // Drop rows the server would refuse, so the list only shows what can be saved.
+      st.found = { answer: out.answer || '', places: (out.places || []).filter((p) => p?.name), events: (out.events || []).filter((e) => e?.title && /^\d{4}-\d{2}-\d{2}$/.test(e.date || '')).slice(0, 80) };
+      $('kSaMsg').textContent = '';
+    } catch (err) { $('kSaMsg').textContent = err.message; }
+    st.busy = false; paint();
+  };
+};
+
 function dialog() {
   let d = $('kDialog');
   if (!d) { d = document.createElement('dialog'); d.id = 'kDialog'; d.className = 'k-dialog'; document.body.appendChild(d); }
