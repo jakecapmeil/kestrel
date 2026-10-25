@@ -10,6 +10,8 @@
 //      States and the workout library.
 // Each person gets AI_DAILY_CAP calls a day so nobody burns the shared free quota.
 
+import { PLAN_SPEC_SCHEMA } from './plans.js';
+
 export class AiError extends Error {}
 
 // Free-tier quota is per model, so when one is used up (429) or down (5xx) the
@@ -329,4 +331,36 @@ export async function parseProfileText(env, db, person, text, today) {
     maxTokens: 500,
   });
   return out && typeof out === 'object' ? out : {};
+}
+
+// Plan builder chat: a person (or a team captain, for the whole team) talks a training plan into shape with Kestrel AI.
+// Each reply may carry a full plan (`plan`); the server turns it into nine levels (expandPlanSpec) and the person
+// sees a preview before saving. The same prompt goes to whatever model the person chose in AI settings.
+// scope: { team: boolean, name, roster: { athletes, grades, weekly_miles: [..] }, current: plan spec | null }
+export function planChat(history, scope, today) {
+  const turns = (Array.isArray(history) ? history : []).slice(-14)
+    .map((m) => ({ role: m?.role === 'user' ? 'Person' : 'Coach', text: String(m?.text || '').trim().slice(0, 1500) }))
+    .filter((m) => m.text);
+  if (!turns.length || turns[turns.length - 1].role !== 'Person') throw new AiError('Say what you want in the plan first.');
+  const who = scope.team ? `the captain or coach of a school running team ("${scope.name || 'the team'}"), building the plan for the whole team` : 'one runner building their own plan';
+  return {
+    system: `You are Kestrel AI, helping ${who} design a running training plan, then refine it with them. You are not their doctor, and many runners are minors.
+
+HOW THE PLAN WORKS. You describe ONE week shape for three kinds of week: a normal week, a race week and a taper week. Each has exactly 7 days (Monday first). A day has a type (Easy, Recovery, Workout, LR, Long run, Race, Shakeout, Cross-train, Off), a share of that week's miles (0 to 1, adding to about 1; Off and Cross-train are 0) and short notes. Kestrel scales your shape to nine weekly-mileage levels (15 to 60 miles) and puts each runner on the level that matches their fitness, then their AI coach adapts day to day. So do NOT write miles; write shares. Add a short workout menu in sessions (for example Tuesday workouts, long run options).
+
+${scope.team ? `ROSTER: ${JSON.stringify(scope.roster)}. Design for the whole range: the same structure has to work from beginners to the strongest runners.` : ''}
+
+WORKING WITH THEM. If they have not said enough (season phase, how many days a week, workout days, long run day, race days), ask ONE or TWO short questions in "answer" and leave "plan" out. Once you can build a sensible plan, include the full "plan" and say in "answer" what you built and why in under 120 words. When they ask for changes, return the whole updated plan. Keep what they did not ask to change.
+
+SAFETY. Keep hard days apart (never two hard days in a row), at least one full rest or very easy day, one long run no more than about 30% of the week, and no big mileage jumps. Never give medical, diet or weight-loss advice. For pain, tell them to see a coach, parent or doctor.`,
+    prompt: `Today is ${today}.\n\n${scope.current ? `CURRENT PLAN (change only what they ask):\n${JSON.stringify(scope.current)}\n\n` : 'No plan yet.\n\n'}CONVERSATION:\n${turns.map((m) => `${m.role}: ${m.text}`).join('\n')}\n\nReply to the person's last message.`,
+    schema: { type: 'object', properties: { answer: { type: 'string' }, plan: PLAN_SPEC_SCHEMA }, required: ['answer'] },
+  };
+}
+
+export async function askPlan(env, db, person, history, scope, today) {
+  if (!aiEnabled(env)) throw new AiError('The free Kestrel AI is not set up on this server. Pick another model in AI settings.');
+  const chat = planChat(history, scope, today);
+  await spend(db, person.id, today);
+  return await generate(env, { ...chat, maxTokens: 3500 });
 }

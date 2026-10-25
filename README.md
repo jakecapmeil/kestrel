@@ -17,7 +17,8 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 **For a team**
 - Anyone can start a team for their school. Others join with an invite code or link.
 - Team calendar: practices (easy, workout, long run), meets and other events, with RSVPs, availability, day notes, posts, a meets list with forecasts, places, and a private calendar feed for your phone.
-- The owner manages the calendar (including a weekly practice rhythm) and can publish a **team training plan** that every athlete's coach starts from.
+- The owner and any **captains** they name manage the calendar (including a weekly practice rhythm), edit the roster (number, grade, age, events) and build the **team training plan** with Kestrel AI: describe the season, refine it in chat, save. It scales to nine mileage levels so each athlete's coach starts them on the level that fits their fitness. Nothing is preloaded.
+- Anyone can build their own plan the same way (Training → Plan).
 - **Team mileage:** weekly totals and bars for the whole team. Names appear on the leaderboard only for athletes who choose to share.
 - There is no coach view of anyone's training, and teammates never see each other's health, log or contact details.
 
@@ -35,7 +36,7 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 - API keys for your own AI provider stay in your browser. Intervals.icu keys are encrypted at rest (AES-GCM).
 - The coach never diagnoses, and it sends lasting pain to a coach, parent or doctor. Plan changes always pass the guardrails, whichever model suggested them.
 - GPS routes are fetched from intervals.icu only when you open a run, cached for you alone, and never shown to teammates. Deleting your data removes them.
-- You → Settings → **Delete my Kestrel data** removes everything about you.
+- You → Settings → **Delete my Kestrel data** removes everything about you. Terms, privacy and a health notice are at `/legal`.
 
 ## How it is built
 
