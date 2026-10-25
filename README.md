@@ -45,7 +45,7 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 | `src/train/` | The training engine from [Hawks Calendar](https://github.com/jakecapmeil/hawks): plans, coach, log, fitness, workouts, watch sync, plan push, calculators. |
 | `src/models.js` | Kestrel Lab's model engine (one evaluator per model kind, plus upload validation) and the adapters the fitness engine calls. |
 | `public/index.html` | The app (the Hawks views). `public/kestrel.js` adds sign-in, teams, the AI choice and settings; `public/kestrel.css` is the design. |
-| `src/train/courses.js` | Courses (Van Cortlandt, Franklin Park, ...) and course PRs. Built-in courses ship in code, added ones live in the `courses` table and are shared. Only courses with verified bounds (`geo`) are matched from GPS; every other course is chosen by hand on the run. |
+| `src/train/courses.js` | Courses and course PRs. 28 built-in courses (each checked against a published source, with GPS start bounds so a run is matched to its course); courses people add live in the `courses` table, are shared, and are chosen by hand on the run. |
 | `public/records.js` | You → Records (PRs that update themselves, the courses you follow), the course picker, and a run's route (flat, elevation, and 3D terrain through MapLibre with OpenStreetMap and AWS terrain tiles). |
 | `public/lab/` | Kestrel Lab. |
 | `migrations/` | Cloudflare D1 (SQLite) schema. |

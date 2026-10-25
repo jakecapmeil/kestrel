@@ -236,7 +236,7 @@ export async function getDays(db, personId, from, to) {
     db.prepare('SELECT * FROM training_days WHERE person_id = ? AND date >= ? AND date <= ?').bind(personId, from, to).all(),
     db.prepare(
       `SELECT strava_id, date, name, category, distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, effort, hr_effort, load, library_id, summary,
-              start_local, laps, planned_type, planned_miles, surface, course, course_id, gps_vc, temp_f, dew_point_f, metrics
+              start_local, laps, planned_type, planned_miles, surface, course, course_id, gps_vc, gps_course, temp_f, dew_point_f, metrics
        FROM workouts WHERE person_id = ? AND date >= ? AND date <= ? ORDER BY start_local, created_at`
     ).bind(personId, from, to).all(),
     db.prepare(

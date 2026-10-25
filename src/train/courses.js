@@ -4,10 +4,9 @@
 //   next to the standard events. A race on a course updates its course PR only: there is no generic XC PR,
 //   and a track PR is never touched.
 //
-//   Built-in courses ship here, user-added ones live in the courses table. Only a course with `geo` is matched
-//   from GPS; every other course is chosen by hand on the run (or from the calendar event) because Kestrel does
-//   not guess where a park is. Elevation is not stored on a course: it is read off the runs people tagged there
-//   (courseStats), so it is real rather than remembered.
+//   Built-in courses ship here with GPS bounds, so a run that starts inside one is matched to it; user-added courses
+//   live in the courses table and are chosen by hand on the run. Elevation is not stored on a course: it is read off
+//   the runs people tagged there (courseStats), so it is real rather than remembered.
 
 import { VC_FACTOR, VC_RE } from './conditions.js';
 
@@ -22,21 +21,41 @@ export const COURSE_DISTANCES = [
   { m: Math.round(4 * MILE), label: '4 mi' },
 ];
 
-// `geo` is a start-position box [south, north, west, east]. Add one only when the bounds are verified.
+// Every course below was checked against a published source: a championship or invitational held there, or the
+// venue's own page. `geo` is a start-position box [south, north, west, east]: the venue's OpenStreetMap bounds with
+// a little margin (Panorama Farms: Cvillepedia's coordinates, +-0.012 degrees). A run that starts inside one is
+// matched to that course from its GPS. Add a course here only with a source and a box you have looked at.
+// `distances` are the ones raced there (metres): NCAA courses 6K and 8K/10K, high school courses a 5K or 3 miles.
+const M3 = 4828;
 export const BUILTIN_COURSES = [
   { id: 'vc', name: 'Van Cortlandt Park', place: 'Bronx, NY', distances: [5000, 4023], factor: VC_FACTOR, geo: [40.884, 40.915, -73.909, -73.871] },
-  { id: 'franklin-park', name: 'Franklin Park', place: 'Boston, MA', distances: [5000] },
-  { id: 'sunken-meadow', name: 'Sunken Meadow State Park', place: 'Kings Park, NY', distances: [5000] },
-  { id: 'bethpage', name: 'Bethpage State Park', place: 'Farmingdale, NY', distances: [5000] },
-  { id: 'belmont-plateau', name: 'Belmont Plateau', place: 'Philadelphia, PA', distances: [5000] },
-  { id: 'genesee-valley', name: 'Genesee Valley Park', place: 'Rochester, NY', distances: [5000] },
-  { id: 'panorama-farms', name: 'Panorama Farms', place: 'Earlysville, VA', distances: [5000, 8000] },
-  { id: 'burke-golf', name: 'Burke Memorial Golf Course', place: 'South Bend, IN', distances: [6000, 10000] },
-  { id: 'gibson', name: 'LaVern Gibson Championship Course', place: 'Terre Haute, IN', distances: [5000, 6000, 8000, 10000] },
-  { id: 'mt-sac', name: 'Mt. SAC Cross Country Course', place: 'Walnut, CA', distances: [5000] },
-  { id: 'woodward-park', name: 'Woodward Park', place: 'Fresno, CA', distances: [5000] },
-  { id: 'stanford-golf', name: 'Stanford Golf Course', place: 'Stanford, CA', distances: [5000, 8000] },
-  { id: 'portland-meadows', name: 'Portland Meadows', place: 'Portland, OR', distances: [5000] },
+  { id: 'franklin-park', name: 'Franklin Park', place: 'Boston, MA', distances: [5000], geo: [42.291, 42.315, -71.109, -71.083] },
+  { id: 'sunken-meadow', name: 'Sunken Meadow State Park', place: 'Kings Park, NY', distances: [5000], geo: [40.885, 40.921, -73.289, -73.229] },
+  { id: 'bethpage', name: 'Bethpage State Park', place: 'Farmingdale, NY', distances: [5000], geo: [40.732, 40.764, -73.479, -73.431] },
+  { id: 'belmont-plateau', name: 'Belmont Plateau', place: 'Philadelphia, PA', distances: [3000, 5000, 8000], geo: [39.9834, 39.9974, -75.2196, -75.2056] },
+  { id: 'genesee-valley', name: 'Genesee Valley Park', place: 'Rochester, NY', distances: [M3, 5000], geo: [43.101, 43.131, -77.665, -77.628] },
+  { id: 'chenango-valley', name: 'Chenango Valley State Park', place: 'Binghamton, NY', distances: [5000], geo: [42.196, 42.238, -75.851, -75.81] },
+  { id: 'holmdel-park', name: 'Holmdel Park', place: 'Holmdel, NJ', distances: [5000], geo: [40.363, 40.386, -74.196, -74.177] },
+  { id: 'wickham-park', name: 'Wickham Park', place: 'Manchester, CT', distances: [5000], geo: [41.778, 41.795, -72.587, -72.566] },
+  { id: 'covered-bridge', name: 'Covered Bridge Trail (Ponaganset HS)', place: 'Glocester, RI', distances: [5000], geo: [41.855, 41.875, -71.724, -71.705] },
+  { id: 'bull-run', name: 'Hereford High School (Bull Run)', place: 'Parkton, MD', distances: [M3], geo: [39.591, 39.607, -76.668, -76.652] },
+  { id: 'panorama-farms', name: 'Panorama Farms', place: 'Earlysville, VA', distances: [5000, 6000, 8000, 10000], geo: [38.1105, 38.1345, -78.5067, -78.4827] },
+  { id: 'apalachee', name: 'Apalachee Regional Park', place: 'Tallahassee, FL', distances: [6000, 8000, 10000], geo: [30.416, 30.434, -84.162, -84.145] },
+  { id: 'percy-warner', name: 'Percy Warner Park', place: 'Nashville, TN', distances: [5000], geo: [36.048, 36.089, -86.907, -86.864] },
+  { id: 'gibson', name: 'LaVern Gibson Championship Course', place: 'Terre Haute, IN', distances: [5000, 6000, 8000, 10000], geo: [39.45, 39.464, -87.27, -87.257] },
+  { id: 'burke-golf', name: 'Burke Golf Course (Notre Dame)', place: 'Notre Dame, IN', distances: [5000, 8000], geo: [41.692, 41.702, -86.253, -86.242] },
+  { id: 'detweiller', name: 'Detweiller Park', place: 'Peoria, IL', distances: [M3], geo: [40.78, 40.8, -89.6, -89.575] },
+  { id: 'zimmer', name: 'Thomas Zimmer Championship Course', place: 'Madison, WI', distances: [6000, 8000, 10000], geo: [43.014, 43.025, -89.556, -89.541] },
+  { id: 'obetz', name: 'Fortress Obetz', place: 'Obetz, OH', distances: [5000], geo: [39.881, 39.892, -82.95, -82.939] },
+  { id: 'gans-creek', name: 'Gans Creek Cross Country Course', place: 'Columbia, MO', distances: [6000, 8000, 10000], geo: [38.88, 38.892, -92.298, -92.285] },
+  { id: 'greiner-osu', name: 'Greiner Family Cross Country Course (Oklahoma State)', place: 'Stillwater, OK', distances: [6000, 8000, 10000], geo: [36.13, 36.147, -97.085, -97.071] },
+  { id: 'old-settlers', name: 'Old Settlers Park', place: 'Round Rock, TX', distances: [5000], geo: [30.527, 30.549, -97.637, -97.612] },
+  { id: 'mt-sac', name: 'Mt. SAC Cross Country Course', place: 'Walnut, CA', distances: [M3, 5000], geo: [34.036, 34.056, -117.852, -117.831] },
+  { id: 'woodward-park', name: 'Woodward Park', place: 'Fresno, CA', distances: [5000], geo: [36.858, 36.876, -119.794, -119.777] },
+  { id: 'stanford-golf', name: 'Stanford Golf Course', place: 'Stanford, CA', distances: [5000, 6000, 8000], geo: [37.414, 37.433, -122.194, -122.177] },
+  { id: 'morley-field', name: 'Morley Field (Balboa Park)', place: 'San Diego, CA', distances: [5000], geo: [32.733, 32.743, -117.146, -117.132] },
+  { id: 'glendoveer', name: 'Glendoveer Golf Course', place: 'Portland, OR', distances: [5000], geo: [45.524, 45.536, -122.53, -122.506] },
+  { id: 'sun-willows', name: 'Sun Willows Golf Course', place: 'Pasco, WA', distances: [5000], geo: [46.246, 46.258, -119.117, -119.099] },
 ].map((c) => ({ ...c, builtin: true }));
 
 const BUILTIN = new Map(BUILTIN_COURSES.map((c) => [c.id, c]));

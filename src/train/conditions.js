@@ -24,12 +24,6 @@ const HEAT = [[100, 0], [110, 0.005], [120, 0.01], [130, 0.02], [140, 0.03], [15
 const HOME = { lat: 40.85, lon: -73.9 };
 const DAY = 86400000;
 
-// Van Cortlandt Park's footprint (Bronx), with a little margin. A run's GPS
-// start inside it is at the park; outside it never is, whatever the name says.
-export function inVanCortlandt(lat, lon) {
-  return lat >= 40.884 && lat <= 40.915 && lon >= -73.909 && lon <= -73.871;
-}
-
 export const VC_RE = /van\s*cort?land|\bvcp\b|vannie|tortoise\s*(&|and)\s*(the\s*)?hare/i;
 
 // Fraction slower than ideal weather.
@@ -64,6 +58,8 @@ export function courseOf(w, events = []) {
   if (w.course_id === 'none') return '';
   // A course the runner picked is final: Van Cortlandt is 'vc', any other is a cross-country course.
   if (w.course_id) return w.course_id === 'vc' ? 'vc' : 'xc';
+  // Where the watch's GPS says the run started, when that is a course Kestrel has bounds for.
+  if (w.gps_course) return w.gps_course === 'vc' ? 'vc' : 'xc';
   // A run named after the park is there. Otherwise Hawky's read of it (from
   // the run and the day's calendar) decides, then the rules below.
   // GPS settles it when the watch recorded a position: at the park, or not.
@@ -86,6 +82,7 @@ export function courseOf(w, events = []) {
 export function courseIdOf(w, events = []) {
   if (w.course_id === 'none') return '';
   if (w.course_id) return w.course_id;
+  if (w.gps_course) return w.gps_course;
   return courseOf(w, events) === 'vc' ? 'vc' : '';
 }
 

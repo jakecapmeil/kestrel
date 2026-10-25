@@ -143,7 +143,7 @@ async function loadInputs(db, personId, today) {
   const [person, workouts, days, maxRow, events, efforts, well, model] = await Promise.all([
     db.prepare('SELECT id, prs, five_k_time, five_k_set_at, sex, settings FROM people WHERE id = ?').bind(personId).first(),
     db.prepare(
-      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, course_id, gps_vc, load, temp_f, dew_point_f
+      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, course_id, gps_vc, gps_course, load, temp_f, dew_point_f
        FROM workouts WHERE person_id = ? AND date >= ? ORDER BY date`
     ).bind(personId, since).all(),
     db.prepare(
@@ -157,7 +157,7 @@ async function loadInputs(db, personId, today) {
        LEFT JOIN locations l ON l.id = e.location_id WHERE e.date >= ?`
     ).bind(personId, since).all(),
     db.prepare(
-      `SELECT b.meters, b.sec, b.date, b.activity_id, w.category, w.laps, w.name, w.distance_mi, w.elev_gain_ft, w.surface, w.course, w.course_id, w.gps_vc, w.temp_f, w.dew_point_f FROM best_efforts b
+      `SELECT b.meters, b.sec, b.date, b.activity_id, w.category, w.laps, w.name, w.distance_mi, w.elev_gain_ft, w.surface, w.course, w.course_id, w.gps_vc, w.gps_course, w.temp_f, w.dew_point_f FROM best_efforts b
        LEFT JOIN workouts w ON w.person_id = b.person_id AND w.strava_id = 'intervals:' || b.activity_id WHERE b.person_id = ?`
     ).bind(personId).all(),
     db.prepare('SELECT date, vo2max, resting_hr, ctl, atl FROM wellness WHERE person_id = ? AND date >= ? ORDER BY date').bind(personId, since).all(),
@@ -168,7 +168,7 @@ async function loadInputs(db, personId, today) {
   const courseIds = [
     ...Object.keys(normalizePrs(parsePrs(person?.prs))).map((k) => parseCourseKey(k)?.id).filter(Boolean),
     ...trackedOf(parseSettings(person?.settings)).map((t) => t.course),
-    ...workouts.results.map((w) => w.course_id).filter(Boolean),
+    ...workouts.results.flatMap((w) => [w.course_id, w.gps_course]).filter((id) => id && id !== 'none'),
     'vc',
   ];
   const courses = await coursesById(db, courseIds);
