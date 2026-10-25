@@ -73,10 +73,11 @@ export function fitLaps(bytes) {
 
 // Splits worth showing: the laps where the athlete was running.
 export function runningSplits(rawLaps) {
-  const real = rawLaps.filter((l) => l.m >= 50 && l.s > 0);
+  // Not running: button-press slivers, and standing around (slower than 14:00/mi).
+  const real = rawLaps.filter((l) => l.m >= 50 && l.s > 0 && l.s / (l.m / 1609.344) <= 840);
   const running = real.filter((l) => !REST.has(l.intensity));
   const use = running.length >= 2 ? running : real;
-  return use.slice(0, 40).map((l) => ({ m: Math.round(l.m), s: Math.round(l.s), hr: l.hr }));
+  return use.slice(0, 40).map((l) => ({ m: Math.round(l.m), s: Math.round(l.s * 10) / 10, hr: l.hr, f: 1 }));
 }
 
 // TCX keeps laps as <Lap> blocks; some sources store that instead of a FIT.
