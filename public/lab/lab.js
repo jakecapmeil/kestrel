@@ -735,6 +735,7 @@ async function viewProviders() {
 // ---------- purposes
 
 // Every place in Kestrel where a model does a job, what is doing it for you now, and what else could.
+// A purpose has one pick; each of its events can override that pick (race:5K, short:600, vc:2.5mi).
 async function viewPurposes() {
   const me = await signedIn();
   const [list, mine] = await Promise.all([
@@ -744,34 +745,56 @@ async function viewPurposes() {
   if (!list) return;
   const purposes = L.cfg.purposes || {};
   const picks = { ...(L.cfg.defaults || {}), ...(mine?.models || {}) };
+  const eventPicks = mine?.event_models || {};
   const groups = {};
   for (const [key, p] of Object.entries(purposes)) (groups[p.group] ||= []).push([key, p]);
   const byId = Object.fromEntries(list.models.map((m) => [m.id, m]));
+  const opt = (m, sel) => html`<option value="${m.id}" ${m.id === sel ? raw('selected') : ''}>${m.name} ${m.version}</option>`;
   const row = ([key, p]) => {
     if (p.model === false) {
       return html`<div class="lab-purpose"><div><h3>${p.label}</h3><p class="k-small">Powered by a provider, not a weights file: the free Kestrel model, your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer. The plan rules and safety checks are the same whatever you choose.</p></div><a class="k-btn small" href="#/providers">Choose a provider</a></div>`;
     }
     const options = list.models.filter((m) => m.task === key);
     const cur = byId[picks[key]];
+    const evs = (L.cfg.slotEvents || {})[key] || [];
+    const nOver = evs.filter(([e]) => eventPicks[`${key}:${e}`]).length;
     return html`<div class="lab-purpose"><div><h3>${p.label}</h3>
       <p class="k-small">${cur ? html`Now: <a href="#/m/${encodeURIComponent(cur.id)}"><b>${cur.name}</b> ${cur.version}</a>${picks[key] === L.cfg.defaults[key] ? ' (default)' : ''}` : 'Using the default.'} ${options.length} model${options.length === 1 ? '' : 's'} can do this.</p></div>
       <div class="k-row">${me
-        ? html`<select class="k-input" data-pick="${key}" aria-label="Model for ${p.label}">${options.map((m) => html`<option value="${m.id}" ${m.id === picks[key] ? raw('selected') : ''}>${m.name} ${m.version}</option>`)}</select>`
+        ? html`<select class="k-input" data-pick="${key}" aria-label="Model for ${p.label}">${options.map((m) => opt(m, picks[key]))}</select>`
         : html`<span class="k-small">Sign in to Kestrel to choose.</span>`}
-        <a class="k-btn small" href="#/models?task=${key}">Browse</a></div></div>`;
+        <a class="k-btn small" href="#/models?task=${key}">Browse</a></div>
+      ${me && evs.length ? html`<details class="lab-slots"${nOver ? raw(' open') : ''}><summary>Per-event models${nOver ? html` <span class="lab-chip">${nOver} overridden</span>` : ''}</summary>
+        <div class="lab-slot-grid">${evs.map(([e, name]) => { const slot = `${key}:${e}`; return html`<label>${name}<select class="k-input" data-slot="${slot}"><option value="">Same as above</option>${options.map((m) => opt(m, eventPicks[slot]))}</select></label>`; })}</div></details>` : ''}
+      </div>`;
   };
+  const setup = me ? JSON.stringify({ models: picks, event_models: eventPicks }, null, 2) : '';
   render(html`
   <div class="k-kicker">Purposes</div>
   ${title('Which model does which job')}
-  <p class="k-lede">${L.cfg.platform} models each declare one purpose, because Kestrel only has so many places a model can plug in. Pick one model for each. A course purpose swaps in a model for that one course, so a Van Cortlandt model never changes your track predictions.</p>
-  <div class="lab-page">${Object.entries(groups).map(([g, rows]) => html`<section class="lab-panel"><h2>${g}</h2>${rows.map(row)}</section>`)}</div>`);
-  $lab.querySelectorAll('[data-pick]').forEach((sel) => {
-    sel.onchange = () => attempt(async () => {
-      await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [sel.dataset.pick]: sel.value } }) });
-      L.me = null;
-      toast('Saved. Fitness recalculates with it.');
-    }, sel);
-  });
+  <p class="k-lede">${L.cfg.platform} models each declare one purpose, because Kestrel only has so many places a model can plug in. Pick one model for each, then override any single event: the 5K on one model, the 1600 on another, Van Cortlandt's 2.5 mi on a model fitted just for it. A course purpose swaps in a model for that one course, so a Van Cortlandt model never changes your track predictions.</p>
+  <div class="lab-page">${Object.entries(groups).map(([g, rows]) => html`<section class="lab-panel"><h2>${g}</h2>${rows.map(row)}</section>`)}
+  ${me ? html`<section class="lab-panel"><h2>Your setup as a file</h2>
+    <p class="k-small">Everything above as JSON. Copy it to keep or share a setup, or paste one and apply it. Slots are <code>purpose:event</code>; an empty value follows the purpose.</p>
+    <textarea class="k-input lab-setup" id="setupJson" rows="10" spellcheck="false" aria-label="Setup JSON">${setup}</textarea>
+    <div class="k-row"><button class="k-btn" type="button" id="setupApply">Apply setup</button></div></section>` : ''}</div>`);
+  const save = (body, btn) => attempt(async () => {
+    await api('/api/me', { method: 'PUT', body: JSON.stringify(body) });
+    L.me = null;
+    toast('Saved. Fitness recalculates with it.');
+    return true;
+  }, btn);
+  $lab.querySelectorAll('[data-pick]').forEach((sel) => { sel.onchange = () => save({ models: { [sel.dataset.pick]: sel.value } }, sel); });
+  $lab.querySelectorAll('[data-slot]').forEach((sel) => { sel.onchange = async () => { if (await save({ event_models: { [sel.dataset.slot]: sel.value } }, sel)) viewPurposes(); }; });
+  if ($('setupApply')) {
+    $('setupApply').onclick = async (e) => {
+      let cfg;
+      try { cfg = JSON.parse($('setupJson').value); } catch { toast('That is not valid JSON.', true); return; }
+      // Slots missing from the file are cleared, so the file is the whole truth.
+      const cleared = Object.fromEntries(Object.keys(eventPicks).map((k) => [k, '']));
+      if (await save({ models: cfg.models || {}, event_models: { ...cleared, ...(cfg.event_models || {}) } }, e.currentTarget)) viewPurposes();
+    };
+  }
 }
 
 // ---------- boot

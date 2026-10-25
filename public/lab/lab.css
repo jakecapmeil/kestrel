@@ -154,3 +154,9 @@ a.lab-feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
 .lab-purpose h3{margin:0 0 var(--s-1);font-size:16px;}
 .lab-purpose .k-row{margin:0;align-items:center;}
 .lab-purpose select{min-width:220px;}
+
+.lab-slots{flex-basis:100%;margin-top:var(--s-2);}
+.lab-slots summary{cursor:pointer;font-size:14px;font-weight:600;}
+.lab-slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s-3);margin-top:var(--s-3);}
+.lab-slot-grid label{display:flex;flex-direction:column;gap:var(--s-1);font-size:13px;color:var(--text-2);}
+.lab-setup{width:100%;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:13px;}

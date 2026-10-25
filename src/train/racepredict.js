@@ -89,7 +89,8 @@ export async function racePredictions(env, personId, today) {
     const RM = modelSet(await pickedModels(db, personId, person?.settings), person?.sex || '');
     for (const [key, label, m] of [['VC 2.5 mi', '2.5 mi at Van Cortlandt', 2.5 * MILE], ['VC 5K', '5K at Van Cortlandt', 5000]]) {
       const k = Math.pow(m / 5000, 1.06);
-      const vc = (s) => RM.toCourse('vc', s) * k;
+      const ev = key === 'VC 5K' ? '5K' : '2.5mi';
+      const vc = (s) => RM.toCourse('vc', s * k, ev);
       rows.push({ key, label, sec: vc(five.sec), lo: vc(five.lo), hi: vc(five.hi), pr: prs[key === 'VC 5K' ? 'XC 5K' : key]?.time || null });
     }
   }

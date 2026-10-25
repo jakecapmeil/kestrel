@@ -51,6 +51,8 @@ A **purpose** is a place in the app where a model does a job (`PURPOSES` in `src
 | `vc` (a course) | `course-transfer` | Van Cortlandt: crediting VC races back to flat, and the "5K / 2.5 mi at Van Cortlandt" predictions |
 | `coach` | not a model file | Provider chosen in the Lab (free Gemini, your own key, local) |
 
+Any purpose can be overridden per event with a **slot** (`race:5K`, `short:600`, `vc:2.5mi`; `SLOT_EVENTS` in `src/models.js`). Resolution order for one prediction: the event's slot, else the purpose's pick, else the built-in default. So one athlete can run the 5K on VDOT, the 1600 on Riegel, the rest on HawksPredict-Lite, and Van Cortlandt's 2.5 mi on a model fitted just for that distance. The Purposes page edits all of it and shows the whole setup as JSON that can be copied or applied back.
+
 To add a course, add it to `COURSES`, teach `courseOf` to recognise it, and ship a default `course-transfer` model. Picking, validation, the Workbench note, the API and the Purposes page all follow from the registry. Course models are separate from `race`, so a Van Cortlandt model can never change a track prediction.
 
 Not built: more than one coaching variant. Coaching is a provider plus a prompt that the server checks every answer against (`applyCoachSaves`); making the prompt swappable is the next step, but it needs a design for who is allowed to publish prompts.

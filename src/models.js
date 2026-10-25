@@ -45,6 +45,18 @@ export const DEFAULTS = {
   race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon',
   vc: 'kestrel/vc-flat-factor',
 };
+// Slots: a purpose can also be overridden per event, so an athlete can run the 5K on one model and the 1600 on
+// another, or use one model for Van Cortlandt's 5K and the flat factor for its 2.5 mi. A slot is `purpose:event`
+// (`race:5K`, `short:600`, `vc:2.5mi`); the event keys are Fitness States' own. A slot with no pick follows its purpose.
+export const SLOT_EVENTS = {
+  race: [['400', '400 m'], ['800', '800 m'], ['1600', '1600 m'], ['3200', '3200 m'], ['5K', '5K'], ['10K', '10K'], ['half', 'Half marathon']],
+  short: [['100', '100 m'], ['200', '200 m'], ['600', '600 m'], ['1000', '1000 m'], ['2000SC', '2000 m steeple'], ['3000SC', '3000 m steeple']],
+  ...Object.fromEntries(Object.entries(COURSES).map(([k, c]) => [k, [['5K', `5K at ${c.label}`], ['2.5mi', `2.5 mi at ${c.label}`]]])),
+};
+export const slotKey = (purpose, event) => `${purpose}:${event}`;
+// slot -> purpose, for every valid slot
+export const SLOTS = Object.fromEntries(Object.entries(SLOT_EVENTS).flatMap(([p, evs]) => evs.map(([e]) => [slotKey(p, e), p])));
+
 export const KINDS = {
   'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'],
   vdot: ['race'], tanda: ['marathon'], 'course-transfer': Object.keys(COURSES),
@@ -518,16 +530,20 @@ export function modelSet(picked = {}, sex = '') {
   const short = picked.short || BY_ID.get(DEFAULTS.short);
   const marathon = picked.marathon || BY_ID.get(DEFAULTS.marathon);
   const courses = Object.fromEntries(Object.keys(COURSES).map((k) => [k, picked[k] || BY_ID.get(DEFAULTS[k])]));
+  const slots = picked.$slots || {};
+  // The model for a purpose at one event: the slot's pick, else the purpose's.
+  const forSlot = (purpose, event, base) => (event !== undefined && slots[slotKey(purpose, event)]) || base;
   const shortEvents = short.kind === 'short-pairs' ? short.weights.events : SHORT_METERS;
   const label = (m) => ({ name: m.name, version: m.version || '' });
 
-  // results: [{ m, sec, surf }]  target: { m, surf } -> { sec, lo, hi, buckets } | null
-  function raceAny(results, target) {
+  // results: [{ m, sec, surf }]  target: { m, surf }  event: Fitness event key -> { sec, lo, hi, buckets } | null
+  function raceAny(results, target, event) {
+    const model = forSlot('race', event, race);
     const clean = (results || []).filter((r) => r && r.m > 0 && r.sec > 0);
     if (!clean.length) return null;
-    if (race.kind === 'riegel') { const r = riegelPredict(race.weights, clean, target); return r && { ...r, buckets: 1 }; }
-    if (race.kind === 'vdot') { const r = vdotPredict(race.weights, clean, target); return r && { ...r, buckets: 1 }; }
-    const one = (male) => liteOne(race.weights, clean, { ...target, male });
+    if (model.kind === 'riegel') { const r = riegelPredict(model.weights, clean, target); return r && { ...r, buckets: 1 }; }
+    if (model.kind === 'vdot') { const r = vdotPredict(model.weights, clean, target); return r && { ...r, buckets: 1 }; }
+    const one = (male) => liteOne(model.weights, clean, { ...target, male });
     const buckets = liteFeatures(clean, target).n_buckets;
     if (sex) { const r = one(sex === 'm' ? 1 : 0); return r && { ...r, buckets }; }
     const a = one(0);
@@ -536,17 +552,18 @@ export function modelSet(picked = {}, sex = '') {
     return { sec: Math.sqrt(a.sec * b.sec), lo: Math.min(a.lo, b.lo), hi: Math.max(a.hi, b.hi), buckets };
   }
 
-  // sources: [{ ev, sec, extra }]  target: short event key -> { sec, lo, hi, sd, n } | null
-  function shortAny(sources, target) {
-    if (short.kind === 'riegel') {
+  // sources: [{ ev, sec, extra }]  target: short event key  event: Fitness event key -> { sec, lo, hi, sd, n } | null
+  function shortAny(sources, target, event) {
+    const model = forSlot('short', event, short);
+    if (model.kind === 'riegel') {
       const tm = SHORT_METERS[target];
       if (!tm) return null;
       const res = sources.filter((s) => SHORT_METERS[s.ev] && !s.ev.startsWith('S')).map((s) => ({ m: SHORT_METERS[s.ev], sec: s.sec }));
-      const r = riegelPredict(short.weights, res, { m: tm });
+      const r = riegelPredict(model.weights, res, { m: tm });
       return r && { ...r, sd: Math.log(r.hi / r.lo) / (2 * Z80), n: 1 };
     }
-    if (!short.weights.events[target]) return null;
-    const r = shortPredict(short.weights, sources.filter((s) => short.weights.events[s.ev]), target, sex);
+    if (!model.weights.events[target]) return null;
+    const r = shortPredict(model.weights, sources.filter((s) => model.weights.events[s.ev]), target, sex);
     return r && { ...r, sd: Math.log(r.hi / r.lo) / (2 * Z80), n: Math.min(3, sources.length) };
   }
 
@@ -557,33 +574,54 @@ export function modelSet(picked = {}, sex = '') {
     return marathon.kind === 'tanda' ? tandaPredict(marathon.weights, training, today) : marathonPredict(marathon.weights, training, today);
   }
 
-  // What a flat-course time is worth on a course, and back. A course without a model is the flat time.
-  const toCourseSec = (course, flatSec) => (courses[course] ? toCourse(courses[course].weights, flatSec, sex) : flatSec);
-  const toFlatSec = (course, courseSec) => (courses[course] ? toFlat(courses[course].weights, courseSec, sex) : courseSec);
+  // What a flat-course time is worth on a course, and back; `event` ('5K', '2.5mi') picks a per-event course model.
+  // A course without a model is the flat time.
+  const courseModel = (course, event) => forSlot(course, event, courses[course]);
+  const toCourseSec = (course, flatSec, event) => { const m = courseModel(course, event); return m ? toCourse(m.weights, flatSec, sex) : flatSec; };
+  const toFlatSec = (course, courseSec, event) => { const m = courseModel(course, event); return m ? toFlat(m.weights, courseSec, sex) : courseSec; };
 
   return {
     raceAny, shortAny, marathon: marathonFrom,
     shortSource: (m, sec) => shortSourceIn(shortEvents, m, sec),
     toCourse: toCourseSec, toFlat: toFlatSec,
     // The time ratio course/flat for a run of this many seconds (conditionsOf multiplies by it).
-    courseFactor: (course, courseSec) => courseSec / toFlatSec(course, courseSec),
-    info: { race: label(race), short: label(short), marathon: label(marathon), ...Object.fromEntries(Object.keys(courses).map((k) => [k, label(courses[k])])) },
-    ids: { race: race.id, short: short.id, marathon: marathon.id, ...Object.fromEntries(Object.entries(courses).map(([k, m]) => [k, m.id])) },
+    courseFactor: (course, courseSec, event) => courseSec / toFlatSec(course, courseSec, event),
+    info: {
+      race: label(race), short: label(short), marathon: label(marathon), ...Object.fromEntries(Object.keys(courses).map((k) => [k, label(courses[k])])),
+      // Slots that run on a different model than their purpose: { 'race:5K': { name, version } }
+      overrides: Object.fromEntries(Object.entries(slots).map(([k, m]) => [k, label(m)])),
+    },
+    ids: { race: race.id, short: short.id, marathon: marathon.id, ...Object.fromEntries(Object.entries(courses).map(([k, m]) => [k, m.id])), ...Object.fromEntries(Object.entries(slots).map(([k, m]) => [k, m.id])) },
   };
 }
 
-// The models an athlete picked (people.settings.models), resolved to model files. Private models count only
-// for their owner; a model that was deleted falls back to the default.
+// One model by id for a purpose, for this viewer (private models count only for their owner), or null.
+async function resolveModel(db, personId, id, task) {
+  if (BY_ID.has(id)) return BY_ID.get(id).task === task ? BY_ID.get(id) : null;
+  const row = await db.prepare("SELECT body, task FROM models WHERE id = ? AND (visibility = 'public' OR owner_id = ?)").bind(id, personId).first();
+  if (!row || row.task !== task) return null;
+  try { return { ...JSON.parse(row.body), id }; } catch { return null; }
+}
+
+// The models an athlete picked (people.settings.models and .event_models), resolved to model files. A model that was
+// deleted, went private or no longer fits falls back to the default. The per-event picks come back under `$slots`.
 export async function pickedModels(db, personId, settingsJson) {
-  let picked = {};
-  try { picked = JSON.parse(settingsJson || '{}').models || {}; } catch { /* defaults */ }
+  let settings = {};
+  try { settings = JSON.parse(settingsJson || '{}'); } catch { /* defaults */ }
+  const picked = settings.models || {};
   const out = {};
   for (const task of Object.keys(TASKS)) {
     const id = picked[task];
     if (!id || id === DEFAULTS[task]) continue;
-    if (BY_ID.has(id)) { if (BY_ID.get(id).task === task) out[task] = BY_ID.get(id); continue; }
-    const row = await db.prepare("SELECT body, task FROM models WHERE id = ? AND (visibility = 'public' OR owner_id = ?)").bind(id, personId).first();
-    if (row && row.task === task) { try { out[task] = { ...JSON.parse(row.body), id }; } catch { /* default */ } }
+    const m = await resolveModel(db, personId, id, task);
+    if (m) out[task] = m;
   }
+  const slots = {};
+  for (const [slot, id] of Object.entries(settings.event_models || {})) {
+    if (!SLOTS[slot] || !id) continue;
+    const m = await resolveModel(db, personId, id, SLOTS[slot]);
+    if (m) slots[slot] = m;
+  }
+  if (Object.keys(slots).length) out.$slots = slots;
   return out;
 }

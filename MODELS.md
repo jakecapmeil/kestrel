@@ -31,6 +31,8 @@ The whole file is at most 1 MB. Each user can upload up to 20 models, public or 
 
 A purpose is a place in the app where a model does a job. A model declares one; each athlete picks one model per purpose in the Lab's Purposes page. Coaching is also a purpose, but it is powered by a provider (the free Kestrel model, your own key, or a local model), not a weights file.
 
+Every purpose can also be overridden per event with a **slot**, `purpose:event`: `race:5K`, `race:1600`, `short:600`, `vc:2.5mi`. A slot with no pick follows its purpose, so you can run the 5K on one model and everything else on another. Events are Fitness States' own (`SLOT_EVENTS` in `src/models.js`). Picks are stored as `people.settings.models` (purposes) and `people.settings.event_models` (slots); `PUT /api/me` with `{ "models": {...}, "event_models": { "race:5K": "kestrel/vdot", "race:1600": "" } }` sets them, and an empty id clears a slot.
+
 - `race`: 800 m and up on track, cross country and road (XC 5K, 3200 m, half marathon, ...).
 - `short`: 100-1000 m and the steeplechases.
 - `marathon`: marathon time from the last 16 weeks of training.

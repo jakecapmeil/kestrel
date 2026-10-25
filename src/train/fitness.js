@@ -242,7 +242,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // unless the PR says it was somewhere else.
     const onCourse = event === 'XC 5K' || event === 'VC 2.5 mi';
     const vc = event === 'VC 2.5 mi' || (event === 'XC 5K' && (!v?.meet || VC_RE.test(v.meet)));
-    const t = onCourse ? (vc ? RM.toFlat('vc', sec) : sec / XC_FACTOR) : sec;
+    const t = onCourse ? (vc ? RM.toFlat('vc', sec, event === 'VC 2.5 mi' ? '2.5mi' : '5K') : sec / XC_FACTOR) : sec;
     sources.push({
       kind: 'pr', max: true, event, m, s: t, age, date: dated ? v.date : null,
       quality: (dated ? 0.9 : 0.5) * (onCourse ? 0.8 : 1),
@@ -458,7 +458,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const results = liteIn.map((s) => ({ m: s.m, sec: s.s, surf: 'track' }));
     let by = {};
     for (const e of EVENTS) {
-      by[e.key] = RM.raceAny(results, { m: e.m, surf: 'track' });
+      by[e.key] = RM.raceAny(results, { m: e.m, surf: 'track' }, e.key);
       if (!by[e.key]) { by = null; break; }
     }
     if (by) {
@@ -588,7 +588,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
       const own = shortPrs.filter((p) => p.ev === e.short).sort((a, b) => a.age - b.age)[0];
       // 400-to-5K PRs are already inside Lite's estimates, so only PRs at the events Short owns count as extra sources.
       const prsUsed = shortPrs.filter((p) => p.ev !== e.short && SHORT_OWN.has(p.ev)).map((p) => ({ ev: p.ev, sec: p.sec, extra: p.age > 365 ? 0.02 : 0.008, name: `${PR_NAMES[p.ev] || p.ev} PR` }));
-      const r = RM.shortAny([...fromLite, ...prsUsed], e.short);
+      const r = RM.shortAny([...fromLite, ...prsUsed], e.short, e.key);
       if (!r) continue;
       let mu = Math.log(r.sec);
       let sd = r.sd;
@@ -613,10 +613,10 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
 
   // The same fitness on the team's home course: what to expect at Van
   // Cortlandt (the 5K, and the 2.5-mile course by Riegel from the 5K).
-  const vc5 = RM.toCourse('vc', est['5K'].sec);
+  const vc5 = RM.toCourse('vc', est['5K'].sec, '5K');
   const courseEstimates = [
     { key: 'vc5k', label: '5K at Van Cortlandt', meters: 5000, sec: Math.round(vc5 * 10) / 10 },
-    { key: 'vc2.5', label: '2.5 mi at Van Cortlandt', meters: 2.5 * MILE, sec: Math.round(vc5 * Math.pow((2.5 * MILE) / 5000, 1.06) * 10) / 10 },
+    { key: 'vc2.5', label: '2.5 mi at Van Cortlandt', meters: 2.5 * MILE, sec: Math.round(RM.toCourse('vc', est['5K'].sec * Math.pow((2.5 * MILE) / 5000, 1.06), '2.5mi') * 10) / 10 },
   ].map((c) => ({ ...c, time: fmtTime(c.sec), pace_mi: fmtPace((c.sec / c.meters) * MILE) }));
 
   // Zones: race paces from the estimates, aerobic zones from race VO2max (Daniels'
@@ -663,6 +663,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     confidence: overall,
     mpw, mpw_prev: mpwPrev, longest_28d: round1(cur.longest),
     model_short: lite ? `${RM.info.short.name} ${RM.info.short.version}` : null,
+    model_overrides: RM.info.overrides,
     model_marathon: est.marathon ? `${RM.info.marathon.name} ${RM.info.marathon.version}` : null,
     estimates: [...EVENTS, ...EXTRA_EVENTS.filter((e) => est[e.key])].map((e) => {
       const x = est[e.key];

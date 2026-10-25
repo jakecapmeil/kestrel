@@ -9,7 +9,7 @@
 
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
-import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, COURSES, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
+import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, COURSES, SLOT_EVENTS, SLOTS, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
@@ -77,6 +77,7 @@ async function meView(db, me) {
       age_ok: !!me.age_ok, share_miles: !!me.share_miles, plan_rank: me.plan_rank,
     },
     models: { ...DEFAULTS, ...(settingsOf(me).models || {}) },
+    event_models: settingsOf(me).event_models || {},
     teams,
   };
 }
@@ -97,17 +98,27 @@ async function updateMe(db, me, b) {
     set('plan_rank', r);
     set('coach_rank', r);
   }
-  if (b.models && typeof b.models === 'object') {
+  if ((b.models && typeof b.models === 'object') || (b.event_models && typeof b.event_models === 'object')) {
     const settings = settingsOf(me);
     const models = { ...(settings.models || {}) };
-    for (const [task, id] of Object.entries(b.models)) {
+    for (const [task, id] of Object.entries(b.models || {})) {
       if (!TASKS[task]) throw new BadRequest(`Unknown task ${task}.`);
       const m = await findModel(db, me.id, String(id));
       if (!m) throw new BadRequest('That model does not exist or is private.');
       if (m.task !== task) throw new BadRequest(`${m.name} is a ${m.task} model, not ${task}.`);
       models[task] = m.id;
     }
-    set('settings', JSON.stringify({ ...settings, models }));
+    // Per-event picks, keyed `purpose:event` (see SLOT_EVENTS). An empty id clears the slot so it follows its purpose again.
+    const eventModels = { ...(settings.event_models || {}) };
+    for (const [slot, id] of Object.entries(b.event_models || {})) {
+      if (!SLOTS[slot]) throw new BadRequest(`Unknown slot ${slot}. Slots are purpose:event, such as race:5K.`);
+      if (!id) { delete eventModels[slot]; continue; }
+      const m = await findModel(db, me.id, String(id));
+      if (!m) throw new BadRequest('That model does not exist or is private.');
+      if (m.task !== SLOTS[slot]) throw new BadRequest(`${m.name} is a ${m.task} model, not ${SLOTS[slot]}.`);
+      eventModels[slot] = m.id;
+    }
+    set('settings', JSON.stringify({ ...settings, models, event_models: eventModels }));
     // Fitness States are cached; the next read recomputes them with the new models.
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
   }
@@ -680,7 +691,7 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, courses: COURSES, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, courses: COURSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));

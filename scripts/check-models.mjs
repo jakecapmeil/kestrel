@@ -63,6 +63,19 @@ REF.marathon.forEach((c, i) => same(`marathon ${i}`, marathonPredict(byId['hawks
   if (Math.abs(modelSet().courseFactor('vc', 1080) - VC_FACTOR) > 1e-12) { fails++; console.log('modelSet course factor'); }
 }
 
+// Slots: a per-event pick overrides its purpose for that event only, and nothing else moves.
+{
+  const results = [{ m: 1600, sec: 300, surf: 'track' }, { m: 3200, sec: 650, surf: 'track' }];
+  const plain = modelSet({}, 'm');
+  const mixed = modelSet({ $slots: { 'race:5K': byId.vdot, 'vc:2.5mi': { ...byId['vc-flat-factor'], weights: { a: 0.1, b: 1, c: 0 } } } }, 'm');
+  const at = (set, m, key) => set.raceAny(results, { m, surf: 'track' }, key);
+  compared += 4;
+  if (at(plain, 5000, '5K').sec === at(mixed, 5000, '5K').sec) { fails++; console.log('race:5K override had no effect'); }
+  if (at(plain, 800, '800').sec !== at(mixed, 800, '800').sec) { fails++; console.log('race:5K override moved the 800'); }
+  if (Math.abs(mixed.toCourse('vc', 1000, '2.5mi') / 1000 - Math.exp(0.1)) > 1e-12) { fails++; console.log('vc:2.5mi override not used'); }
+  if (Math.abs(mixed.toCourse('vc', 1000, '5K') / 1000 - VC_FACTOR) > 1e-12) { fails++; console.log('vc:2.5mi override leaked into vc 5K'); }
+}
+
 for (const m of BUILTIN) {
   try { validateModel(m); } catch (e) { fails++; console.log('built-in model fails validation', m.slug, e.message); }
 }

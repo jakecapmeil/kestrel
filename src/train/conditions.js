@@ -87,7 +87,9 @@ export function conditionsOf(w, events = [], { reps = false, courseFactor = null
   const heat = heatCost(w.temp_f, w.dew_point_f) * (reps ? 0.5 : 1);
   const hill = course === 'vc' || w.surface === 'track' ? 0 : hillCost(w.elev_gain_ft, w.distance_mi);
   const secs = w.sec || w.elapsed_sec || w.moving_sec;
-  const vcf = course === 'vc' && courseFactor && secs > 0 ? courseFactor('vc', secs) : VC_FACTOR;
+  // The course's own events by distance: 2.5 mi (the high-school race) or the 5K.
+  const meters = w.meters || (w.raw_distance_mi ?? w.distance_mi) * 1609.344;
+  const vcf = course === 'vc' && courseFactor && secs > 0 ? courseFactor('vc', secs, meters < 4000 ? '2.5mi' : '5K') : VC_FACTOR;
   const factor = (course === 'vc' ? vcf : course === 'xc' ? XC_FACTOR : 1) * (1 + hill) * (1 + heat);
   const parts = [
     course === 'vc' ? 'Van Cortlandt course' : course === 'xc' ? 'cross-country course' : '',
