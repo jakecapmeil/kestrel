@@ -23,6 +23,7 @@ import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { hawkyState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/hawky.js';
 import { aiEnabled, askCoach, coachChat, AiError } from './train/gemini.js';
+import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
 class NotFound extends Error {}
@@ -398,7 +399,7 @@ const pub = (m) => ({
   id: m.id, slug: m.slug || m.id, name: m.name, version: m.version || '', kind: m.kind, task: m.task, license: m.license || '',
   description: m.description || '', trained_on: m.trained_on || '', base_model: m.base_model || '', builtin: !!m.builtin,
   owner: m.owner || 'Kestrel', owner_id: m.builtin ? null : m.owner_id, visibility: m.visibility || 'public',
-  size: m.size ?? JSON.stringify(m.weights).length, downloads: m.downloads || 0, created_at: m.created_at || null,
+  size: m.size ?? JSON.stringify(m.weights).length, downloads: m.downloads || 0, created_at: m.created_at || null, source_url: m.source_url || '',
 });
 
 async function findModel(db, viewerId, id) {
@@ -423,7 +424,7 @@ async function listModels(db, viewerId, { task = '', q = '' } = {}) {
   if (TASKS[task]) { where.push('m.task = ?'); vals.push(task); }
   if (q) { where.push('(m.name LIKE ? OR m.description LIKE ?)'); vals.push(`%${q}%`, `%${q}%`); }
   const { results } = await db.prepare(
-    `SELECT m.id, m.slug, m.name, m.version, m.kind, m.task, m.license, m.description, m.base_model, m.visibility, m.size, m.downloads, m.owner_id, m.created_at, p.name AS owner
+    `SELECT m.id, m.slug, m.name, m.version, m.kind, m.task, m.license, m.description, m.base_model, m.visibility, m.size, m.downloads, m.owner_id, m.created_at, m.source_url, p.name AS owner
      FROM models m JOIN people p ON p.id = m.owner_id WHERE ${where.join(' AND ')} ORDER BY m.downloads DESC, m.created_at DESC LIMIT 200`
   ).bind(...vals).all();
   const ql = q.toLowerCase();
@@ -438,19 +439,74 @@ async function uploadModel(db, me, request) {
   if (raw.length > MAX_MODEL_BYTES + 20000) throw new BadRequest('Model files can be up to 1 MB.');
   let b;
   try { b = JSON.parse(raw); } catch { throw new BadRequest('That is not valid JSON.'); }
-  const file = validateModel(b.model ?? b);
+  return insertModel(db, me, { file: validateModel(b.model ?? b), readme: b.readme, base_model: b.base_model, visibility: b.visibility });
+}
+
+// Stores a validated model as a new Lab model with its first version.
+async function insertModel(db, me, { file, readme = '', base_model = '', visibility = 'public', source_url = '', note = 'First version' }) {
   const text = JSON.stringify(file);
   if (text.length > MAX_MODEL_BYTES) throw new BadRequest('Model files can be up to 1 MB.');
   const n = await db.prepare('SELECT COUNT(*) AS n FROM models WHERE owner_id = ?').bind(me.id).first();
   if (n.n >= 20) throw new BadRequest('You can publish up to 20 models. Delete one first.');
-  const base = str(b.base_model, 80);
   const id = randomId('m_', 6);
   const slug = `${(me.name || 'user').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'user'}/${file.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}`;
-  await db.prepare(
-    'INSERT INTO models (id, owner_id, slug, name, version, kind, task, description, license, readme, base_model, visibility, body, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).bind(id, me.id, slug, file.name, file.version, file.kind, file.task, file.description, file.license, str(b.readme, 20000), base,
-    b.visibility === 'private' ? 'private' : 'public', text, text.length, Date.now()).run();
+  const now = Date.now();
+  await db.batch([
+    db.prepare(
+      'INSERT INTO models (id, owner_id, slug, name, version, kind, task, description, license, readme, base_model, visibility, body, size, created_at, source_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(id, me.id, slug, file.name, file.version, file.kind, file.task, file.description, file.license, str(readme, 20000), str(base_model, 80),
+      visibility === 'private' ? 'private' : 'public', text, text.length, now, str(source_url, 300)),
+    db.prepare('INSERT INTO model_versions (id, model_id, version, body, size, note, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(randomId('v_', 6), id, file.version, text, text.length, str(note, 200), str(source_url, 300), now),
+  ]);
   return id;
+}
+
+// A new version of a model you own. The kind and task cannot change, since athletes may have picked it for that task.
+async function addVersion(db, me, id, file, { note = '', source_url = '', readme } = {}) {
+  const row = await db.prepare('SELECT id, kind, task FROM models WHERE id = ? AND owner_id = ?').bind(id, me.id).first();
+  if (!row) throw new NotFound('Model not found.');
+  if (row.kind !== file.kind || row.task !== file.task) throw new BadRequest(`A new version must stay a ${row.kind} model for ${row.task}. Publish a different kind as a new model.`);
+  const text = JSON.stringify(file);
+  if (text.length > MAX_MODEL_BYTES) throw new BadRequest('Model files can be up to 1 MB.');
+  const count = await db.prepare('SELECT COUNT(*) AS n FROM model_versions WHERE model_id = ?').bind(id).first();
+  if (count.n >= 50) throw new BadRequest('A model can have up to 50 versions.');
+  const now = Date.now();
+  await db.batch([
+    db.prepare('INSERT INTO model_versions (id, model_id, version, body, size, note, source_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(randomId('v_', 6), id, file.version, text, text.length, str(note, 200), str(source_url, 300), now),
+    db.prepare('UPDATE models SET body = ?, size = ?, version = ?, name = ?, description = ?, license = ?, source_url = COALESCE(NULLIF(?, \'\'), source_url), readme = COALESCE(?, readme) WHERE id = ?')
+      .bind(text, text.length, file.version, file.name, file.description, file.license, str(source_url, 300), readme !== undefined ? str(readme, 20000) : null, id),
+  ]);
+}
+
+// Imports and exports call other sites, so each person gets 30 a day.
+async function syncBudget(db, me) {
+  const use = await db.prepare('INSERT INTO api_usage (key_id, date, calls) VALUES (?, ?, 1) ON CONFLICT(key_id, date) DO UPDATE SET calls = calls + 1 RETURNING calls').bind(`sync:${me.id}`, todayInTz()).first();
+  if (use.calls > 30) throw new BadRequest('That is today\'s 30 imports and exports. Try again tomorrow.');
+}
+
+// Leave-one-out on your own PRs: hide each result, ask the model for it from the others, compare. Nothing is saved.
+async function workbench(db, me, ids) {
+  const prs = await getPrs(db, me.id);
+  const have = EVENTS.filter((e) => prs[e.key]?.time).map((e) => ({ key: e.key, m: e.m, surf: e.surf, steeple: !!e.steeple, sec: parseTime(prs[e.key].time), ev: e })).filter((p) => p.sec > 0);
+  const out = [];
+  for (const id of ids.slice(0, 4)) {
+    const model = await findModel(db, me.id, id);
+    if (!model) throw new NotFound('Model not found.');
+    if (model.task === 'marathon') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Marathon models read training logs, not PRs, so the Workbench cannot test them here.' }); continue; }
+    const rows = [];
+    for (const p of have) {
+      if (p.ev.task !== model.task) continue;
+      const r = predictEvent(model, have, p.ev, me.sex || '');
+      if (!r) continue;
+      rows.push({ event: p.key, label: p.ev.label, actual: p.sec, predicted: r.sec, lo: r.lo, hi: r.hi, err: (r.sec - p.sec) / p.sec, inside: p.sec >= r.lo && p.sec <= r.hi });
+    }
+    const mae = rows.length ? rows.reduce((a, r) => a + Math.abs(r.err), 0) / rows.length : null;
+    out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows, mae, coverage: rows.length ? rows.filter((r) => r.inside).length / rows.length : null,
+      note: rows.length ? undefined : 'Needs at least two PRs in this task to test.' });
+  }
+  return { results: out, prs: have.length };
 }
 
 // Public predict API: API keys are "kst_" + 32 hex characters; only their SHA-256 is stored.
@@ -655,6 +711,24 @@ async function route(request, env, url) {
     const r = await db.prepare("SELECT COUNT(*) AS n, COALESCE(SUM(downloads), 0) AS d, COUNT(DISTINCT owner_id) AS o FROM models WHERE visibility = 'public'").first();
     return json({ models: r.n + BUILTIN.length, downloads: r.d, publishers: r.o + 1 });
   }
+  // Versions and lineage take the model id as ?id= (built-in ids contain a slash, so they cannot sit in the path).
+  if (path === '/api/lab/versions' && method === 'GET') {
+    const m = await findModel(db, viewer?.id, str(q.get('id'), 80));
+    if (!m) throw new NotFound('Model not found.');
+    if (m.builtin) return json({ versions: [{ id: 'current', version: m.version || '', size: pub(m).size, note: 'Ships with Kestrel', created_at: null, current: true }] });
+    const { results } = await db.prepare('SELECT id, version, size, note, source_url, created_at FROM model_versions WHERE model_id = ? ORDER BY created_at DESC').bind(m.id).all();
+    return json({ versions: results.map((v, i) => ({ ...v, current: i === 0 })) });
+  }
+  if (path === '/api/lab/lineage' && method === 'GET') {
+    const m = await findModel(db, viewer?.id, str(q.get('id'), 80));
+    if (!m) throw new NotFound('Model not found.');
+    const parent = m.base_model ? await findModel(db, viewer?.id, m.base_model) : null;
+    const { results } = await db.prepare(
+      `SELECT m.id, m.slug, m.name, m.version, m.kind, m.task, m.license, m.description, m.base_model, m.visibility, m.size, m.downloads, m.owner_id, m.created_at, m.source_url, p.name AS owner
+       FROM models m JOIN people p ON p.id = m.owner_id WHERE m.base_model = ? AND (m.visibility = 'public' OR m.owner_id = ?) ORDER BY m.created_at DESC LIMIT 50`
+    ).bind(m.id, viewer?.id || '').all();
+    return json({ parent: parent ? pub(parent) : null, external_parent: !parent && m.base_model ? m.base_model : '', children: results.map(pub) });
+  }
   if (path === '/api/lab/models' && method === 'GET') return json({ models: await listModels(db, viewer?.id, { task: str(q.get('task'), 20), q: str(q.get('q'), 60) }) });
   const labModel = path.match(/^\/api\/lab\/models\/(.+)$/);
   if (labModel && method === 'GET') {
@@ -682,6 +756,47 @@ async function route(request, env, url) {
 
   // Kestrel Lab, signed in
   if (path === '/api/lab/models' && method === 'POST') return json({ id: await uploadModel(db, me, request) });
+  if (path === '/api/lab/fork' && method === 'POST') {
+    const m = await findModel(db, me.id, str((await readJson(request)).id, 80));
+    if (!m) throw new NotFound('Model not found.');
+    const id = await insertModel(db, me, { file: validateModel(modelFile(m)), readme: m.readme || '', base_model: m.id, visibility: 'private', note: `Forked from ${m.name} ${m.version || ''}`.trim() });
+    return json({ id });
+  }
+  if (path === '/api/lab/versions' && method === 'POST') {
+    const b = await readJson(request);
+    const id = str(b.id, 80);
+    await addVersion(db, me, id, validateModel(b.model), { note: b.note, readme: b.readme });
+    return json({ ok: true });
+  }
+  if (path === '/api/lab/import' && method === 'POST') {
+    const b = await readJson(request);
+    if (!SOURCES.includes(b.source)) throw new BadRequest('source must be github or huggingface.');
+    await syncBudget(db, me);
+    const got = await importModel({ source: b.source, repo: str(b.repo, 300), token: str(b.token, 300) });
+    const mine = got.source_url ? await db.prepare('SELECT id, version FROM models WHERE owner_id = ? AND source_url = ?').bind(me.id, got.source_url).first() : null;
+    const preview = { model: { name: got.model.name, version: got.model.version, kind: got.model.kind, task: got.model.task, license: got.model.license, description: got.model.description, size: JSON.stringify(got.model).length },
+      readme: got.readme, base_model: got.base_model, source_url: got.source_url, files: got.files, update_of: mine ? { id: mine.id, version: mine.version } : null };
+    if (b.dry !== false) return json({ dry: true, ...preview });
+    if (mine) { await addVersion(db, me, mine.id, got.model, { note: `Updated from ${got.source === 'github' ? 'GitHub' : 'Hugging Face'}`, source_url: got.source_url, readme: got.readme }); return json({ id: mine.id, updated: true }); }
+    return json({ id: await insertModel(db, me, { file: got.model, readme: got.readme, base_model: got.base_model, visibility: b.visibility === 'private' ? 'private' : 'public', source_url: got.source_url, note: `Imported from ${got.source === 'github' ? 'GitHub' : 'Hugging Face'}` }) });
+  }
+  if (path === '/api/lab/export' && method === 'POST') {
+    const b = await readJson(request);
+    if (!SOURCES.includes(b.target)) throw new BadRequest('target must be github or huggingface.');
+    const m = await findModel(db, me.id, str(b.id, 80));
+    if (!m) throw new NotFound('Model not found.');
+    await syncBudget(db, me);
+    const args = { repo: str(b.repo, 300), token: str(b.token, 300), model: m, readme: m.readme || (m.builtin ? `${m.description}\n\nTrained on: ${m.trained_on || ''}` : ''), message: str(b.message, 200), visibility: m.visibility, origin: new URL(request.url).origin };
+    const out = b.target === 'github' ? await exportToGithub(args) : await exportToHuggingface(args);
+    return json(out);
+  }
+  if (path === '/api/lab/workbench' && method === 'POST') {
+    const b = await readJson(request);
+    const ids = (Array.isArray(b.models) ? b.models : []).map((x) => str(x, 80)).filter(Boolean);
+    if (!ids.length) throw new BadRequest('Pick at least one model to test.');
+    return json(await workbench(db, me, ids));
+  }
+
   if (labModel && (method === 'PUT' || method === 'DELETE')) {
     const id = decodeURIComponent(labModel[1]);
     const row = await db.prepare('SELECT id FROM models WHERE id = ? AND owner_id = ?').bind(id, me.id).first();
