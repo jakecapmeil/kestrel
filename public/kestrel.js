@@ -171,26 +171,106 @@ function renderNewPassword() {
   };
 }
 
-function renderOnboarding() {
+const OB_STEPS = ['About you', 'Body', 'Running', 'Personal records', 'Goals'];
+const OB_YEAR = new Date().getFullYear();
+
+function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: false })) {
+  K.ob = d;
   const u = K.me.user;
-  gate(html`<div class="k-auth narrow"><h2>Welcome to Kestrel</h2><p class="k-small">A few things so your coach can build your plan.</p>
-    <form id="kOb">
-      <label class="k-label" for="kObN">Your name (teammates see this)</label><input class="k-input" id="kObN" name="name" value="${u.name}" maxlength="60" required>
-      <label class="k-label" for="kObM">About how many miles do you run in a week right now?</label>
-      <input class="k-input" id="kObM" name="weekly_miles" type="number" min="0" max="150" step="1" inputmode="numeric" placeholder="e.g. 25" required>
-      <label class="k-label" for="kObG">Grade</label>
-      <select class="k-input" id="kObG" name="class_year"><option value="">Not set</option><option>Middle school</option><option>Freshman</option><option>Sophomore</option><option>Junior</option><option>Senior</option><option>College</option><option>Adult</option></select>
-      <label class="k-label" for="kObS">Sex (race models use it if you give it)</label>
-      <select class="k-input" id="kObS" name="sex"><option value="">Prefer not to say</option><option value="f">Female</option><option value="m">Male</option></select>
-      <label class="k-check"><input type="checkbox" name="age" required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel.</span></label>
-      <p class="k-small">Teammates see your name, colour, availability and RSVPs. Your training log, health, body map and predictions are only yours.</p>
-      <button class="k-btn primary wide">Continue</button>
+  const metric = d.units === 'km';
+  const sel = (name, opts, cur) => html`<select class="k-input" name="${name}">${opts.map(([v, l]) => html`<option value="${v}" ${String(cur ?? '') === v ? 'selected' : ''}>${l}</option>`)}</select>`;
+  const field = (label, inner, hint = '') => html`<label class="k-label">${label}</label>${inner}${hint ? html`<p class="k-small">${hint}</p>` : ''}`;
+  const num = (name, ph, extra = '') => html`<input class="k-input" name="${name}" type="number" inputmode="decimal" step="any" placeholder="${ph}" value="${d[name] ?? ''}" ${extra}>`;
+  const time = (name, ph) => html`<input class="k-input mono" name="${name}" placeholder="${ph}" value="${d[name] ?? ''}" maxlength="10" inputmode="numeric" pattern="[0-9:.]*">`;
+  const panels = [
+    () => html`
+      ${K.cfg?.freeAi ? html`<div class="k-ai-fill"><label class="k-label" for="kObAi">Short on time? Describe yourself and let Kestrel AI fill this in.</label>
+        <textarea class="k-input" id="kObAi" rows="3" maxlength="2000" placeholder="e.g. I'm 5'10, 150 lb, run about 30 miles a week with a Garmin. 5K PR 19:38, mile 5:10. Want to run 18:30 at the Oct 25 5K."></textarea>
+        <button class="k-btn small" type="button" id="kObAiGo">Fill in with AI</button>
+        <p class="k-small">You can check and change everything before you finish. Or fill it in by hand below.</p></div><hr class="k-rule">` : ''}
+      ${field('Your name (teammates see this)', html`<input class="k-input" name="name" value="${d.name ?? u.name}" maxlength="60" required>`)}
+      ${field('Year you were born', num('birth_year', 'e.g. 2008', `min="1930" max="${OB_YEAR - 8}" required`), 'Used for heart-rate zones and age-graded comparisons.')}
+      ${field('Sex (race models use it if you give it)', sel('sex', [['', 'Prefer not to say'], ['f', 'Female'], ['m', 'Male']], d.sex))}
+      ${field('Grade', sel('class_year', [['', 'Not set'], ...['Middle school', 'Freshman', 'Sophomore', 'Junior', 'Senior', 'College', 'Adult'].map((x) => [x, x])], d.class_year))}
+      ${field('Units', sel('units', [['mi', 'Miles, feet and pounds'], ['km', 'Kilometres and kilograms']], d.units))}`,
+    () => html`
+      ${metric
+        ? field('Height (cm)', num('height_cm', 'e.g. 172', 'min="100" max="230"'))
+        : field('Height', html`<div class="k-row2">${num('ft', 'ft', 'min="3" max="7"')}${num('in', 'in', 'min="0" max="11.9"')}</div>`)}
+      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', 'min="50" max="500"'), 'Optional. Used for calorie and pace estimates. Only you see it.')}
+      ${field('Resting heart rate (bpm)', num('resting_hr', 'e.g. 52', 'min="30" max="120"'), 'Optional. Your watch shows this.')}
+      ${field('Max heart rate (bpm)', num('max_hr', 'e.g. 195', 'min="120" max="230"'), 'Optional. Leave blank and we estimate it from your age.')}`,
+    () => html`
+      ${field('How long have you been running?', sel('experience', [['', 'Choose one'], ['new', 'Just starting'], ['under1', 'Under a year'], ['1to3', '1 to 3 years'], ['3plus', 'More than 3 years']], d.experience))}
+      ${field('Miles you run in a typical week right now', num('weekly_miles', 'e.g. 25', 'min="0" max="150" required'), 'We start your plan on the level that fits.')}
+      ${field('Longest run in the last month (miles)', num('longest_run_mi', 'e.g. 8', 'min="0" max="100"'))}
+      ${field('Days a week you want to run', sel('days_per_week', [['', 'Choose one'], ...[3, 4, 5, 6, 7].map((n) => [String(n), `${n} days`])], d.days_per_week))}
+      ${field('What do you train with?', sel('watch', [['', 'Choose one'], ['garmin', 'Garmin'], ['coros', 'COROS'], ['apple', 'Apple Watch'], ['strava', 'Strava only'], ['other', 'Something else'], ['none', 'Nothing yet']], d.watch), 'You can connect it in You → Settings.')}
+      ${field('Injuries or limits we should know about', html`<textarea class="k-input" name="injuries" maxlength="300" rows="2" placeholder="e.g. shin splints last spring">${d.injuries ?? ''}</textarea>`)}`,
+    () => html`<p class="k-small">Add the ones you have, skip the rest. Times look like 58.4, 2:15 or 19:38.</p>
+      ${field('800 m', time('pr800', 'e.g. 2:20'))}
+      ${field('1600 m (mile)', time('pr1600', 'e.g. 5:15'))}
+      ${field('3200 m (2 mile)', time('pr3200', 'e.g. 11:30'))}
+      ${field('5K', time('pr5K', 'e.g. 19:38'), 'Your best or current 5K sets all your training paces.')}`,
+    () => html`
+      ${field('What are you here for?', sel('goal', [['', 'Choose one'], ['race', 'Run a specific race'], ['faster', 'Get faster'], ['distance', 'Build up distance'], ['fitness', 'Stay fit and healthy'], ['weight', 'Lose weight'], ['team', 'Train with my team']], d.goal))}
+      ${field('Target event (if you have one)', sel('goal_event', [['', 'None yet'], ...['800', '1600', '3200', '5K', '10K', 'Half marathon', 'Marathon'].map((x) => [x, x])], d.goal_event))}
+      ${field('Goal time', time('goal_time', 'e.g. 18:30'))}
+      ${field('Race date', html`<input class="k-input" name="goal_date" type="date" value="${d.goal_date ?? ''}">`)}
+      <label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel.</span></label>
+      <p class="k-small">Teammates see your name, colour, availability and RSVPs. Your training log, health, body map and predictions are only yours.</p>`,
+  ];
+  const last = step === OB_STEPS.length - 1;
+  gate(html`<div class="k-auth narrow"><div class="k-steps" aria-label="Step ${step + 1} of ${OB_STEPS.length}">${OB_STEPS.map((n, i) => html`<i class="${i < step ? 'done' : i === step ? 'on' : ''}"></i>`)}</div>
+    <div class="k-kicker">Step ${step + 1} of ${OB_STEPS.length}</div>
+    <h2>${step === 0 ? 'Welcome to Kestrel' : OB_STEPS[step]}</h2>
+    <p class="k-small">${['Let’s set up your profile so your coach can build the right plan.', 'Helps with pace, effort and heart-rate zones. All of it is private.', 'Where you are today, so the plan starts at the right level.', 'Your coach uses these to predict your races.', 'Tell us what you’re working towards.'][step]}</p>
+    <form id="kOb" novalidate>${panels[step]()}
+      <div class="k-nav">${step ? html`<button class="k-btn ghost" type="button" id="kObBack">Back</button>` : ''}<button class="k-btn primary" style="flex:1">${last ? 'Finish' : 'Continue'}</button></div>
     </form></div>`);
+  const grab = () => {
+    const f = form($('kOb'));
+    for (const [k, v] of Object.entries(f)) d[k] = v;
+    if (step === 4) d.age = !!f.age;
+  };
+  if ($('kObAiGo')) $('kObAiGo').onclick = (e) => attempt(async () => {
+    const text = $('kObAi').value;
+    grab();
+    const { fields: x } = await api('/api/me/parse', { method: 'POST', body: JSON.stringify({ text }) });
+    let n = 0;
+    const put = (k, v) => { if (v !== undefined && v !== null && v !== '') { d[k] = String(v); n++; } };
+    if (x.height_cm) {
+      if (metric) put('height_cm', Math.round(x.height_cm));
+      else { const inch = x.height_cm / 2.54; d.ft = String(Math.floor(inch / 12)); d.in = String(Math.round(inch % 12)); n++; }
+    }
+    if (x.weight_kg) put('weight', metric ? Math.round(x.weight_kg) : Math.round(x.weight_kg / 0.4536));
+    for (const k of ['birth_year', 'sex', 'experience', 'weekly_miles', 'longest_run_mi', 'days_per_week', 'resting_hr', 'max_hr', 'watch', 'injuries', 'goal', 'goal_event', 'goal_time', 'goal_date']) put(k, x[k]);
+    for (const [ev, t] of Object.entries(x.prs || {})) put('pr' + ev, t);
+    if (!n) { toast('I couldn’t find anything to fill in. Add a few details and try again.', true); return; }
+    toast(`Filled in ${n} ${n === 1 ? 'field' : 'fields'}. Check each step, then finish.`);
+    renderOnboarding(step, d);
+  }, e.currentTarget);
+  if ($('kObBack')) $('kObBack').onclick = () => { grab(); renderOnboarding(step - 1, d); };
   $('kOb').onsubmit = (e) => {
     e.preventDefault();
-    const f = form(e.target);
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+    grab();
+    if (!last) { renderOnboarding(step + 1, d); return; }
+    if (!d.age) { toast('Please confirm your age to continue.', true); return; }
+    const n = (v) => (v === '' || v == null ? undefined : Number(v));
+    const height_cm = metric ? n(d.height_cm) : (d.ft || d.in) ? Math.round((Number(d.ft || 0) * 12 + Number(d.in || 0)) * 2.54) : undefined;
+    const weight_kg = d.weight ? (metric ? Number(d.weight) : Math.round(Number(d.weight) * 0.4536 * 10) / 10) : undefined;
+    const prs = {};
+    for (const ev of ['800', '1600', '3200', '5K']) if (d['pr' + ev]) prs[ev] = { time: d['pr' + ev].trim() };
     attempt(async () => {
-      K.me = await api('/api/me', { method: 'PUT', body: JSON.stringify({ name: f.name, weekly_miles: Number(f.weekly_miles), class_year: f.class_year, sex: f.sex, age_ok: !!f.age }) });
+      K.me = await api('/api/me', { method: 'PUT', body: JSON.stringify({
+        name: d.name, sex: d.sex || '', class_year: d.class_year || '', weekly_miles: n(d.weekly_miles), age_ok: true,
+        profile: { height_cm, weight_kg, birth_year: n(d.birth_year), units: d.units, experience: d.experience, longest_run_mi: n(d.longest_run_mi),
+          days_per_week: n(d.days_per_week), goal: d.goal, goal_event: d.goal_event, goal_time: d.goal_time, goal_date: d.goal_date,
+          injuries: d.injuries, resting_hr: n(d.resting_hr), max_hr: n(d.max_hr), watch: d.watch },
+        prs,
+      }) });
+      K.ob = null;
       await finishSetup();
     }, e.submitter);
   };
@@ -431,7 +511,7 @@ function parseLoose(text) {
   return null;
 }
 
-// turns: [{ role: 'user' | 'hawky', text }] -> { answer, saved, refused } or { error }
+// turns: [{ role: 'user' | 'kai', text }] -> { answer, saved, refused } or { error }
 window.kestrelAsk = async (turns) => {
   try {
     if (K.ai.provider === 'kestrel') return await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: turns }) });

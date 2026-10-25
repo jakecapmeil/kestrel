@@ -60,7 +60,7 @@ export function courseOf(w, events = []) {
   if (w.course_id) return w.course_id === 'vc' ? 'vc' : 'xc';
   // Where the watch's GPS says the run started, when that is a course Kestrel has bounds for.
   if (w.gps_course) return w.gps_course === 'vc' ? 'vc' : 'xc';
-  // A run named after the park is there. Otherwise Hawky's read of it (from
+  // A run named after the park is there. Otherwise Kai's read of it (from
   // the run and the day's calendar) decides, then the rules below.
   // GPS settles it when the watch recorded a position: at the park, or not.
   if (w.gps_vc === 1) return 'vc';
