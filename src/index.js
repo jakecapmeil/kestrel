@@ -1187,7 +1187,8 @@ async function route(request, env, url) {
     }
     if (path === '/api/plan') { const p = await planView(db, me, Number(q.get('level')) || null); return p ? json(p) : json({ error: 'no_plan' }, 404); }
     if (path === '/api/distance') return json({ configured: false, available: false });
-    if (path === '/api/log') return json({ ...(await getLog(db, me.id, str(q.get('from'), 10), str(q.get('to'), 10))), five_k_time: await fiveKFor(db, me.id) });
+    // Finds any new PR (a stale Fitness State recomputes) before the day shows which run set it.
+    if (path === '/api/log') { await getFitness(db, me.id, today).catch(() => null); return json({ ...(await getLog(db, me.id, str(q.get('from'), 10), str(q.get('to'), 10))), five_k_time: await fiveKFor(db, me.id) }); }
     if (path === '/api/intervals/status') return json({ ...(await icuStatus(db, me.id)), ai: aiEnabled(env) });
     if (path === '/api/library') {
       const person = await loadPerson(db, me.id);
@@ -1346,7 +1347,8 @@ async function route(request, env, url) {
   }
   if (path === '/api/log/tag') {
     await setRunTag(db, me.id, str(b.strava_id, 80), b.tag);
-    return json({ ok: true });
+    const fitness = await recomputeFitness(db, me.id, today).catch(() => null);
+    return json({ ok: true, new_prs: fitness?.new_prs || [] });
   }
   if (path === '/api/log/custom-tag') return json({ custom: b.remove ? await removeCustomTag(db, me.id, b.name) : await addCustomTag(db, me.id, b.name, b.base) });
   if (path === '/api/log/track') {

@@ -4,7 +4,7 @@
 import { WORKOUTS, WORKOUT_TYPES, RACES, PHASES, PACE_ZONES, pacesFrom5k, findWorkouts, workoutTargets, parseReps, snap100, trackMiles, TRACK_MILE_M } from './workouts.js';
 import { getFitness } from './fitness.js';
 import { conditionsOf, courseIdOf } from './conditions.js';
-import { normalizePrs, parseCourseKey, getCourse } from './courses.js';
+import { normalizePrs, parseCourseKey, getCourse, coursesById, courseLabel } from './courses.js';
 
 // Marks Fitness States stale so the next read recomputes them.
 const staleFitness = (db, personId) => db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(personId).run();
@@ -184,7 +184,7 @@ function rolesOf(rs) {
 
 // One activity with everything the watch and the weather say about it.
 // `events` (that day's calendar) tells which course it was on.
-function activityDetail(w, events = [], role = '') {
+function activityDetail(w, events = [], role = '', prs = []) {
   let metrics = {};
   try { metrics = JSON.parse(w.metrics || '{}') || {}; } catch { /* ignore */ }
   let laps = [];
@@ -195,7 +195,7 @@ function activityDetail(w, events = [], role = '') {
   const heat = cond?.heat || 0;
   const hill = cond?.hill || 0;
   return {
-    id: w.strava_id, name: w.name, category: w.category, tag: w.tag || '', role, start: w.start_local || '', end: endMin(w) === null ? '' : hhmm(endMin(w)),
+    id: w.strava_id, name: w.name, category: w.category, tag: w.tag || '', role, prs, start: w.start_local || '', end: endMin(w) === null ? '' : hhmm(endMin(w)),
     miles: w.distance_mi, minutes: w.moving_sec ? Math.round(w.moving_sec / 60) : null,
     moving_sec: w.moving_sec ?? null, elapsed_sec: w.elapsed_sec ?? null,
     pace: pace ? fmtSec(Math.round(pace)) : null,
@@ -215,7 +215,7 @@ function activityDetail(w, events = [], role = '') {
   };
 }
 
-export function sessionsOf(rs, events = []) {
+export function sessionsOf(rs, events = [], prMap = new Map()) {
   rs = [...rs].sort(byEnd);
   const roles = rolesOf(rs);
   const groups = [];
@@ -260,7 +260,7 @@ export function sessionsOf(rs, events = []) {
       report: main.summary || items.find((w) => w.summary)?.summary || '',
       elev_ft: items.some((w) => w.elev_gain_ft != null) ? items.reduce((a, w) => a + (w.elev_gain_ft || 0), 0) : null,
       temp_f: main.temp_f ?? null, dew_point_f: main.dew_point_f ?? null,
-      activities: items.map((w) => activityDetail(w, events, roles.get(w.strava_id) || '')),
+      activities: items.map((w) => activityDetail(w, events, roles.get(w.strava_id) || '', prMap.get(w.strava_id) || [])),
     };
   });
 }
@@ -300,7 +300,7 @@ export function dayPlanTag(rs, miles, maxEffort) {
 export async function getDays(db, personId, from, to) {
   if (!isDate(from) || !isDate(to)) throw new LogError('from and to must be YYYY-MM-DD');
   if (from > to) throw new LogError('from must be on or before to');
-  const [days, runs, events] = await Promise.all([
+  const [days, runs, events, person] = await Promise.all([
     db.prepare('SELECT * FROM training_days WHERE person_id = ? AND date >= ? AND date <= ?').bind(personId, from, to).all(),
     db.prepare(
       `SELECT strava_id, date, name, category, tag, distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, effort, hr_effort, load, library_id, summary,
@@ -312,7 +312,18 @@ export async function getDays(db, personId, from, to) {
        JOIN team_members tm ON tm.team_id = e.team_id AND tm.person_id = ?
        LEFT JOIN locations l ON l.id = e.location_id WHERE e.date >= ? AND e.date <= ?`
     ).bind(personId, from, to).all(),
+    db.prepare('SELECT prs FROM people WHERE id = ?').bind(personId).first(),
   ]);
+
+  // PRs Kestrel found from a run, so the day can say "5K PR" on it.
+  const prMap = new Map();
+  const found = Object.entries(normalizePrs(parsePrs(person?.prs))).filter(([, v]) => v?.run);
+  const prCourses = found.length ? await coursesById(db, [...new Set(found.map(([k]) => parseCourseKey(k)?.id).filter(Boolean))]) : new Map();
+  for (const [key, v] of found) {
+    const ck = parseCourseKey(key);
+    const label = ck ? courseLabel(prCourses.get(ck.id), ck.m) : key;
+    prMap.set(v.run, [...(prMap.get(v.run) || []), { event: key, label, time: v.time, date: v.date || '' }]);
+  }
 
   const byDate = new Map();
   const get = (date) => {
@@ -352,7 +363,7 @@ export async function getDays(db, personId, from, to) {
       split_reps: reps.length ? reps : laps.length ? laps : parseReps(e?.splits).map((r) => ({ ...r, m: track ? snap100(r.m) : r.m, rest: '' })),
       day_line: e?.day_line || '',
       plan: dayPlanTag(rs, stravaMiles, maxHrEffort),
-      sessions: sessionsOf(rs, events.results),
+      sessions: sessionsOf(rs, events.results, prMap),
       summary: e?.summary || '',
       coach_note: e?.coach_note || '',
       load_note: e?.load_note || '',
