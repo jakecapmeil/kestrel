@@ -165,3 +165,9 @@ a.lab-feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
 .lab-course-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
 .lab-course-grid fieldset{border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s-3);display:flex;flex-direction:column;gap:var(--s-2);min-width:0;}
 .lab-course-grid legend{font-weight:600;padding:0 var(--s-1);}
+
+/* Same column as the app header, so the Run/Lab switch sits in the same spot on both sides. */
+.lab-top{--hp:14px;--hw:460px;padding-inline:max(var(--hp),calc((100% - var(--hw)) / 2));}
+@media (min-width:720px){.lab-top{--hp:28px;--hw:760px;}}
+@media (min-width:1024px){.lab-top{--hw:1480px;padding-top:16px;}}
+@media (max-width:1023px){.lab-top{padding-top:14px;}}
