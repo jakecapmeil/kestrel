@@ -414,7 +414,7 @@ window.kestrelRenderTeamCard = async (el) => {
       ${m.role === 'owner' ? html`<span class="badge">owner</span>` : m.role === 'captain' ? html`<span class="badge">captain</span>` : ''}
       ${owner && m.id !== K.me.user.id ? html`<button class="k-link danger" type="button" data-remove="${m.id}">Remove</button>` : ''}</div>`)}</div>
     <div class="k-row">
-      ${lead ? html`<button class="k-btn small" type="button" id="kAdmin">Manage calendar</button><button class="k-btn small" type="button" id="kPlanEdit">Training plan${team.has_plan ? ' (custom)' : ''}</button>` : ''}${owner ? html`<button class="k-btn small" type="button" id="kRename">Rename</button>` : ''}
+      ${lead ? html`<button class="k-btn small" type="button" id="kAdmin">Manage calendar</button><button class="k-btn small" type="button" id="kPlanEdit">Team plan${team.has_plan ? ' (custom)' : ''}</button>` : ''}${owner ? html`<button class="k-btn small" type="button" id="kRename">Rename</button>` : ''}
       <button class="k-link danger" type="button" id="kLeave">Leave team</button>
     </div>`.s;
   $('kCopyInvite').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Invite link copied.'); } catch { prompt('Copy this invite link:', link); } };
@@ -514,27 +514,153 @@ window.kestrelRenderTeamTraining = async (el) => {
   const r = await attempt(() => api(`/api/teams/${K.teamId}/plan`));
   if (!r) return;
   const lead = isLead();
+  const lv = lead && r.custom ? await attempt(() => api(`/api/teams/${K.teamId}/plan/levels`)) : null;
+  const again = () => window.kestrelRenderTeamTraining(el);
   el.innerHTML = html`<section class="card">
       <div class="section-head"><div>
-        <div class="card-title">Team training plan</div>
+        <div class="card-title">Team plan</div>
         <div class="hint">${r.custom ? (r.spec?.name || 'Custom plan') : 'No team plan yet.'}</div>
       </div></div>
       ${r.custom
-        ? html`<p class="k-small">${r.spec?.summary || 'Your captains built this plan.'}</p><p class="k-small">Every athlete trains from the level that fits their current mileage and fitness, and their own Kestrel AI coach adapts it day to day. Athletes who built a personal plan keep using theirs.</p>`
+        ? html`${r.spec?.summary ? html`<p class="k-small">${r.spec.summary}</p>` : ''}<p class="k-small">Each row is a level, by weekly miles. Every athlete trains from the level you put them on, and their own Kestrel AI coach adapts it day to day.${lead ? ' Tap a number to change that day.' : ' Tap a number to see that day.'}</p>`
         : html`<p class="k-small">Nothing is preloaded. ${lead ? 'Talk it through with Kestrel AI: tell it your season, how many days you run, workout days and race days, or attach the plan you use now (PDF, Word, Excel, CSV). Refine it until it is right. It scales to every runner on the roster.' : 'Your captain or coach can build one. Until then you can build your own in Train → Plan.'}</p>`}
-      ${lead ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-btn" type="button" id="kPlanJsonBtn">Edit as JSON</button><button class="k-link danger" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
-      ${r.custom && r.spec ? planTable(r.spec) : ''}
+      ${lead ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-link danger" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
+      ${r.custom ? html`<div id="kPlanGrid"></div>` : ''}
       <p class="k-small">Plans are general guidance, not medical advice, and are not checked by Kestrel for any one runner.</p>
-    </section>`.s;
-  if ($('kPlanBuild')) $('kPlanBuild').onclick = () => openPlanBuilder({ team: true, current: r.spec, onSaved: () => window.kestrelRenderTeamTraining(el) });
-  if ($('kPlanJsonBtn')) $('kPlanJsonBtn').onclick = () => openPlanJson(r, () => window.kestrelRenderTeamTraining(el));
+    </section>
+    ${lv ? html`<section class="card" id="kLevels"></section>` : ''}`.s;
+  if ($('kPlanBuild')) $('kPlanBuild').onclick = () => openPlanBuilder({ team: true, current: r.spec || (r.plans && specFromPlans(r.plans)), replacesEdits: r.custom, onSaved: again });
   if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
     if (!confirm('Remove the team plan? Everyone on the team goes back to having no plan until they build their own.')) return;
     await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' });
     await window.hawksReload();
-    window.kestrelRenderTeamTraining(el);
+    again();
   }, e.currentTarget);
+  if (r.custom) renderPlanGrid($('kPlanGrid'), r.plans, lead, async (plans) => {
+    await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
+    await window.hawksReload();
+    toast('Plan saved.');
+    again();
+  });
+  if (lv) renderLevels($('kLevels'), lv, again);
 };
+
+// Who is on which level. Kestrel AI recommends a move up when an athlete has earned it; the captain decides.
+function renderLevels(el, lv, again) {
+  const rows = lv.athletes;
+  el.innerHTML = html`<div class="section-head"><div>
+      <div class="card-title">Who’s on what</div>
+      <div class="hint">Pick each athlete’s level. Kestrel AI flags runners who are ready to move up, but only you move them.</div>
+    </div></div>
+    <div class="k-lvls">${rows.map((a) => html`<div class="k-lvl">
+      <span class="k-lname"><b>${a.name || 'Unnamed'}</b>${a.class_year ? html`<small>${a.class_year}</small>` : ''}</span>
+      ${a.locked
+        ? html`<span class="k-small" style="margin:0">${a.locked}</span>`
+        : html`<select class="k-input" data-who="${a.id}" aria-label="Level for ${a.name}">${lv.levels.map((l) => html`<option value="${l.level}" ${l.level === a.level ? 'selected' : ''}>${l.miles} mi a week</option>`)}</select>`}
+      ${a.recommend ? html`<span class="k-rec"><span class="badge tone-race">Kestrel AI: ready for ${a.recommend.miles} mi</span> <button class="k-btn small" type="button" data-up="${a.id}" data-to="${a.recommend.to}">Move up</button></span>` : ''}
+    </div>`)}</div>
+    ${rows.length ? '' : html`<p class="k-small">No one has joined the team yet.</p>`}`.s;
+  const move = (id, level, btn) => attempt(async () => {
+    await api(`/api/teams/${K.teamId}/plan/levels/${id}`, { method: 'PUT', body: JSON.stringify({ level }) });
+    toast('Level changed.');
+    again();
+  }, btn);
+  el.querySelectorAll('select[data-who]').forEach((sel) => { sel.onchange = () => move(sel.dataset.who, Number(sel.value), sel); });
+  el.querySelectorAll('[data-up]').forEach((b) => { b.onclick = () => move(b.dataset.up, Number(b.dataset.to), b); });
+}
+
+// ---------- the plan as a table: a row per level, Monday to Sunday across, one number per day
+
+const TYPE_LABEL = { LR: 'Long run', 'Cross-train': 'Cross-train', Off: 'Rest' };
+const TYPE_CLASS = { Easy: 'easy', Recovery: 'easy', Shakeout: 'easy', Workout: 'wo', LR: 'lr', 'Long run': 'lr', Race: 'race', 'Cross-train': 'rest', Off: 'rest' };
+const PLAN_TYPES = ['Easy', 'Recovery', 'Workout', 'LR', 'Race', 'Shakeout', 'Cross-train', 'Off'];
+const WEEKS = [['No race', 'Standard'], ['Race week', 'Race week'], ['Taper', 'Taper']];
+const FULL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const numOf = (c) => parseFloat(c.miles) || 0;
+const fmtMi = (n) => String(Math.round(n * 10) / 10);
+
+function dayLine(day, c) {
+  const t = TYPE_LABEL[c.type] || c.type;
+  return c.type === 'Off' ? `${day}: rest${c.notes ? ` (${c.notes})` : ''}` : `${day}: ${c.miles ? c.miles + ' mi ' : ''}${t.toLowerCase()}${c.notes ? `. ${c.notes}` : ''}`;
+}
+
+function renderPlanGrid(el, plans, lead, save) {
+  const levels = Object.keys(plans).map(Number).sort((a, b) => a - b);
+  const open = new Set();
+  const paint = () => {
+    const cellsOf = (lvl, wi) => plans[lvl].days.map((d, di) => {
+      const c = d.cells[wi];
+      const n = numOf(c);
+      const rest = c.type === 'Off' || c.type === 'Cross-train';
+      const tip = dayLine(FULL_DAYS[di], c);
+      return html`<button type="button" class="k-pc ${TYPE_CLASS[c.type] || ''}" data-l="${lvl}" data-w="${wi}" data-d="${di}" title="${tip}" aria-label="${tip}">${rest && !n ? '·' : fmtMi(n)}</button>`;
+    });
+    const total = (lvl, wi) => fmtMi(plans[lvl].days.reduce((a, d) => a + numOf(d.cells[wi]), 0));
+    el.innerHTML = html`<div class="k-pgrid" role="table" aria-label="Team training plan by level">
+      <div class="k-pr k-ph" role="row"><span>Level</span>${DAYS7.map((d) => html`<span role="columnheader">${d}</span>`)}<span>Total</span></div>
+      ${levels.map((lvl) => html`<div class="k-pr" role="row"><button type="button" class="k-plvl" data-open="${lvl}" aria-expanded="${String(open.has(lvl))}"><i>${open.has(lvl) ? '▾' : '▸'}</i>${plans[lvl].weeks[0].miles}<small>mi</small></button>${cellsOf(lvl, 0)}<span class="k-ptot">${total(lvl, 0)}</span></div>
+        ${open.has(lvl) ? [1, 2].map((wi) => html`<div class="k-pr sub" role="row"><span class="k-pwk">${WEEKS[wi][1]}</span>${cellsOf(lvl, wi)}<span class="k-ptot">${total(lvl, wi)}</span></div>`) : ''}`)}
+    </div>
+    <div class="k-pleg"><span class="easy">Easy</span><span class="wo">Workout</span><span class="lr">Long run</span><span class="race">Race</span><span class="rest">Rest · cross-train</span> <small>Miles per day. Race week and Taper are under each level.</small></div>`.s;
+    el.querySelectorAll('[data-open]').forEach((b) => { b.onclick = () => { const l = Number(b.dataset.open); open.has(l) ? open.delete(l) : open.add(l); paint(); }; });
+    el.querySelectorAll('.k-pc').forEach((b) => { b.onclick = () => openCell(Number(b.dataset.l), Number(b.dataset.w), Number(b.dataset.d)); });
+  };
+  // Tap a day: read it (everyone) or change it (captains and the owner).
+  const openCell = (lvl, wi, di) => {
+    const c = plans[lvl].days[di].cells[wi];
+    const d = dialog();
+    const head = `${FULL_DAYS[di]} · ${WEEKS[wi][1].toLowerCase()} · ${plans[lvl].weeks[0].miles} mi level`;
+    if (!lead) {
+      d.innerHTML = html`<h2>${FULL_DAYS[di]}</h2><p class="k-small">${head}</p><p><b>${TYPE_LABEL[c.type] || c.type}</b>${c.miles && c.type !== 'Off' ? ` · ${c.miles} mi` : ''}</p>${c.notes ? html`<p class="k-small">${c.notes}</p>` : ''}${c.shoes ? html`<p class="k-small">Shoes: ${c.shoes}</p>` : ''}<div class="k-row"><button class="k-link" type="button" id="kCellClose">Close</button></div>`.s;
+      d.showModal(); $('kCellClose').onclick = () => d.close();
+      return;
+    }
+    d.innerHTML = html`<h2>${FULL_DAYS[di]}</h2><p class="k-small">${head}</p>
+      <form id="kCellForm">
+        <div><label class="k-label" for="kCellType">What the day is</label><select class="k-input" id="kCellType">${PLAN_TYPES.map((t) => html`<option value="${t}" ${t === c.type ? 'selected' : ''}>${TYPE_LABEL[t] || t}</option>`)}</select></div>
+        <div><label class="k-label" for="kCellMi">Miles</label><input class="k-input" id="kCellMi" value="${c.miles}" maxlength="30" inputmode="decimal"><p class="k-small">A number, or a number with the workout part, like 6 (3 WO).</p></div>
+        <div><label class="k-label" for="kCellNotes">Notes</label><input class="k-input" id="kCellNotes" value="${c.notes}" maxlength="120" placeholder="e.g. 1.5 WU 1.5 CD, strides"></div>
+        <p class="k-small" id="kCellWarn" role="status"></p>
+        <div class="k-row"><button class="k-btn primary" type="submit">Save</button><button class="k-link" type="button" id="kCellClose">Cancel</button></div>
+      </form>`.s;
+    d.showModal();
+    $('kCellClose').onclick = () => d.close();
+    const warn = () => {
+      const t = $('kCellType').value, mi = parseFloat($('kCellMi').value) || 0;
+      const hard = (x) => x === 'Workout' || x === 'Race';
+      const cells = plans[lvl].days.map((x) => x.cells[wi]);
+      const type = (i) => (i === di ? t : cells[i].type);
+      const msgs = [];
+      if (hard(t) && ((di > 0 && hard(type(di - 1))) || (di < 6 && hard(type(di + 1))))) msgs.push('Two hard days in a row. Most plans put an easy or rest day between.');
+      const week = cells.reduce((a, x, i) => a + (i === di ? mi : numOf(x)), 0);
+      if ((t === 'LR') && week > 0 && mi / week > 0.35) msgs.push('That long run is over about a third of the week. About 25-30% is the usual ceiling.');
+      $('kCellWarn').textContent = msgs.join(' ');
+    };
+    ['kCellType', 'kCellMi'].forEach((id) => { $(id).oninput = warn; });
+    warn();
+    $('kCellForm').onsubmit = (e) => {
+      e.preventDefault();
+      const next = JSON.parse(JSON.stringify(plans));
+      const cell = next[lvl].days[di].cells[wi];
+      cell.type = $('kCellType').value; cell.miles = $('kCellMi').value.trim() || '0'; cell.notes = $('kCellNotes').value.trim();
+      attempt(async () => { await save(next); d.close(); });
+    };
+  };
+  paint();
+}
+
+// A short brief for the AI, made from a plan that was typed in or imported rather than built with Kestrel AI.
+// It reads the plan's middle level and turns each day's miles into a share of the week.
+function specFromPlans(plans) {
+  const keys = Object.keys(plans).map(Number).sort((a, b) => a - b);
+  const lvl = plans[keys.find((k) => plans[k].weeks[0].miles >= 30) ?? keys[keys.length - 1]];
+  const week = (wi) => {
+    const mi = lvl.days.map((d) => numOf(d.cells[wi])), tot = mi.reduce((a, b) => a + b, 0) || 1;
+    return lvl.days.map((d, i) => ({ type: d.cells[wi].type, share: Math.round((mi[i] / tot) * 1000) / 1000, notes: d.cells[wi].notes }));
+  };
+  const f = (i) => Math.round((lvl.weeks[i].miles / lvl.weeks[0].miles) * 100) / 100;
+  return { name: 'Current team plan', summary: '', normal_week: week(0), race_week: week(1), taper_week: week(2), race_week_factor: f(1), taper_factor: f(2), core: lvl.ref?.core || '', gym: lvl.ref?.gym || '', sessions: lvl.ref?.sessions || [] };
+}
 
 const DAYS7 = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 function planTable(spec) {
@@ -545,24 +671,6 @@ function planTable(spec) {
     <div class="k-small"><b>Taper</b> (${Math.round(spec.taper_factor * 100)}% of the miles)</div>${week(spec.taper_week)}
     ${spec.sessions?.length ? html`<div class="k-small"><b>Workouts</b></div>${spec.sessions.map((x) => html`<details class="k-sess"><summary>${x.title}${x.desc ? ' · ' + x.desc : ''}</summary><ul>${x.items.map((i) => html`<li>${i}</li>`)}</ul></details>`)}` : ''}
   </div>`;
-}
-
-// The old editor, for leaders who want to write every cell by hand.
-function openPlanJson(r, done) {
-  const d = dialog();
-  d.innerHTML = html`<h2>Edit plan as JSON</h2>
-    <p class="k-small">Nine levels by weekly miles. Each level has three weeks (no race, race week, taper), seven days with a type, miles, shoes and notes, and a menu of workouts. Saving this replaces what the AI built.</p>
-    <textarea class="k-input mono" id="kPlanJson" rows="18" spellcheck="false">${JSON.stringify(r.plans, null, 1)}</textarea>
-    <div class="k-row"><button class="k-btn primary" type="button" id="kPlanSave">Save</button><button class="k-link" type="button" id="kPlanClose">Close</button></div>`.s;
-  d.showModal();
-  $('kPlanClose').onclick = () => d.close();
-  $('kPlanSave').onclick = (e) => attempt(async () => {
-    let plans;
-    try { plans = JSON.parse($('kPlanJson').value); } catch { throw new Error('That is not valid JSON.'); }
-    await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
-    d.close(); toast('Team plan saved.');
-    await window.hawksReload(); done();
-  }, e.currentTarget);
 }
 
 // ---------- Plan builder: talk to Kestrel AI, see the plan, refine, save. For a team (captains) or for yourself.
@@ -613,7 +721,7 @@ async function extractText(file) {
   throw new Error('unsupported file type (use PDF, Word, Excel, CSV or text)');
 }
 
-function openPlanBuilder({ team, current, onSaved }) {
+function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
   const base = team ? `/api/teams/${K.teamId}/plan` : '/api/me/plan';
   const st = { turns: [], plan: current || null, preview: null, busy: false, docs: [], week: 'normal' };
   const d = dialog();
@@ -708,6 +816,7 @@ function openPlanBuilder({ team, current, onSaved }) {
     st.busy = false; paint();
   };
   $('kPbSave').onclick = (e) => attempt(async () => {
+    if (replacesEdits && !confirm('This rebuilds the whole table from the new plan, replacing any changes you made by hand. Continue?')) return;
     await api(base, { method: 'PUT', body: JSON.stringify({ plan: st.plan }) });
     d.close();
     toast(team ? 'Team plan saved. Everyone trains from it now.' : 'Plan saved. Your coach uses it from today.');

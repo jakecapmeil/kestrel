@@ -10,7 +10,7 @@
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
-import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
+import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
 import { getLog, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
@@ -21,7 +21,7 @@ import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
 import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
-import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/kai.js';
+import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
@@ -227,6 +227,27 @@ async function teamView(db, teamId, role) {
   ).bind(teamId).all();
   const plan = await db.prepare('SELECT updated_at FROM team_plans WHERE team_id = ?').bind(teamId).first();
   return { ...team, role, members, has_plan: !!plan };
+}
+
+// Who is on which plan level, for the captain's Plan tab. Kestrel AI only recommends a move up (levelStatus.ready);
+// the captain decides. Athletes on a plan of their own (or a different team's) are shown but not changeable here.
+async function teamLevels(db, teamId, today) {
+  const { results } = await db.prepare('SELECT m.person_id FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY p.name').bind(teamId).all();
+  const rows = await Promise.all(results.map(async ({ person_id }) => {
+    const person = await loadPerson(db, person_id);
+    if (!person) return null;
+    const mine = person.plan_source === 'team' && person.plan_team_id === teamId;
+    const rank = rankOf(person);
+    let rec = null;
+    if (mine) {
+      try {
+        const st = await levelStatus(db, person, today, await healthSummary(db, person, today));
+        if (st?.ready) rec = { to: rank + 1, miles: milesOfRank(person, rank + 1), why: 'Three steady weeks near their mileage, healthy and feeling good.' };
+      } catch { /* a recommendation is optional */ }
+    }
+    return { id: person.id, name: person.name, class_year: person.class_year, level: rank, miles: milesOfRank(person, rank), locked: mine ? null : person.plan_source === 'own' ? 'Uses their own plan' : 'Follows another team’s plan', recommend: rec };
+  }));
+  return rows.filter(Boolean);
 }
 
 // The roster: name, number, grade, events for the whole team; age only for that person and for leaders.
@@ -763,7 +784,7 @@ const WATCH_TOOLS = [
     name: 'change_plan_day', description: "Change one day of the plan (today to 13 days out). Kestrel enforces the limits (no big mileage jumps, no back-to-back hard days, week within 10% of plan) and says why if it refuses. reset: true puts the day back to the plan.",
     inputSchema: { type: 'object', required: ['date'], properties: { date: { type: 'string' }, type: { type: 'string', enum: ['Easy', 'Recovery', 'Workout', 'Long run', 'Race', 'Shakeout', 'Cross-train', 'Off'] }, miles: { type: 'number' }, detail: { type: 'string' }, reason: { type: 'string' }, reset: { type: 'boolean' } }, additionalProperties: false },
   },
-  { name: 'change_level', description: 'Move the athlete up a plan level (only when get_plan_status says ready) or down one (injury, illness, exhaustion).', inputSchema: { type: 'object', required: ['direction', 'reason'], properties: { direction: { type: 'string', enum: ['up', 'down'] }, reason: { type: 'string' } }, additionalProperties: false } },
+  { name: 'change_level', description: 'Move the athlete up a plan level (only when get_plan_status says ready; athletes on a team plan cannot be moved up, their captain decides) or down one (injury, illness, exhaustion).', inputSchema: { type: 'object', required: ['direction', 'reason'], properties: { direction: { type: 'string', enum: ['up', 'down'] }, reason: { type: 'string' } }, additionalProperties: false } },
   { name: 'get_profile', description: "The athlete's sign-up profile: height, weight, birth year, experience, weekly miles, goal, injuries, resting and max heart rate, and PRs. Check it before asking the athlete anything you could already know.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   {
     name: 'set_profile', description: "Fill in or update the athlete's profile from what they tell you. Only send fields they actually said; others are kept. Height and weight are metric. The athlete still confirms their age in the app.",
@@ -1159,13 +1180,33 @@ async function route(request, env, url) {
       if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change the team plan.');
       if (sub === 'plan/chat' || sub === 'plan/prompt') return json(await planChatRoute(env, db, me, await readJson(request), await teamPlanScope(db, teamId), sub.endsWith('prompt'), today));
       if (sub === 'plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
+      if (sub === 'plan/levels' && method === 'GET') {
+        const row = await db.prepare('SELECT data FROM team_plans WHERE team_id = ?').bind(teamId).first();
+        const plans = row ? JSON.parse(row.data) : {};
+        return json({ levels: Object.keys(plans).map((r) => ({ level: Number(r), miles: plans[r].weeks[0].miles })), athletes: row ? await teamLevels(db, teamId, today) : [] });
+      }
+      const lm = sub.match(/^plan\/levels\/(.+)$/);
+      if (lm && method === 'PUT') {
+        const target = await roleIn(db, teamId, lm[1]);
+        if (!target) throw new NotFound('Not on this team.');
+        const person = await loadPerson(db, lm[1]);
+        if (person.plan_source !== 'team' || person.plan_team_id !== teamId) throw new BadRequest('That athlete does not train from this team’s plan.');
+        const to = Number((await readJson(request)).level);
+        if (!person.plans[to]) throw new BadRequest('That level is not in the plan.');
+        const from = rankOf(person);
+        if (to !== from) {
+          await setRank(db, person, to, `Set by ${me.name || 'a captain'}.`, 'captain');
+          await db.prepare('UPDATE people SET coach_rank = ? WHERE id = ?').bind(to, person.id).run(); // the AI's step limit now counts from the captain's choice
+        }
+        return json({ athletes: await teamLevels(db, teamId, today) });
+      }
       if (sub === 'plan' && method === 'PUT') {
         const b = await readJson(request);
-        let plans, spec = '';
+        let plans, spec = null; // null = a hand edit of the cells: keep the AI's brief so it can still be refined
         if (b.plan) { const x = expandPlanSpec(b.plan); plans = x.plans; spec = JSON.stringify(x.spec); }
         else plans = validateTeamPlans(b.plans);
-        await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = excluded.spec, updated_by = excluded.updated_by, updated_at = excluded.updated_at')
-          .bind(teamId, JSON.stringify(plans), spec, me.id, Date.now()).run();
+        await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, COALESCE(?, \'\'), ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = COALESCE(?, team_plans.spec), updated_by = excluded.updated_by, updated_at = excluded.updated_at')
+          .bind(teamId, JSON.stringify(plans), spec, me.id, Date.now(), spec).run();
         return json({ ok: true });
       }
       if (sub === 'plan' && method === 'DELETE') { await db.prepare('DELETE FROM team_plans WHERE team_id = ?').bind(teamId).run(); return json({ ok: true }); }
