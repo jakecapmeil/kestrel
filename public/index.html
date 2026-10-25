@@ -1233,12 +1233,33 @@
   .session-splits:has(#splitPanel[style*="none"]){display:none;}
   .session-splits:not(:empty){margin-top:var(--sp-3);padding-top:var(--sp-2);border-top:1px solid var(--line);}
   #tlDayCard .tl-day-actions{gap:var(--sp-2);align-items:center;}
-  #tlDayCard.viewing #tlTrackWrap,#tlDayCard.viewing #tlManual,#tlDayCard.viewing #splitPanel,#tlDayCard.viewing .stack-lg,#tlDayCard.viewing .divider,#tlDayCard.viewing #tlLockNote,#tlDayCard.viewing #tlCancel,#tlDayCard.viewing .tag-pick{display:none !important;}
+  #tlDayCard.viewing #tlDaySplits,#tlDayCard.viewing #tlTrackWrap,#tlDayCard.viewing #tlManual,#tlDayCard.viewing #splitPanel,#tlDayCard.viewing .stack-lg,#tlDayCard.viewing .divider,#tlDayCard.viewing #tlLockNote,#tlDayCard.viewing #tlCancel,#tlDayCard.viewing .tag-pick{display:none !important;}
   #tlDayCard.editing #tlEdit,#tlDayCard.editing #tlReadout,#tlDayCard.editing .session-suggest{display:none !important;}
   .tag-chip{display:inline-block;font-size:var(--fs-caption);padding:1px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;}
   .tag-chip.hard{background:var(--gold-bg);color:var(--gold-ink);border-color:transparent;}
   .session-suggest{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-2) var(--sp-3);margin-top:var(--sp-2);font-size:var(--fs-subhead);line-height:1.4;}
   .session-suggest span{flex:1 1 200px;}
+  .seg-group{margin-top:var(--sp-3);}
+  .seg-session{display:flex;justify-content:space-between;align-items:baseline;gap:var(--sp-2);margin-bottom:var(--sp-2);font-size:var(--fs-subhead);}
+  .seg-session span{color:var(--ink-soft);font-size:var(--fs-footnote);}
+  .seg-card{border:1px solid var(--line);border-radius:var(--r-control);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-2);background:var(--card);}
+  .seg-card.hard{border-color:var(--gold);}
+  .seg-top{display:flex;align-items:center;gap:var(--sp-3);cursor:pointer;list-style:none;}
+  .seg-top::-webkit-details-marker{display:none;}
+  .seg-top svg{width:18px;height:18px;fill:none;stroke:var(--ink-soft);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;transition:transform .2s;}
+  .seg-card[open] > .seg-top svg{transform:rotate(180deg);}
+  .seg-drop{margin-top:var(--sp-2);border-top:1px solid var(--line);}
+  .seg-drop summary{cursor:pointer;list-style:none;padding:var(--sp-2) 0;font-size:var(--fs-footnote);font-weight:600;display:flex;justify-content:space-between;}
+  .seg-drop summary::-webkit-details-marker{display:none;}
+  .seg-drop summary span{color:var(--ink-soft);font-weight:400;}
+  .seg-mi{font-weight:700;font-size:var(--fs-title3);flex:1;}
+  .seg-pace{color:var(--ink-soft);font-size:var(--fs-subhead);}
+  .seg-card .act{border:0;background:transparent;padding:0;margin-top:var(--sp-2);}
+  .seg-card .act-btn{display:none;}
+  .seg-card .act-body{display:block;padding:0;}
+  .seg-prs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .pr-chip{font-size:var(--fs-caption);font-weight:700;padding:2px 10px;border-radius:99px;background:var(--gold);color:#fff;}
+  .seg-meta{font-size:var(--fs-footnote);color:var(--ink-soft);margin-top:4px;}
   .tag-pick{margin-top:var(--sp-3);}
   .tag-pick .tag-opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
   .tag-pick .tag-opts button{font-size:var(--fs-footnote);padding:4px 11px;border-radius:99px;min-height:0;}
@@ -5316,9 +5337,9 @@ const ZONE_COLORS = ['#9bb7d4','#6fbf8e','#e8c547','#f0954a','#e0584f','#b0365e'
 
 // One activity of a session: a row that opens to its own numbers, the
 // weather and terrain behind them, HR zones and laps.
-function activityHtml(a){
+function activityHtml(a, forceOpen = false){
   const m = a.metrics || {};
-  const open = a.id === tlOpenActivity;
+  const open = forceOpen || a.id === tlOpenActivity;
   const generic = /^((morning|afternoon|evening|lunch|night)\s+)?run(ning)?$|running$/i;
   const name = ROLE_LABEL[a.role] || (a.name && !generic.test(a.name) ? a.name : (SESSION_LABEL[a.category] || 'Run'));
   const stat = (v, l)=> v == null || v === '' ? '' : `<div class="act-stat"><b>${escapeHtml(String(v))}</b><span>${escapeHtml(l)}</span></div>`;
@@ -5424,6 +5445,31 @@ function tagPickerHtml(sx){
     <div class="hint">Race: a steady all-out effort. Time trial: all-out, not a sanctioned race. Workout: structured reps, tempo or fartlek.</div>
   </div>`;
 }
+function presentSessionsHtml(list){
+  if(!list.length) return '<div class="hint">No run logged. Tap Edit to add miles, or it fills in from your watch.</div>';
+  return list.map(sx=>{
+    const acts = (sx.activities || []).length ? sx.activities : [{ id: '', role: '', category: sx.category, miles: sx.miles, minutes: sx.minutes, pace: sx.pace, avg_hr: sx.avg_hr }];
+    const multi = acts.length > 1;
+    const segs = acts.map(a=>{
+      const isMain = !sx.main_id || a.id === sx.main_id;
+      const label = a.role && ROLE_LABEL[a.role] ? ROLE_LABEL[a.role] : (sx.tag_label || SESSION_LABEL[sx.category] || 'Run');
+      const hard = isMain && ['workout','race'].includes(sx.category) && !a.role;
+      const mi = a.miles != null ? Math.round(a.miles * 100) / 100 : null;
+      const prs = (a.prs || []).map(p=>`<span class="pr-chip">PR · ${escapeHtml(p.label)} ${escapeHtml(p.time)}</span>`).join('');
+      const nReps = isMain ? (sx.splits || []).length : 0;
+      const reps = nReps ? `<details class="seg-drop"><summary>Splits<span>${nReps} reps</span></summary><table class="ro-splits num">${sx.splits.map((r,i)=>`<tr><td>${i+1}</td><td>${r.m} m</td><td>${fmtClock(r.s)}</td><td>${r.m >= 100 ? fmtClock(Math.round(r.s / (r.m / 1609.344))) + '/mi' : ''}</td></tr>`).join('')}</table></details>` : '';
+      return `<details class="seg-card ${hard ? 'hard' : ''}">
+        <summary class="seg-top"><span class="tag-chip ${hard ? 'hard' : ''}">${escapeHtml(label)}</span><span class="seg-mi num">${mi != null ? mi + ' mi' : ''}</span><span class="seg-pace num">${a.pace ? escapeHtml(a.pace) + '/mi' : ''}</span><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg></summary>
+        ${prs ? `<div class="seg-prs">${prs}</div>` : ''}${a.id ? activityHtml(a, true) : ''}${reps}
+      </details>`;
+    }).join('');
+    const sug = sx.suggest && sx.main_id ? `<div class="session-suggest" data-main="${escapeHtml(sx.main_id)}" data-tag="${escapeHtml(sx.suggest.tag)}"><span>${escapeHtml(sx.suggest.why)}</span><button type="button" class="sm-btn" data-act="apply">Tag as ${escapeHtml(tagLabel(sx.suggest.tag))}</button><button type="button" class="ghost sm-btn" data-act="dismiss">Dismiss</button></div>` : '';
+    const title = multi ? `<div class="seg-session"><b>${escapeHtml((sx.tag_label || SESSION_LABEL[sx.category] || 'Session'))} session</b><span class="num">${sx.miles} mi · ${sx.minutes} min${sx.pace ? ' · ' + escapeHtml(sx.pace) + '/mi' : ''}</span></div>` : '';
+    const summary = sessionSummary(sx);
+    const report = sx.report ? `<div class="session-report"><b>Kestrel AI</b>${escapeHtml(sx.report)}</div>` : '';
+    return `<div class="seg-group">${title}${sug}${summary}${segs}${report}</div>`;
+  }).join('');
+}
 function readoutHtml(day){
   const bits = [];
   if(day.summary) bits.push(`<div><div class="ro-label">What happened</div><div class="ro-text">${escapeHtml(day.summary)}</div></div>`);
@@ -5505,7 +5551,7 @@ async function renderTrainingDay(){
   if(dsBtn) dsBtn.addEventListener('click', ()=>{ const open = dsBtn.getAttribute('aria-expanded') !== 'true'; daySplitsOpen = open; dsBtn.setAttribute('aria-expanded', String(open)); $('daySplitsBody').hidden = !open; });
   $('tlSessions').innerHTML = tlSessions.map(sx=>{
     const meta = [sx.start && sx.start, sx.track && 'Track', sx.miles != null && `${sx.miles} mi`, sx.minutes && `${sx.minutes} min`, sx.pace && `${sx.pace}/mi`, sx.avg_hr && `${sx.avg_hr} bpm`, sx.effort && `difficulty ${sx.effort}`, sx.temp_f != null && `${Math.round(sx.temp_f)}°F`, sx.elev_ft && !sx.track && `${sx.elev_ft} ft up`].filter(Boolean).join(' · ');
-    const acts = sx.activities.length ? `<div class="acts">${sx.activities.map(activityHtml).join('')}</div>` : '';
+    const acts = sx.activities.length ? `<div class="acts">${sx.activities.map(a=>activityHtml(a)).join('')}</div>` : '';
     const open = sx.key === tlOpenSession;
     const reps = 0;
     return `<div class="session ${open ? 'open' : ''}" data-key="${escapeHtml(sx.key)}">
@@ -5523,6 +5569,7 @@ async function renderTrainingDay(){
       </div>
     </div>`;
   }).join('') || '<div class="hint">No run logged. Add miles above, or it fills in from your watch.</div>';
+  if(!tlEditing) $('tlSessions').innerHTML = presentSessionsHtml(tlSessions);
   $('tlSessions').querySelectorAll('.act-btn').forEach(b=> b.addEventListener('click', ()=>{
     const id = b.closest('.act').dataset.id;
     tlOpenActivity = tlOpenActivity === id ? null : id;
@@ -5539,6 +5586,7 @@ async function renderTrainingDay(){
     renderTrainingDay();
   }));
 
+  if(!tlEditing) $('tlSessions').querySelectorAll('.act').forEach(el=> window.kRecords?.mountActivity(el));
   bindTagUi();
   $('tlReadout').innerHTML = readoutHtml(day);
 

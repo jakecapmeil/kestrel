@@ -229,7 +229,9 @@ function rawReps(w, dayRow) {
 const RACE_METERS = [1600, MILE, 3200, 2 * MILE, 2.5 * MILE, 4000, 5000, 3 * MILE, 6000, 8000, 10000];
 // `extra`: distances raced on the course the run was on (a 6K course, say).
 function raceDistance(m, extra = []) {
-  for (const d of [...RACE_METERS, ...extra]) if (Math.abs(m - d) / d <= 0.03) return d;
+  for (const d of RACE_METERS) if (Math.abs(m - d) / d <= 0.03) return d;
+  // A course's own distances get more slack: a GPS watch reads a measured cross-country 5K anywhere from 4.8 to 5.2 km.
+  for (const d of extra) if (Math.abs(m - d) / d <= 0.045) return d;
   return null;
 }
 // PR events a race distance updates, and the time scaled to that event.
@@ -300,7 +302,10 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     if (!m) continue;
     const hrPct = hrMax && w.avg_hr ? w.avg_hr / hrMax : null;
     const raceDay = w.category === 'race' || meets.has(w.date);
-    if (!(hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay)) continue;
+    // Race effort: a meet or race label, 86%+ of max HR, or a run the pace and heart rate grade says was hard (7+/10). The grade
+    // catches a PR by someone with no max HR on file, or whose watch HR sat low in the cold.
+    const hard = Math.max(w.effort || 0, w.hr_effort || 0) >= 7;
+    if (!(hard || (hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay))) continue;
     // Nobody stops mid-race: a long pause means a workout with rests.
     if (w.elapsed_sec && w.moving_sec && w.elapsed_sec > w.moving_sec * 1.3) continue;
     // Races are timed gun to finish: elapsed time, unless the watch was left running.
