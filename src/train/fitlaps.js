@@ -79,7 +79,21 @@ export function runningSplits(rawLaps) {
   return use.slice(0, 40).map((l) => ({ m: Math.round(l.m), s: Math.round(l.s), hr: l.hr }));
 }
 
+// TCX keeps laps as <Lap> blocks; some sources store that instead of a FIT.
+export function tcxLaps(text) {
+  const num = (block, tag) => { const m = block.match(new RegExp(`<${tag}>([^<]+)</${tag}>`)); return m ? Number(m[1]) : null; };
+  return [...text.matchAll(/<Lap\b[\s\S]*?<\/Lap>/g)].map(([b]) => {
+    const hr = b.match(/<AverageHeartRateBpm[^>]*>\s*<Value>(\d+)</);
+    return { m: num(b, 'DistanceMeters') || 0, s: num(b, 'TotalTimeSeconds') || 0, hr: hr ? Number(hr[1]) : null, intensity: /<Intensity>Resting/.test(b) ? 1 : 0 };
+  });
+}
+
+// Splits from a downloaded activity file response; [] when it has none.
 export async function splitsFromFile(res) {
-  if (!res.ok) return [];
-  return runningSplits(fitLaps(await gunzipIfNeeded(await res.arrayBuffer())));
+  if (!res.ok) { console.warn('intervals file', res.status); return []; }
+  const bytes = await gunzipIfNeeded(await res.arrayBuffer());
+  let laps = fitLaps(bytes);
+  if (!laps.length) laps = tcxLaps(new TextDecoder().decode(bytes));
+  if (!laps.length) console.warn('intervals file: no laps found', bytes.length);
+  return runningSplits(laps);
 }
