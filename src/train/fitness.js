@@ -242,6 +242,10 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   const tracked = trackedOf(parseSettings(person?.settings));
   // What a course costs: Van Cortlandt has its own measured factor, every other course is a cross-country course.
   const factorOf = (id) => courses.get(id)?.factor ?? (id === 'vc' ? VC_FACTOR : XC_FACTOR);
+  // A course runs on the model the athlete picked for that course or distance (slots `course:<id>[:<metres>]`),
+  // else on its catalogue factor.
+  const toFlatOn = (id, sec, m) => RM.toFlat(id, sec, m, factorOf(id));
+  const toCourseOn = (id, flatSec, m) => RM.toCourse(id, flatSec, m, factorOf(id));
   const shortPrs = []; // PRs HawksPredict-Short can use: { ev, sec, age }
 
   // 1. Max efforts.
@@ -264,7 +268,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
       seenCourse.add(key);
     }
     const vc = !!ck && ck.id === 'vc';
-    const t = onCourse ? sec / factorOf(ck.id) : sec;
+    const t = onCourse ? toFlatOn(ck.id, sec, m) : sec;
     const name = ck ? courseLabel(courses.get(ck.id), m) : event;
     sources.push({
       kind: 'pr', max: true, event, m, s: t, age, date: dated ? v.date : null,
@@ -302,7 +306,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // Races are timed gun to finish: elapsed time, unless the watch was left running.
     const t = w.elapsed_sec && w.elapsed_sec <= w.moving_sec * 1.05 ? w.elapsed_sec : w.moving_sec;
     // Credited back to a flat course in good weather.
-    const cond = conditionsOf(w, events);
+    const cond = conditionsOf(w, events, { courseFactor: RM.courseFactor });
     const adj = t / cond.factor;
     const credit = cond.factor > 1.004 ? `; ${cond.note}: worth ${fmtTime(adj)} flat and cool` : '';
     const label = `${raceDay ? 'Race' : 'Hard run'} ${m === MILE ? 'mile' : m === 2 * MILE ? '2 mi' : m === 2.5 * MILE ? '2.5 mi' : m === 3 * MILE ? '3 mi' : `${m >= 1000 && m % 1000 === 0 ? m / 1000 + 'K' : m + 'm'}`} in ${fmtTime(t)} (${w.date}${credit})`;
@@ -324,7 +328,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const stitched = e.meters >= 1500 && (!e.category || e.category === 'workout' || e.laps); // unknown run: can't rule out reps
     const prEvent = { 400: '400', 800: '800', 1600: '1600', 1609: '1600', 3200: '3200', 5000: '5K' }[e.meters];
     if (prEvent && !stitched) {
-      const pc = conditionsOf(e, events);
+      const pc = conditionsOf(e, events, { courseFactor: RM.courseFactor });
       const sec = e.meters === 1609 ? (e.sec * 1600) / 1609.344 : e.sec;
       const pcid = prEvent === '5K' ? courseIdOf(e, events) : '';
       const pname = pcid ? courses.get(pcid)?.name || '' : '';
@@ -340,7 +344,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     if (age > 365) continue;
     // Conditions of the run it came from. A short burst is often the downhill
     // part of a hilly run, so only long efforts get the course and hill credit.
-    const cond = e.distance_mi ? conditionsOf(e, events, { reps: e.meters < 1500 }) : null;
+    const cond = e.distance_mi ? conditionsOf(e, events, { reps: e.meters < 1500, courseFactor: RM.courseFactor }) : null;
     const factor = !cond ? 1 : e.meters >= 1500 ? cond.factor : 1 + cond.heat;
     const s = e.sec / factor;
     const what = `Fastest ${e.meters === 1609 ? 'mile' : e.meters >= 1000 && e.meters % 1000 === 0 ? e.meters / 1000 + 'K' : e.meters + 'm'} in a run: ${fmtTime(e.sec, { tenths: e.meters <= 800 })}`;
@@ -481,7 +485,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const results = liteIn.map((s) => ({ m: s.m, sec: s.s, surf: 'track' }));
     let by = {};
     for (const e of EVENTS) {
-      by[e.key] = RM.raceAny(results, { m: e.m, surf: 'track' });
+      by[e.key] = RM.raceAny(results, { m: e.m, surf: 'track' }, e.key);
       if (!by[e.key]) { by = null; break; }
     }
     if (by) {
@@ -611,7 +615,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
       const own = shortPrs.filter((p) => p.ev === e.short).sort((a, b) => a.age - b.age)[0];
       // 400-to-5K PRs are already inside Lite's estimates, so only PRs at the events Short owns count as extra sources.
       const prsUsed = shortPrs.filter((p) => p.ev !== e.short && SHORT_OWN.has(p.ev)).map((p) => ({ ev: p.ev, sec: p.sec, extra: p.age > 365 ? 0.02 : 0.008, name: `${PR_NAMES[p.ev] || p.ev} PR` }));
-      const r = RM.shortAny([...fromLite, ...prsUsed], e.short);
+      const r = RM.shortAny([...fromLite, ...prsUsed], e.short, e.key);
       if (!r) continue;
       let mu = Math.log(r.sec);
       let sd = r.sd;
@@ -638,7 +642,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   // the 2.5 mi there, ...): the 5K estimate times the course's factor, other
   // distances by Riegel from the 5K.
   const courseEstimates = tracked.filter((t) => courses.has(t.course)).map((t) => {
-    const sec = est['5K'].sec * factorOf(t.course) * Math.pow(t.m / 5000, 1.06);
+    const sec = toCourseOn(t.course, est['5K'].sec * Math.pow(t.m / 5000, 1.06), t.m);
     return { key: courseKey(t.course, t.m), label: courseLabel(courses.get(t.course), t.m), course: t.course, meters: t.m, sec: Math.round(sec * 10) / 10 };
   }).map((c) => ({ ...c, time: fmtTime(c.sec), pace_mi: fmtPace((c.sec / c.meters) * MILE) }));
 
@@ -686,6 +690,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     confidence: overall,
     mpw, mpw_prev: mpwPrev, longest_28d: round1(cur.longest),
     model_short: lite ? `${RM.info.short.name} ${RM.info.short.version}` : null,
+    model_overrides: RM.info.overrides,
     model_marathon: est.marathon ? `${RM.info.marathon.name} ${RM.info.marathon.version}` : null,
     estimates: [...EVENTS, ...EXTRA_EVENTS.filter((e) => est[e.key])].map((e) => {
       const x = est[e.key];

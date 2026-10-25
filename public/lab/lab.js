@@ -1,7 +1,7 @@
 // Kestrel Lab: browse, try, download and publish open running models, and get API keys to call them.
 // Routes: #/ (about), #/models (directory), #/m/<id>/<tab> (a model: card, files, try, api, lineage), #/new (publish),
 // #/import (from GitHub or Hugging Face), #/workbench (test models on your own PRs), #/providers (what powers Kestrel AI),
-// #/docs (format + API), #/me (your models).
+// #/purposes (which model does which job in the app), #/docs (format + API), #/me (your models).
 // Signing in shares the main app's Supabase session (same site), so the Lab needs no sign-in of its own.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
 import * as AI from '/ai.js';
@@ -9,12 +9,16 @@ import * as AI from '/ai.js';
 const $ = (id) => document.getElementById(id);
 const $lab = $('lab');
 const L = { cfg: null, sb: null, token: null, me: null, task: '', q: '' };
-const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon' };
+// Purposes (the jobs a model can have in the app) come from /api/config; these are the short names.
+const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', course: 'Courses' };
 const KIND_LABEL = {
   'lite-trees': 'Boosted trees (HawksPredict-Lite format)',
   'short-pairs': 'Event-pair lines (HawksPredict-Short format)',
   'marathon-trees': 'Boosted trees over training (HawksPredict-Marathon format)',
   riegel: 'Riegel formula',
+  vdot: 'Daniels VDOT (oxygen-cost curves)',
+  tanda: 'Tanda marathon formula (weekly distance and pace)',
+  'course-transfer': 'Course line (flat time to course time)',
 };
 const SOURCE = 'https://github.com/jakecapmeil/kestrel/blob/main';
 
@@ -125,7 +129,7 @@ async function viewLab() {
   render(html`
   <div class="lab-landing">
     <div class="lab-section lab-intro">
-      <span class="k-chip accent">Kestrel Lab</span>
+      <span class="k-chip accent">${L.cfg.platform}</span>
       <h1 class="k-display lab-display">Models you can read, fork and ship.</h1>
       <p class="k-lede">Kestrel is the simple app: it works out of the box. The Lab is where you choose the models behind it, test them on your own races, and move them to and from GitHub and Hugging Face. Every model is a plain file of numbers, never code.</p>
       <div class="k-row"><a class="k-btn primary" href="#/models">Browse models</a><a class="k-btn" href="#/import">Import from GitHub or Hugging Face</a>${me ? '' : html`<span class="k-small">Sign in to Kestrel to publish and import.</span>`}</div>
@@ -137,6 +141,7 @@ async function viewLab() {
         ${feat('Test before you switch', 'The Workbench hides each of your PRs in turn, asks the model for it, and shows how far off it was. Plan first, then Act.', '#/workbench')}
         ${feat('Fork and fine-tune', 'Fork any model, retrain it on your data and add a new version. Lineage shows what came from what.', '#/models')}
         ${feat('GitHub and Hugging Face', 'Import a kestrel.json from either site, update from source later, or push your model back out with a model card.', '#/import')}
+        ${feat('Wire models to jobs', 'Every model declares one purpose: race times, sprints, the marathon, a single course like Van Cortlandt, or coaching. Pick one per job.', '#/purposes')}
         ${feat('Choose what powers the coach', 'Use your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer.', '#/providers')}
         ${feat('Call it from your code', 'Every model has a REST endpoint. Make an API key and predict from your own app or dashboard.', '#/docs')}
         ${feat('Publish your own', 'Upload a validated JSON file, add a model card and a data licence, and share it with every Kestrel athlete.', '#/new')}
@@ -149,6 +154,9 @@ async function viewLab() {
         <dt>Lite-trees</dt><dd>Gradient-boosted trees over 21 HawksPredict-Lite features. The one to fine-tune for race predictions.</dd>
         <dt>Short-pairs</dt><dd>Log-log lines between event pairs, for sprints and steeplechase (100-1000 m).</dd>
         <dt>Marathon-trees</dt><dd>Trees over 15 training features from your last 16 weeks.</dd>
+        <dt>VDOT</dt><dd>Daniels' oxygen-cost curves: one result sets a fitness number, which sets every other distance.</dd>
+        <dt>Tanda</dt><dd>A marathon formula from weekly distance and training pace, for 2:47 to 3:36 marathoners.</dd>
+        <dt>Course-transfer</dt><dd>A line from flat-course time to a course's time, for one course such as Van Cortlandt. Fit it on that course's own races.</dd>
       </dl>
     </div>
   </div>`);
@@ -195,7 +203,10 @@ async function viewModel(id, tab = 'card') {
   if (!MODEL_TABS.some(([k]) => k === tab)) tab = 'card';
   const m = r.model;
   const me = await signedIn();
-  const curl = m.task === 'marathon'
+  const isCourse = m.task === 'course';
+  const curl = isCourse
+    ? `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","flat_sec":1080,"sex":"m"}'`
+    : m.task === 'marathon'
     ? `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","training":[{"date":"2026-10-01","miles":8,"minutes":64}]}'`
     : `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","event":"5000","prs":[{"event":"1600","time":"5:05.3"}]}'`;
   const events = (L.cfg.labEvents || []).filter((e) => (m.task === 'short' ? e.task === 'short' : m.task === 'race' ? e.task === 'race' : false));
@@ -214,7 +225,15 @@ async function viewModel(id, tab = 'card') {
           <label class="k-label" for="verNote">What changed</label><input class="k-input" id="verNote" maxlength="200" placeholder="Retrained on 2026 results">
           <div class="k-row"><button class="k-btn primary">Add version</button>${m.source_url ? html`<button type="button" class="k-btn" id="verPull">Update from source</button>` : ''}</div></form>` : ''}</section>`;
   } else if (tab === 'try') {
-    body = m.task === 'marathon'
+    body = isCourse
+      ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter what a runner would run on a flat course in good weather. The model says what that is worth on ${m.course ? 'the course it was fitted for' : 'a course'}.</p>
+          <form id="courseForm">
+            <label class="k-label" for="flatTime">Flat time (a 5K, say)</label><input class="k-input" id="flatTime" placeholder="18:00" inputmode="numeric" required>
+            <label class="k-label" for="courseSex">Sex (optional)</label>
+            <select class="k-input" id="courseSex"><option value="">Not given</option><option value="f">Female</option><option value="m">Male</option></select>
+            <div class="k-row"><button class="k-btn primary">Convert</button></div>
+          </form><div id="tryOut"></div></section>`
+      : m.task === 'marathon'
       ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Marathon models read 16 weeks of training. Use this model in your account to see it on your own log, or call it through the API with your training days.</p></section>`
       : html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter one or more results; the model predicts the event you pick, with its 80% range.</p>
           <form id="tryForm">
@@ -310,6 +329,18 @@ async function viewModel(id, tab = 'card') {
         <div class="lab-tree-in"><div class="lab-lin now"><b>${m.name}</b> <span class="k-small">${m.version} · this model</span></div>
           <div class="lab-tree-in">${l.children.length ? l.children.map((c) => row(c)) : html`<div class="k-small">No forks or fine-tunes yet.</div>`}</div></div></div>`.s;
     });
+  }
+  if ($('courseForm')) {
+    $('courseForm').onsubmit = (e) => {
+      e.preventDefault();
+      const parts = $('flatTime').value.trim().split(':').map(Number);
+      const flat = parts.some((x) => !Number.isFinite(x)) ? NaN : parts.reduce((a, x) => a * 60 + x, 0);
+      attempt(async () => {
+        const out = await api('/api/lab/try', { method: 'POST', body: JSON.stringify({ model: m.id, flat_sec: flat, sex: $('courseSex').value }) });
+        const p = out.prediction.sec;
+        $('tryOut').innerHTML = html`<div class="lab-result">${fmtTime(p)}</div><p class="k-small">${fmtTime(flat)} flat is worth ${fmtTime(p)} on the course (${((p / flat - 1) * 100).toFixed(1)}% slower).</p>`.s;
+      }, e.submitter);
+    };
   }
   if ($('tryForm')) {
     let n = 1;
@@ -701,6 +732,91 @@ async function viewProviders() {
   draw(state.provider);
 }
 
+// ---------- purposes
+
+// Every place in Kestrel where a model does a job, what is doing it for you now, and what else could.
+// A purpose has one pick; each of its events can override that pick (race:5K, short:600, vc:2.5mi).
+async function viewPurposes() {
+  const me = await signedIn();
+  const [list, mine, cat] = await Promise.all([
+    attempt(() => api('/api/lab/models')),
+    me ? attempt(() => api('/api/me')) : null,
+    me ? attempt(() => api('/api/courses')) : null,
+  ]);
+  if (!list) return;
+  const purposes = L.cfg.purposes || {};
+  const picks = { ...(L.cfg.defaults || {}), ...(mine?.models || {}) };
+  const eventPicks = mine?.event_models || {};
+  const groups = {};
+  for (const [key, p] of Object.entries(purposes)) (groups[p.group] ||= []).push([key, p]);
+  const byId = Object.fromEntries(list.models.map((m) => [m.id, m]));
+  const opt = (m, sel) => html`<option value="${m.id}" ${m.id === sel ? raw('selected') : ''}>${m.name} ${m.version}</option>`;
+  // Courses: the ones this athlete follows (plus any with a pick already), each with a model for the course and one per distance.
+  const courseSection = (p) => {
+    const options = list.models.filter((m) => m.task === 'course');
+    const names = Object.fromEntries((cat?.courses || []).map((c) => [c.id, c.name]));
+    const rows = new Map();
+    for (const t of cat?.tracked || []) { if (!rows.has(t.course)) rows.set(t.course, new Set()); rows.get(t.course).add(t.m); }
+    for (const k of Object.keys(eventPicks)) { const m = /^course:([^:]+)(?::(\d+))?$/.exec(k); if (m) { if (!rows.has(m[1])) rows.set(m[1], new Set()); if (m[2]) rows.get(m[1]).add(Number(m[2])); } }
+    const pick = (slot, none) => html`<select class="k-input" data-slot="${slot}"><option value="">${none}</option>${options.map((m) => opt(m, eventPicks[slot]))}</select>`;
+    const dist = (m) => { const mi = m / 1609.344; return Math.abs(mi * 2 - Math.round(mi * 2)) < 0.03 && m % 1000 ? `${Math.round(mi * 2) / 2} mi` : m % 1000 === 0 ? `${m / 1000}K` : `${m} m`; };
+    return html`<div class="lab-purpose"><div><h3>${p.label}</h3>
+      <p class="k-small">A course with no model uses its catalogue factor (Van Cortlandt runs 5.5% slower than flat, other cross-country courses 2.5%). Pick a model to replace that for one course, or for one distance on it; a distance beats its course, and a course beats the setting below. ${options.length} course model${options.length === 1 ? '' : 's'}. <a href="#/models?task=course">Browse</a></p></div>
+      ${me ? html`<div class="k-row"><label class="k-small">All courses <select class="k-input" data-pick="course"><option value="">Catalogue factors (default)</option>${options.map((m) => opt(m, mine?.models?.course))}</select></label></div>
+      <div class="lab-slot-grid lab-course-grid">${[...rows].map(([id, ms]) => html`<fieldset><legend>${names[id] || id}</legend>
+        <label>Whole course${pick(`course:${id}`, 'Same as all courses')}</label>
+        ${[...ms].sort((a, b) => a - b).map((m) => html`<label>${dist(m)}${pick(`course:${id}:${m}`, 'Same as the course')}</label>`)}</fieldset>`)}</div>
+      ${rows.size ? '' : html`<p class="k-small">Follow a course in Kestrel (Records, then Courses) and it shows up here.</p>`}` : html`<p class="k-small">Sign in to Kestrel to choose.</p>`}
+      </div>`;
+  };
+  const row = ([key, p]) => {
+    if (key === 'course') return courseSection(p);
+    if (p.model === false) {
+      return html`<div class="lab-purpose"><div><h3>${p.label}</h3><p class="k-small">Powered by a provider, not a weights file: the free Kestrel model, your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer. The plan rules and safety checks are the same whatever you choose.</p></div><a class="k-btn small" href="#/providers">Choose a provider</a></div>`;
+    }
+    const options = list.models.filter((m) => m.task === key);
+    const cur = byId[picks[key]];
+    const evs = (L.cfg.slotEvents || {})[key] || [];
+    const nOver = evs.filter(([e]) => eventPicks[`${key}:${e}`]).length;
+    return html`<div class="lab-purpose"><div><h3>${p.label}</h3>
+      <p class="k-small">${cur ? html`Now: <a href="#/m/${encodeURIComponent(cur.id)}"><b>${cur.name}</b> ${cur.version}</a>${picks[key] === L.cfg.defaults[key] ? ' (default)' : ''}` : 'Using the default.'} ${options.length} model${options.length === 1 ? '' : 's'} can do this.</p></div>
+      <div class="k-row">${me
+        ? html`<select class="k-input" data-pick="${key}" aria-label="Model for ${p.label}">${options.map((m) => opt(m, picks[key]))}</select>`
+        : html`<span class="k-small">Sign in to Kestrel to choose.</span>`}
+        <a class="k-btn small" href="#/models?task=${key}">Browse</a></div>
+      ${me && evs.length ? html`<details class="lab-slots"${nOver ? raw(' open') : ''}><summary>Per-event models${nOver ? html` <span class="lab-chip">${nOver} overridden</span>` : ''}</summary>
+        <div class="lab-slot-grid">${evs.map(([e, name]) => { const slot = `${key}:${e}`; return html`<label>${name}<select class="k-input" data-slot="${slot}"><option value="">Same as above</option>${options.map((m) => opt(m, eventPicks[slot]))}</select></label>`; })}</div></details>` : ''}
+      </div>`;
+  };
+  const setup = me ? JSON.stringify({ models: picks, event_models: eventPicks }, null, 2) : '';
+  render(html`
+  <div class="k-kicker">Purposes</div>
+  ${title('Which model does which job')}
+  <p class="k-lede">${L.cfg.platform} models each declare one purpose, because Kestrel only has so many places a model can plug in. Pick one model for each, then override any single event: the 5K on one model, the 1600 on another, Van Cortlandt's 2.5 mi on a model fitted just for it. A course purpose swaps in a model for that one course, so a Van Cortlandt model never changes your track predictions.</p>
+  <div class="lab-page">${Object.entries(groups).map(([g, rows]) => html`<section class="lab-panel"><h2>${g}</h2>${rows.map(row)}</section>`)}
+  ${me ? html`<section class="lab-panel"><h2>Your setup as a file</h2>
+    <p class="k-small">Everything above as JSON. Copy it to keep or share a setup, or paste one and apply it. Slots are <code>purpose:event</code>; an empty value follows the purpose.</p>
+    <textarea class="k-input lab-setup" id="setupJson" rows="10" spellcheck="false" aria-label="Setup JSON">${setup}</textarea>
+    <div class="k-row"><button class="k-btn" type="button" id="setupApply">Apply setup</button></div></section>` : ''}</div>`);
+  const save = (body, btn) => attempt(async () => {
+    await api('/api/me', { method: 'PUT', body: JSON.stringify(body) });
+    L.me = null;
+    toast('Saved. Fitness recalculates with it.');
+    return true;
+  }, btn);
+  $lab.querySelectorAll('[data-pick]').forEach((sel) => { sel.onchange = () => save({ models: { [sel.dataset.pick]: sel.value } }, sel); });
+  $lab.querySelectorAll('[data-slot]').forEach((sel) => { sel.onchange = async () => { if (await save({ event_models: { [sel.dataset.slot]: sel.value } }, sel)) viewPurposes(); }; });
+  if ($('setupApply')) {
+    $('setupApply').onclick = async (e) => {
+      let cfg;
+      try { cfg = JSON.parse($('setupJson').value); } catch { toast('That is not valid JSON.', true); return; }
+      // Slots missing from the file are cleared, so the file is the whole truth.
+      const cleared = Object.fromEntries(Object.keys(eventPicks).map((k) => [k, '']));
+      if (await save({ models: cfg.models || {}, event_models: { ...cleared, ...(cfg.event_models || {}) } }, e.currentTarget)) viewPurposes();
+    };
+  }
+}
+
 // ---------- boot
 
 async function signedIn() {
@@ -714,7 +830,8 @@ async function signedIn() {
 
 function route() {
   const h = location.hash.replace(/^#/, '') || '/';
-  const [path] = h.split('?');
+  const [path, query] = h.split('?');
+  if (path === '/models' && query) L.task = new URLSearchParams(query).get('task') || '';
   const nav = path.startsWith('/m/') || path === '/models' ? 'models' : path === '/' ? 'home' : path.slice(1);
   document.querySelectorAll('[data-nav]').forEach((a) => { const on = a.dataset.nav === nav; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   if (path.startsWith('/m/')) {
@@ -726,6 +843,7 @@ function route() {
   if (path === '/import') return viewImport();
   if (path === '/workbench') return viewWorkbench();
   if (path === '/providers') return viewProviders();
+  if (path === '/purposes') return viewPurposes();
   if (path === '/docs') return viewDocs();
   if (path === '/me') return viewMe();
   if (path === '/models') return viewModels();
@@ -737,7 +855,12 @@ async function boot() {
   if (L.cfg.supabaseUrl && L.cfg.supabaseKey) {
     L.sb = createClient(L.cfg.supabaseUrl, L.cfg.supabaseKey, { auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: false } });
   }
+  // The platform's name lives on the server (PLATFORM_NAME); the static pages carry it too, so keep them in step.
+  if (L.cfg.platform) {
+    document.title = L.cfg.platform;
+    document.querySelectorAll('[data-platform]').forEach((el) => { el.textContent = L.cfg.platform; });
+  }
   window.addEventListener('hashchange', route);
   route();
 }
-boot().catch((err) => { console.error(err); $lab.innerHTML = `<p class="k-small">Kestrel Lab could not start: ${esc(err.message)}</p>`; });
+boot().catch((err) => { console.error(err); $lab.innerHTML = `<p class="k-small">${L.cfg?.platform || 'Kestrel Lab'} could not start: ${esc(err.message)}</p>`; });

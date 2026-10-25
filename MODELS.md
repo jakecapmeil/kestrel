@@ -27,11 +27,16 @@ A Kestrel model is one JSON file. It holds numbers, never code: Kestrel has one 
 
 The whole file is at most 1 MB. Each user can upload up to 20 models, public or private.
 
-## Tasks
+## Purposes (the `task` field)
+
+A purpose is a place in the app where a model does a job. A model declares one; each athlete picks one model per purpose in the Lab's Purposes page. Coaching is also a purpose, but it is powered by a provider (the free Kestrel model, your own key, or a local model), not a weights file.
+
+Every purpose can also be overridden per event with a **slot**, `purpose:event`: `race:5K`, `race:1600`, `short:600`. Courses are slots too: `course:vc` for a whole course and `course:vc:4023` for one distance on it (the key is the course id and metres, as course PRs are keyed). A distance beats its course, a course beats the `course` setting, and that beats the catalogue factor. A slot with no pick follows its purpose, so you can run the 5K on one model and everything else on another. Events are Fitness States' own (`SLOT_EVENTS` in `src/models.js`). Picks are stored as `people.settings.models` (purposes) and `people.settings.event_models` (slots); `PUT /api/me` with `{ "models": {...}, "event_models": { "race:5K": "kestrel/vdot", "race:1600": "" } }` sets them, and an empty id clears a slot.
 
 - `race`: 800 m and up on track, cross country and road (XC 5K, 3200 m, half marathon, ...).
 - `short`: 100-1000 m and the steeplechases.
 - `marathon`: marathon time from the last 16 weeks of training.
+- `course`: what a flat-course time is worth on a cross-country course (Van Cortlandt, Franklin Park, any course in the catalogue). Used to credit a race on the course back to flat and to predict the athlete's times there. A course with no model keeps its catalogue factor, so nothing changes until one is picked. A course model never changes track predictions.
 
 ## Kinds
 
@@ -41,6 +46,18 @@ The whole file is at most 1 MB. Each user can upload up to 20 models, public or 
 
 - `exponent`: 0.9-1.3
 - `sd`: above 0, at most 0.5
+
+### `vdot` (task `race`)
+
+Daniels' VDOT. The nearest PR sets a VDOT; that VDOT sets the target time. `weights`: `{ "sd": 0.035 }` (log-SD for the 80% range, above 0, at most 0.5).
+
+### `tanda` (task `marathon`)
+
+Tanda (2011): pace (s/km) = `a + b e^(-c K) + d P` from K = mean weekly km and P = mean training pace (s/km) over `weeks` weeks. `weights`: `a, b, c, d, weeks` (1-16), `min_days` running days needed, `see_sec` (standard error in seconds, for the 80% range) and `range_sec` (`[shortest, longest]` marathon the formula is valid for; outside it, no answer).
+
+### `course-transfer` (task `course`)
+
+`ln t_course = a + b ln t_flat + c male`, where `t_flat` is what the runner would run on a flat course in good weather. `weights`: `a` (within ±2), `b` (0.5-1.5), `c` (within ±0.5; halved when sex is unknown) and optional `sd` and `n`. A line that makes a course time under 0.9x or over 1.5x the flat time is refused. Fit one from your own races with `node scripts/fit-course.mjs races.csv "Name" vc`. Set the optional top-level `"course": "vc"` to say which course it was fitted for.
 
 ### `lite-trees` (task `race`)
 

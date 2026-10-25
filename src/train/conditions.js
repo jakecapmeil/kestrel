@@ -89,11 +89,20 @@ export function courseIdOf(w, events = []) {
 const fmtF = (f) => `${Math.round(f)}°F`;
 
 // What a run's time is worth on a flat course in good weather: divide by factor.
-export function conditionsOf(w, events = [], { reps = false } = {}) {
+// courseFactor(courseId, sec, metres, base) -> course/flat time ratio, from the athlete's picked course model
+// (modelSet().courseFactor), or `base` when no model is picked for that course or distance. Without the option the
+// course constants above apply.
+export function conditionsOf(w, events = [], { reps = false, courseFactor = null } = {}) {
   const course = courseOf(w, events);
   const heat = heatCost(w.temp_f, w.dew_point_f) * (reps ? 0.5 : 1);
   const hill = course === 'vc' || w.surface === 'track' ? 0 : hillCost(w.elev_gain_ft, w.distance_mi);
-  const factor = (course === 'vc' ? VC_FACTOR : course === 'xc' ? XC_FACTOR : 1) * (1 + hill) * (1 + heat);
+  const secs = w.sec || w.elapsed_sec || w.moving_sec;
+  const meters = w.meters || (w.raw_distance_mi ?? w.distance_mi) * 1609.344;
+  const base = course === 'vc' ? VC_FACTOR : course === 'xc' ? XC_FACTOR : 1;
+  // A course the runner picked a model for (per course or per distance) replaces the course constant.
+  const cid = course ? courseIdOf(w, events) || (course === 'vc' ? 'vc' : '') : '';
+  const courseFac = cid && courseFactor && secs > 0 && meters > 0 ? courseFactor(cid, secs, meters, base) : base;
+  const factor = courseFac * (1 + hill) * (1 + heat);
   const parts = [
     course === 'vc' ? 'Van Cortlandt course' : course === 'xc' ? 'cross-country course' : '',
     hill >= 0.005 ? `${Math.round(w.elev_gain_ft)} ft of climbing` : '',

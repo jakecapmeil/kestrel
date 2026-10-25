@@ -147,3 +147,20 @@ body.lab .lab-stats{margin:var(--s-3) 0;}
 .lab-landing .k-browser{margin-bottom:var(--s-7);}
 a.lab-feature{display:block;text-decoration:none;color:var(--text);transition:transform var(--t-med) var(--ease),box-shadow var(--t-med) var(--ease);}
 a.lab-feature:hover{transform:translateY(-3px);box-shadow:var(--shadow-2);}
+
+/* Purposes: one row per job a model can do in the app. */
+.lab-purpose{display:flex;gap:var(--s-4);align-items:center;justify-content:space-between;flex-wrap:wrap;padding:var(--s-3) 0;border-top:1px solid var(--line);}
+.lab-purpose:first-of-type{border-top:0;}
+.lab-purpose h3{margin:0 0 var(--s-1);font-size:16px;}
+.lab-purpose .k-row{margin:0;align-items:center;}
+.lab-purpose select{min-width:220px;}
+
+.lab-slots{flex-basis:100%;margin-top:var(--s-2);}
+.lab-slots summary{cursor:pointer;font-size:14px;font-weight:600;}
+.lab-slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s-3);margin-top:var(--s-3);}
+.lab-slot-grid label{display:flex;flex-direction:column;gap:var(--s-1);font-size:13px;color:var(--text-2);}
+.lab-setup{width:100%;font-family:var(--font-mono,'JetBrains Mono',monospace);font-size:13px;}
+
+.lab-course-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr));}
+.lab-course-grid fieldset{border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s-3);display:flex;flex-direction:column;gap:var(--s-2);min-width:0;}
+.lab-course-grid legend{font-weight:600;padding:0 var(--s-1);}

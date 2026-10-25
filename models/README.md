@@ -1,6 +1,6 @@
 # Kestrel model cards
 
-The four built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). They were trained in the [Hawks repository](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict), where the training scripts and full results are (`RESULTS.md`, `DATASETS.md`).
+The built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). They were trained in the [Hawks repository](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict), where the training scripts and full results are (`RESULTS.md`, `DATASETS.md`).
 
 All errors below are mean absolute error in percent of race time, on data the model never saw.
 
@@ -29,6 +29,24 @@ All errors below are mean absolute error in percent of race time, on data the mo
 - **How good:** 6.30% on 2,127 held-out races (Riegel from the best training run: 8.55%). 80% range coverage 78.9%.
 - **Limits:** adults, and only runs logged on one social site. Training logs alone can't say much more than this about a marathon day, so the range is wide on purpose.
 - **Weights licence:** CC BY 4.0. Credit the BMClab dataset (Figshare 16620238).
+
+## Daniels VDOT (`vdot.json`)
+
+- **Task:** race time from the nearest PR, 1500 m and up: Daniels and Gilbert's oxygen-cost and %VO2max curves.
+- **Source:** Daniels, J. T. & Gilbert, R. (1979), *Oxygen Power*. Checked against Daniels' published table (VDOT 50) to 0.03%. The range (log-SD 0.035) is a rough default.
+- **Licence:** CC0. Published equations.
+
+## Tanda marathon (`tanda-2011.json`)
+
+- **Task:** marathon from weekly distance and mean training pace over 8 weeks. Answers only for 2:47-3:36.
+- **Source:** Tanda, G. (2011), J. Hum. Sport Exerc. 6(3):511-520 (22 runners, standard error about 4 min); re-tested on Strava data by Tanda (2022), RMSE 5.4 min.
+- **Licence:** CC0. A formula.
+
+## Van Cortlandt flat factor (`vc-flat-factor.json`)
+
+- **Task:** the `vc` course purpose: a flat time times 1.055.
+- **Source:** coaches' rule of thumb, not fitted. The baseline for a fitted Van Cortlandt model (see `scripts/fit-course.mjs` and [docs/model-research.md](../docs/model-research.md)).
+- **Licence:** CC0.
 
 ## Riegel (`riegel.json`)
 
