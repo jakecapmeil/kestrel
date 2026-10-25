@@ -202,7 +202,7 @@ function cleanLaps(v) {
   let arr = v;
   if (typeof v === 'string') { try { arr = JSON.parse(v); } catch { return ''; } }
   if (!Array.isArray(arr)) return '';
-  const out = arr.slice(0, 40).map((l) => ({ m: r(num(l?.m, { max: 20000 })), s: Math.round((num(l?.s, { max: 7200 }) || 0) * 10) / 10, hr: r(num(l?.hr, { min: 30, max: 250 })) }))
+  const out = arr.slice(0, 40).map((l) => ({ m: r(num(l?.m, { max: 20000 })), s: Math.round((num(l?.s, { max: 7200 }) || 0) * 10) / 10, hr: r(num(l?.hr, { min: 30, max: 250 })), ...(l?.f === 0 || l?.f === 1 ? { f: l.f } : {}) }))
     .filter((l) => l.m && l.s);
   return out.length ? JSON.stringify(out) : '';
 }

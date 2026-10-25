@@ -130,6 +130,13 @@ function splitsText(laps, track) {
   }).join('; ');
 }
 
+// The watch's laps for one activity from its original file; [] when there are none.
+async function fileSplits(key, id, env) {
+  try {
+    return await splitsFromFile(await fetch(`${env?.ICU_API_BASE || API}/activity/${encodeURIComponent(id)}/file`, { headers: { Authorization: 'Basic ' + btoa('API_KEY:' + key) } }));
+  } catch (e) { console.warn('intervals file', id, String(e)); return []; }
+}
+
 function splitsFrom(intervals) {
   const all = (intervals || []).filter((i) => i.distance > 0);
   const work = all.filter((i) => i.type === 'WORK' && i.distance > 50 && i.moving_time > 0);
@@ -264,6 +271,32 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     await db.batch(gpsRefresh.slice(i, i + 50).map((a) => db.prepare('UPDATE workouts SET gps_vc = ?, gps_course = ? WHERE person_id = ? AND strava_id = ?')
       .bind(courseAt(...startOf(a)) === 'vc' ? 1 : 0, courseAt(...startOf(a)), person.id, `intervals:${a.id}`)));
   }
+  // Runs logged before splits came from the watch's file (or whose file wasn't
+  // readable then) get one try each: laps carry f=1 (file) or f=0 (tried).
+  const reIds = usable.filter((a) => logged.has(`intervals:${a.id}`) && RUN_TYPES.has(a.type) && (a.icu_lap_count || 0) >= 2 && (a.icu_lap_count || 0) <= 60).map((a) => `intervals:${a.id}`);
+  let reFetches = 0;
+  for (let i = 0; i < reIds.length && reFetches < lapBudget; i += 90) {
+    const chunk = reIds.slice(i, i + 90);
+    const rows = (await db.prepare(`SELECT strava_id, date, laps, surface FROM workouts WHERE person_id = ? AND strava_id IN (${chunk.map(() => '?').join(',')}) ORDER BY date DESC`)
+      .bind(person.id, ...chunk).all()).results;
+    for (const w of rows) {
+      if (reFetches >= lapBudget) break;
+      let old = [];
+      try { old = JSON.parse(w.laps || '[]'); } catch { /* none */ }
+      if (!old.length || old.some((l) => l.f === 0 || l.f === 1)) continue;
+      reFetches++;
+      const file = await fileSplits(key, w.strava_id.slice('intervals:'.length), env);
+      const track = w.surface === 'track';
+      const next = file.length >= 2 ? file : old.map((l) => ({ ...l, f: 0 }));
+      await db.prepare('UPDATE workouts SET laps = ? WHERE person_id = ? AND strava_id = ?').bind(JSON.stringify(next), person.id, w.strava_id).run();
+      if (file.length < 2) continue;
+      // The day's splits line, if it is still the one made from the old laps.
+      const day = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(person.id, w.date).first();
+      if (day?.splits && (day.splits === splitsText(old, track) || day.splits === splitsText(old, !track))) {
+        await db.prepare('UPDATE training_days SET splits = ? WHERE person_id = ? AND date = ?').bind(splitsText(file, track), person.id, w.date).run();
+      }
+    }
+  }
   if (!fresh.length) return { imported: 0, checked: usable.length, total: all.length, skipped_strava: skippedStrava };
 
   const maxRow = await db.prepare('SELECT MAX(max_hr) AS m FROM workouts WHERE person_id = ?').bind(person.id).first();
@@ -294,10 +327,9 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
       } catch { /* laps are a nice-to-have */ }
       // Splits are the watch's own laps (what Garmin shows), from the original
       // file. intervals.icu's analysed intervals are only the fallback.
-      try {
-        const file = await splitsFromFile(await fetch(`${env?.ICU_API_BASE || API}/activity/${encodeURIComponent(a.id)}/file`, { headers: { Authorization: 'Basic ' + btoa('API_KEY:' + key) } }));
-        if (file.length >= 2) laps = file;
-      } catch { /* keep the analysed intervals */ }
+      const file = await fileSplits(key, a.id, env);
+      if (file.length >= 2) laps = file;
+      else laps = laps.map((l) => ({ ...l, f: 0 }));
     }
     let gpsStart = startOf(a);
     if (!gpsStart && VC_RE.test(`${a.name || ''} ${a.description || ''}`) && gpsFetches < 8) { gpsFetches++; gpsStart = await streamStart(key, a.id, env); }
