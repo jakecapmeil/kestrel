@@ -6,7 +6,8 @@
   "assets": {
     "directory": "public",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*"]
+    // /mcp/* is the Kestrel AI connector; /.well-known/* must answer 404 (not the app) so connectors do not start OAuth.
+    "run_worker_first": ["/api/*", "/mcp/*", "/.well-known/*"]
   },
   "d1_databases": [
     {

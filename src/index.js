@@ -690,7 +690,8 @@ async function route(request, env, url) {
   if (mcp) {
     if (method !== 'POST') return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
     const person = await personForToken(db, mcp[1]);
-    if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 401);
+    // 404, not 401: a 401 makes connectors go looking for an OAuth sign-in service, which this link does not use.
+    if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 404);
     return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS], (name, args) =>
       (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args) : callCoachTool(db, person, name, args)));
   }
@@ -1148,6 +1149,8 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
+    // The Kestrel AI link is the login: there is no OAuth. Say so plainly when a connector probes for it.
+    if (url.pathname.startsWith('/.well-known/')) return json({ error: 'Kestrel AI uses a private link, not OAuth.' }, 404);
     if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/mcp/')) return env.ASSETS.fetch(request);
     try {
       return await route(request, env, url);
