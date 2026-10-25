@@ -1,7 +1,10 @@
 // Kestrel Lab: browse, try, download and publish open running models, and get API keys to call them.
-// Routes: #/ (directory), #/m/<id> (a model), #/new (publish), #/docs (format + API), #/me (your models and keys).
+// Routes: #/ (about), #/models (directory), #/m/<id>/<tab> (a model: card, files, try, api, lineage), #/new (publish),
+// #/import (from GitHub or Hugging Face), #/workbench (test models on your own PRs), #/providers (what powers Kestrel AI),
+// #/docs (format + API), #/me (your models).
 // Signing in shares the main app's Supabase session (same site), so the Lab needs no sign-in of its own.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
+import * as AI from '/ai.js';
 
 const $ = (id) => document.getElementById(id);
 const $lab = $('lab');
@@ -118,44 +121,36 @@ async function viewModels() {
 
 async function viewLab() {
   const me = await signedIn();
+  const feat = (h, t, href) => html`<a class="lab-feature" href="${href}"><h3>${h}</h3><p>${t}</p></a>`;
   render(html`
   <div class="lab-landing">
-    <div class="lab-section">
-      <h2>Kestrel Lab</h2>
-      <p>An open ecosystem for testing, fine-tuning, and exploring AI-driven running insights and coaching algorithms. Think of it as Hugging Face for running models — a place where anyone can publish a race-time predictor, a training-load estimator, or a marathon model, and every Kestrel athlete can use it.</p>
+    <div class="lab-section lab-intro">
+      <span class="k-chip accent">Kestrel Lab</span>
+      <h1 class="k-display lab-display">Models you can read, fork and ship.</h1>
+      <p class="k-lede">Kestrel is the simple app: it works out of the box. The Lab is where you choose the models behind it, test them on your own races, and move them to and from GitHub and Hugging Face. Every model is a plain file of numbers, never code.</p>
+      <div class="k-row"><a class="k-btn primary" href="#/models">Browse models</a><a class="k-btn" href="#/import">Import from GitHub or Hugging Face</a>${me ? '' : html`<span class="k-small">Sign in to Kestrel to publish and import.</span>`}</div>
     </div>
+    <div class="k-browser"><img src="/shots/lab-workbench.jpg" alt="The Workbench comparing two models against a runner's own results" width="2560" height="1600"></div>
     <div class="lab-section">
-      <h2>What you can do here</h2>
+      <h2>What you can do</h2>
       <div class="lab-feature-grid">
-        <div class="lab-feature">
-          <h3>Browse open models</h3>
-          <p>Discover race-time predictors, marathon estimators, and training models published by the community. Every model includes a model card, training data provenance, and licence information.</p>
-        </div>
-        <div class="lab-feature">
-          <h3>Try before you use</h3>
-          <p>Test any model on your own race times or training data directly in the browser. See predicted times with 80% confidence ranges before committing.</p>
-        </div>
-        <div class="lab-feature">
-          <h3>Publish your own</h3>
-          <p>Upload a validated JSON model file (no code — just numbers) and share it with every Kestrel athlete. Set it public or private, add a model card, and specify your data's licence.</p>
-        </div>
-        <div class="lab-feature">
-          <h3>Call from your own app</h3>
-          <p>Every model has a REST API endpoint (<code>POST /api/v1/predict</code>) with personal API keys. Use it from your own training log, watch app, or coaching dashboard.</p>
-        </div>
+        ${feat('Test before you switch', 'The Workbench hides each of your PRs in turn, asks the model for it, and shows how far off it was. Plan first, then Act.', '#/workbench')}
+        ${feat('Fork and fine-tune', 'Fork any model, retrain it on your data and add a new version. Lineage shows what came from what.', '#/models')}
+        ${feat('GitHub and Hugging Face', 'Import a kestrel.json from either site, update from source later, or push your model back out with a model card.', '#/import')}
+        ${feat('Choose what powers the coach', 'Use your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer.', '#/providers')}
+        ${feat('Call it from your code', 'Every model has a REST endpoint. Make an API key and predict from your own app or dashboard.', '#/docs')}
+        ${feat('Publish your own', 'Upload a validated JSON file, add a model card and a data licence, and share it with every Kestrel athlete.', '#/new')}
       </div>
     </div>
     <div class="lab-section">
-      <h2>Model types</h2>
-      <p>Kestrel Lab supports four model kinds, each filling a specific task slot:</p>
-      <div class="lab-kv" style="margin-top:16px;">
-        <dt>Riegel</dt><dd>Exponent-based race time predictor from your nearest PR. Works for race and short distances.</dd>
-        <dt>Lite-trees</dt><dd>Gradient-boosted trees over 21 HawksPredict-Lite features. Fine-tune on your own results for race predictions.</dd>
-        <dt>Short-pairs</dt><dd>Log-log lines between event pairs. Best for sprints and steeplechase (100-1000 m).</dd>
-        <dt>Marathon-trees</dt><dd>Trees over 15 training features from your last 16 weeks. Predicts marathon time from training load.</dd>
-      </div>
+      <h2>Model kinds</h2>
+      <dl class="lab-kv">
+        <dt>Riegel</dt><dd>Exponent-based race time predictor from your nearest PR. Race and short events.</dd>
+        <dt>Lite-trees</dt><dd>Gradient-boosted trees over 21 HawksPredict-Lite features. The one to fine-tune for race predictions.</dd>
+        <dt>Short-pairs</dt><dd>Log-log lines between event pairs, for sprints and steeplechase (100-1000 m).</dd>
+        <dt>Marathon-trees</dt><dd>Trees over 15 training features from your last 16 weeks.</dd>
+      </dl>
     </div>
-    ${me ? html`<div class="k-row" style="margin-top:32px;"><a class="k-btn primary" href="#/new">Publish your first model →</a><a class="k-btn" href="#/models">Browse models →</a></div>` : html`<div class="k-row" style="margin-top:32px;"><a class="k-btn" href="#/models">Browse models →</a><span style="margin-left:8px;color:var(--ink-soft);font-size:14px;">Sign in to publish your own models.</span></div>`}
   </div>`);
 }
 
@@ -177,43 +172,51 @@ function card(m) {
     </div>
     <div class="repo-footer">
       <div class="repo-stats"><div><b>${m.downloads}</b><br><span class="k-small">downloads</span></div><div><b>${m.used_by || 0}</b><br><span class="k-small">athletes</span></div><div><b>${fmtSize(m.size)}</b><br><span class="k-small">size</span></div></div>
-      <span class="k-small">${new Date(m.updated_at || 0).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+      <span class="k-small">${m.created_at ? new Date(m.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
     </div>
   </a>`;
 }
 
 // ---------- one model
 
+const MODEL_TABS = [['card', 'Model card'], ['files', 'Files & versions'], ['try', 'Try it'], ['api', 'API'], ['lineage', 'Lineage']];
+const shortDate = (t) => (t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+
+function dlg() {
+  let d = $('labDlg');
+  if (!d) { d = document.createElement('dialog'); d.id = 'labDlg'; d.className = 'k-dialog'; document.body.appendChild(d); }
+  d.innerHTML = '';
+  return d;
+}
+
 async function viewModel(id, tab = 'card') {
   const r = await attempt(() => api(`/api/lab/models/${encodeURIComponent(id)}`));
-  if (!r) { render(html`<p class="k-small">Model not found. <a href="#/">Back to the models</a></p>`); return; }
+  if (!r) { render(html`<p class="k-small">Model not found. <a href="#/models">Back to the models</a></p>`); return; }
+  if (!MODEL_TABS.some(([k]) => k === tab)) tab = 'card';
   const m = r.model;
+  const me = await signedIn();
   const curl = m.task === 'marathon'
     ? `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","training":[{"date":"2026-10-01","miles":8,"minutes":64}]}'`
     : `curl -X POST ${location.origin}/api/v1/predict \\\n  -H "Authorization: Bearer kst_YOUR_KEY" -H "Content-Type: application/json" \\\n  -d '{"model":"${m.id}","event":"5000","prs":[{"event":"1600","time":"5:05.3"}]}'`;
   const events = (L.cfg.labEvents || []).filter((e) => (m.task === 'short' ? e.task === 'short' : m.task === 'race' ? e.task === 'race' : false));
-  const taskChip = m.task ? html`<span class="lab-chip">${TASK_LABEL[m.task] || m.task}</span>` : '';
-  const kindChip = m.kind ? html`<span class="lab-chip">${KIND_LABEL[m.kind] || m.kind}</span>` : '';
-  const licenseChip = m.license ? html`<span class="lab-chip">${m.license}</span>` : '';
-  const builtinChip = m.builtin ? html`<span class="lab-chip builtin">Kestrel</span>` : '';
-  const privateChip = m.visibility === 'private' ? html`<span class="lab-chip private">Private</span>` : '';
-  render(html`
-  <div class="lab-model-header">
-    <div class="lab-breadcrumbs"><a href="#/models">Models</a> / <span>${m.owner}</span></div>
-    <h1>${m.name} <span class="k-small">${m.version}</span></h1>
-    <div class="lab-model-meta">${taskChip}${kindChip}${licenseChip}${builtinChip}${privateChip}${m.base_model ? html`<span class="lab-chip red">fine-tuned from ${m.base_model}</span>` : ''}</div>
-    <div class="lab-model-actions">
-      <a class="k-btn k-btn-primary lab-download-btn" href="/api/lab/models/${encodeURIComponent(m.id)}?download=1">⬇ Download weights</a>
-      ${!m.builtin ? html`<button class="k-btn" type="button" id="useModelBtn">Use this model</button>` : ''}
-    </div>
-  </div>
-  <div class="lab-page">
-    <div>
-      <div class="lab-model-tabs" role="tablist">${[['card', 'Model card'], ['try', 'Try it'], ['use', 'Use it']].map(([k, v]) => html`<button type="button" role="tab" data-tab="${k}" class="${k === tab ? 'on' : ''}" aria-selected="${k === tab}">${v}</button>`)}</div>
-      ${tab === 'card' ? html`<section class="lab-panel lab-model-readme">${raw(md(m.readme || (m.builtin ? builtinReadme(m) : `${m.description}\n\n**Trained on:** ${m.trained_on || 'not given'}`)))}</section>` : ''}
-      ${tab === 'try' ? (m.task === 'marathon'
-        ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Marathon models read 16 weeks of training. Sign in to Kestrel and pick this model in You → Settings to see it on your own log, or call it through the API with your training days.</p></section>`
-        : html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter one or more results; the model predicts the event you pick, with its 80% range.</p>
+  const chips = html`${m.task ? html`<span class="lab-chip">${TASK_LABEL[m.task] || m.task}</span>` : ''}${m.kind ? html`<span class="lab-chip">${KIND_LABEL[m.kind] || m.kind}</span>` : ''}${m.license ? html`<span class="lab-chip">${m.license}</span>` : ''}${m.builtin ? html`<span class="lab-chip builtin">Kestrel</span>` : ''}${m.visibility === 'private' ? html`<span class="lab-chip private">Private</span>` : ''}${m.base_model ? html`<span class="lab-chip red">fine-tuned from ${m.base_model}</span>` : ''}`;
+  let body = html``;
+  if (tab === 'card') {
+    body = html`<section class="lab-panel lab-model-readme">${raw(md(m.readme || (m.builtin ? builtinReadme(m) : `${m.description}\n\n**Trained on:** ${m.trained_on || 'not given'}`)))}</section>`;
+  } else if (tab === 'files') {
+    body = html`<section class="lab-panel"><h2>Files</h2>
+        <table class="lab-table"><tbody>
+          <tr><td><b>kestrel.json</b><div class="k-small">The model: numbers, never code</div></td><td>${fmtSize(m.size)}</td><td style="text-align:right"><a class="k-btn small" href="/api/lab/models/${encodeURIComponent(m.id)}?download=1">Download</a></td></tr>
+          <tr><td><b>README.md</b><div class="k-small">The model card</div></td><td>${fmtSize((m.readme || '').length)}</td><td style="text-align:right"><button class="k-btn small" type="button" data-tab="card">View</button></td></tr>
+        </tbody></table>${m.source_url ? html`<p class="k-small">Imported from <a href="${m.source_url}" target="_blank" rel="noopener nofollow">${m.source_url.replace(/^https:\/\//, '')}</a></p>` : ''}</section>
+      <section class="lab-panel"><h2>Versions</h2><div id="verList"><p class="k-small">Loading…</p></div>
+        ${m.mine ? html`<form id="verForm"><label class="k-label" for="verFile">Add a version (a kestrel.json of the same kind and task)</label><input type="file" id="verFile" accept="application/json,.json" required>
+          <label class="k-label" for="verNote">What changed</label><input class="k-input" id="verNote" maxlength="200" placeholder="Retrained on 2026 results">
+          <div class="k-row"><button class="k-btn primary">Add version</button>${m.source_url ? html`<button type="button" class="k-btn" id="verPull">Update from source</button>` : ''}</div></form>` : ''}</section>`;
+  } else if (tab === 'try') {
+    body = m.task === 'marathon'
+      ? html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Marathon models read 16 weeks of training. Use this model in your account to see it on your own log, or call it through the API with your training days.</p></section>`
+      : html`<section class="lab-panel"><h2>Try it</h2><p class="k-small">Enter one or more results; the model predicts the event you pick, with its 80% range.</p>
           <form id="tryForm">
             <div id="tryPrs">${prRow(0)}</div>
             <button type="button" class="k-link" id="tryAdd">+ another result</button>
@@ -221,37 +224,91 @@ async function viewModel(id, tab = 'card') {
             <select class="k-input" id="tryEvent" name="event">${events.map((e) => html`<option value="${e.key}">${e.label}</option>`)}</select>
             <label class="k-label" for="trySex">Sex (optional)</label>
             <select class="k-input" id="trySex" name="sex"><option value="">Not given</option><option value="f">Female</option><option value="m">Male</option></select>
-            <div class="k-row"><button class="k-btn primary">Predict</button></div>
+            <div class="k-row"><button class="k-btn primary">Predict</button><a class="k-btn" href="#/workbench?m=${encodeURIComponent(m.id)}">Test on my PRs</a></div>
           </form>
-          <div id="tryOut"></div></section>`) : ''}
-      ${tab === 'use' ? html`<section class="lab-panel"><h2>In Kestrel</h2><p class="k-small">Make this the model behind your ${TASK_LABEL[m.task].toLowerCase()} in Fitness. You can switch back any time in You → Settings.</p>
-          <button class="k-btn primary" type="button" id="useIt">Use this model</button></section>
-        <section class="lab-panel"><h2>From your code</h2><p class="k-small">Make an API key in <a href="#/docs">Docs &amp; API</a>, then:</p><pre class="lab-code">${curl}</pre>
-          <p class="k-small">Or download the weights and run them yourself: the evaluator is <a href="${SOURCE}/src/models.js" target="_blank" rel="noopener">src/models.js</a>, no dependencies.</p></section>` : ''}
+          <div id="tryOut"></div></section>`;
+  } else if (tab === 'api') {
+    body = html`<section class="lab-panel"><h2>From your code</h2><p class="k-small">Make an API key in <a href="#/docs">Docs &amp; API</a>, then:</p><pre class="lab-code">${curl}</pre>
+        <p class="k-small">Or download the weights and run them yourself: the evaluator is <a href="${SOURCE}/src/models.js" target="_blank" rel="noopener">src/models.js</a>, no dependencies.</p></section>`;
+  } else {
+    body = html`<section class="lab-panel"><h2>Lineage</h2><div id="lineage"><p class="k-small">Loading…</p></div></section>`;
+  }
+  render(html`
+  <div class="lab-model-header">
+    <div class="lab-breadcrumbs"><a href="#/models">Models</a> / <span>${m.owner}</span></div>
+    <h1>${m.name} <span class="k-small">${m.version}</span></h1>
+    <div class="lab-model-meta">${chips}</div>
+    <div class="lab-model-actions">
+      <button class="k-btn primary" type="button" id="useModelBtn">Use in my account</button>
+      <button class="k-btn" type="button" id="forkBtn">Fork</button>
+      <button class="k-btn" type="button" id="pushBtn">Push to GitHub / Hugging Face</button>
+      <a class="k-btn ghost" href="/api/lab/models/${encodeURIComponent(m.id)}?download=1">Download</a>
+    </div>
+  </div>
+  <div class="lab-page">
+    <div>
+      <div class="lab-model-tabs" role="tablist">${MODEL_TABS.map(([k, v]) => html`<button type="button" role="tab" data-tab="${k}" class="${k === tab ? 'on' : ''}" aria-selected="${k === tab}">${v}</button>`)}</div>
+      ${body}
     </div>
     <aside class="lab-model-sidebar">
-      <section class="lab-panel"><h2>Files</h2>
-        <p class="k-small">One JSON file: numbers, never code, so it is safe to run anywhere.</p>
-        <a class="k-btn wide" href="/api/lab/models/${encodeURIComponent(m.id)}?download=1">Download weights (${fmtSize(m.size)})</a>
-        <dl class="lab-kv" style="margin-top:14px">
+      <section class="lab-panel"><h2>About</h2>
+        <dl class="lab-kv">
           <dt>Kind</dt><dd>${m.kind}</dd>
-          ${Object.entries(r.model.weights_summary || {}).map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}
-          <dt>Used by</dt><dd>${r.model.used_by} athlete${r.model.used_by === 1 ? '' : 's'}</dd>
+          ${Object.entries(m.weights_summary || {}).map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}
+          <dt>Used by</dt><dd>${m.used_by} athlete${m.used_by === 1 ? '' : 's'}</dd>
           <dt>Downloads</dt><dd>${m.downloads}</dd>
-          ${m.created_at ? html`<dt>Published</dt><dd>${new Date(m.created_at).toLocaleDateString()}</dd>` : ''}
+          ${m.created_at ? html`<dt>Published</dt><dd>${shortDate(m.created_at)}</dd>` : ''}
         </dl>
-        <p class="k-small" style="margin-top:12px"><a href="#/new?base=${encodeURIComponent(m.id)}">Fine-tune this model</a></p>
+        <p class="k-small" style="margin-top:12px"><a href="#/new?base=${encodeURIComponent(m.id)}">Publish a fine-tuned version</a></p>
       </section>
-      ${r.model.mine ? html`<section class="lab-panel"><h2>Yours</h2><div class="k-row" style="margin:0"><a class="k-btn small" href="#/me">Edit or delete</a></div></section>` : ''}
+      ${m.mine ? html`<section class="lab-panel"><h2>Yours</h2><div class="k-row" style="margin:0"><a class="k-btn small" href="#/me">Edit or delete</a></div></section>` : ''}
     </aside>
   </div>`);
-  $lab.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => viewModel(id, b.dataset.tab); });
-  if ($('useModelBtn')) {
-    $('useModelBtn').onclick = () => attempt(async () => {
-      if (!(await signedIn())) { location.href = '/'; return; }
-      await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [m.task]: m.id } }) });
-      toast('Model set as default for ' + (TASK_LABEL[m.task] || m.task));
-      viewModel(id, 'card');
+  $lab.querySelectorAll('[data-tab]').forEach((b) => { b.onclick = () => { location.hash = `#/m/${encodeURIComponent(id)}/${b.dataset.tab}`; }; });
+  const needSignIn = async () => { if (await signedIn()) return true; toast('Sign in to Kestrel first.', true); setTimeout(() => { location.href = '/'; }, 900); return false; };
+  $('useModelBtn').onclick = (e) => attempt(async () => {
+    if (!(await needSignIn())) return;
+    await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [m.task]: m.id } }) });
+    toast(`${m.name} now makes your ${TASK_LABEL[m.task].toLowerCase()} in Kestrel.`);
+  }, e.currentTarget);
+  $('forkBtn').onclick = (e) => attempt(async () => {
+    if (!(await needSignIn())) return;
+    const out = await api('/api/lab/fork', { method: 'POST', body: JSON.stringify({ id: m.id }) });
+    toast('Forked. It is private until you publish it.');
+    location.hash = `#/m/${encodeURIComponent(out.id)}/files`;
+  }, e.currentTarget);
+  $('pushBtn').onclick = async () => { if (await needSignIn()) pushDialog(m); };
+  if (tab === 'files') {
+    attempt(() => api(`/api/lab/versions?id=${encodeURIComponent(m.id)}`)).then((v) => {
+      if (!v) return;
+      $('verList').innerHTML = html`<table class="lab-table"><thead><tr><th>Version</th><th>What changed</th><th>When</th><th>Size</th></tr></thead><tbody>${v.versions.map((x) => html`<tr><td><b>${x.version || '–'}</b> ${x.current ? html`<span class="lab-chip published">latest</span>` : ''}</td><td>${x.note || ''}${x.source_url ? html` <a href="${x.source_url}" target="_blank" rel="noopener nofollow">source</a>` : ''}</td><td>${shortDate(x.created_at)}</td><td>${fmtSize(x.size)}</td></tr>`)}</tbody></table>`.s;
+    });
+    if ($('verForm')) $('verForm').onsubmit = (e) => {
+      e.preventDefault();
+      attempt(async () => {
+        let file;
+        try { file = JSON.parse(await $('verFile').files[0].text()); } catch { throw new Error('That file is not valid JSON.'); }
+        await api('/api/lab/versions', { method: 'POST', body: JSON.stringify({ id: m.id, model: file, note: $('verNote').value }) });
+        toast('Version added.');
+        viewModel(id, 'files');
+      }, e.submitter);
+    };
+    if ($('verPull')) $('verPull').onclick = (e) => attempt(async () => {
+      const src = m.source_url.match(/^https:\/\/(github\.com|huggingface\.co)\/([^/]+\/[^/]+)\/blob\/([^/]+)\/(.+)$/);
+      if (!src) throw new Error('This model has no source to update from.');
+      await api('/api/lab/import', { method: 'POST', body: JSON.stringify({ source: src[1] === 'github.com' ? 'github' : 'huggingface', repo: `${src[2]}@${src[3]}:${src[4]}`, dry: false }) });
+      toast('Updated from source.');
+      viewModel(id, 'files');
+    }, e.currentTarget);
+  }
+  if (tab === 'lineage') {
+    attempt(() => api(`/api/lab/lineage?id=${encodeURIComponent(m.id)}`)).then((l) => {
+      if (!l) return;
+      const row = (x, cls = '') => html`<a class="lab-lin ${cls}" href="#/m/${encodeURIComponent(x.id)}/lineage"><b>${x.name}</b> <span class="k-small">${x.version} · ${x.owner}</span></a>`;
+      $('lineage').innerHTML = html`<div class="lab-tree">
+        ${l.parent ? row(l.parent) : l.external_parent ? html`<div class="lab-lin"><b>${l.external_parent}</b> <span class="k-small">parent, not in the Lab</span></div>` : html`<div class="lab-lin root"><span class="k-small">No parent: an original model</span></div>`}
+        <div class="lab-tree-in"><div class="lab-lin now"><b>${m.name}</b> <span class="k-small">${m.version} · this model</span></div>
+          <div class="lab-tree-in">${l.children.length ? l.children.map((c) => row(c)) : html`<div class="k-small">No forks or fine-tunes yet.</div>`}</div></div></div>`.s;
     });
   }
   if ($('tryForm')) {
@@ -269,11 +326,38 @@ async function viewModel(id, tab = 'card') {
       }, e.submitter);
     };
   }
-  if ($('useIt')) $('useIt').onclick = (e) => attempt(async () => {
-    if (!(await signedIn())) { location.href = '/'; return; }
-    await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [m.task]: m.id } }) });
-    toast(`${m.name} now makes your ${TASK_LABEL[m.task].toLowerCase()} in Kestrel.`);
-  }, e.currentTarget);
+}
+
+// Push a model to GitHub or Hugging Face. The token is sent once, used for these calls and forgotten.
+function pushDialog(m) {
+  const d = dlg();
+  let target = 'github';
+  const draw = () => {
+    d.innerHTML = html`<h2>Push ${m.name}</h2>
+      <p class="k-small">Writes two files, <code>kestrel.json</code> and <code>README.md</code>, so anyone can import the model back with the same repository name.</p>
+      <div class="lab-seg" role="group" aria-label="Where to">${[['github', 'GitHub'], ['huggingface', 'Hugging Face']].map(([k, v]) => html`<button type="button" data-t="${k}" class="${k === target ? 'on' : ''}">${v}</button>`)}</div>
+      <form id="pushForm">
+        <label class="k-label" for="pushRepo">Repository</label><input class="k-input" id="pushRepo" placeholder="${target === 'github' ? 'you/kestrel-models' : 'you/my-kestrel-model'}" required>
+        <p class="k-small">${target === 'github' ? 'Add @branch to push to a branch, or :folder to put the files in a folder: you/repo@main:models.' : 'Created if it does not exist, as a private repository when this model is private.'}</p>
+        <label class="k-label" for="pushTok">${target === 'github' ? 'GitHub token (fine-grained, Contents: read and write)' : 'Hugging Face token (write access)'}</label><input class="k-input" id="pushTok" type="password" autocomplete="off" required>
+        <p class="k-small">Used once for this push and never stored.</p>
+        <label class="k-label" for="pushMsg">Commit message</label><input class="k-input" id="pushMsg" maxlength="200" placeholder="${esc(`Kestrel Lab: ${m.name} ${m.version || ''}`.trim())}">
+        <div class="k-row"><button class="k-btn primary">Push</button><button type="button" class="k-link" id="pushClose">Close</button></div>
+        <p class="k-small" id="pushOut"></p>
+      </form>`.s;
+    d.querySelectorAll('[data-t]').forEach((b) => { b.onclick = () => { target = b.dataset.t; draw(); }; });
+    $('pushClose').onclick = () => d.close();
+    $('pushForm').onsubmit = (e) => {
+      e.preventDefault();
+      attempt(async () => {
+        const out = await api('/api/lab/export', { method: 'POST', body: JSON.stringify({ id: m.id, target, repo: $('pushRepo').value.trim(), token: $('pushTok').value.trim(), message: $('pushMsg').value.trim() }) });
+        $('pushTok').value = '';
+        $('pushOut').innerHTML = html`<span class="k-good">Pushed.</span> <a href="${out.url}" target="_blank" rel="noopener">Open ${out.repo}</a>`.s;
+      }, e.submitter);
+    };
+  };
+  draw();
+  d.showModal();
 }
 
 function prRow(i) {
@@ -439,6 +523,184 @@ async function viewMe() {
   });
 }
 
+// ---------- import from GitHub or Hugging Face
+
+const STARTER = { kestrel: 1, name: 'My model', version: 'v1', kind: 'riegel', task: 'race', license: 'CC0-1.0', description: 'What it predicts and for whom', trained_on: 'Where the results came from, and the data licence', weights: { exponent: 1.06, sd: 0.04 } };
+
+async function viewImport() {
+  if (!(await signedIn())) {
+    render(html`<div class="k-kicker">Import</div>${title('Import a model')}<section class="lab-panel"><p>Sign in to Kestrel to import models from GitHub or Hugging Face.</p><a class="k-btn primary" href="/">Sign in</a></section>`);
+    return;
+  }
+  let source = 'github';
+  const draw = () => {
+    render(html`
+    <div class="k-kicker">Import</div>
+    ${title('Import a model')}
+    <div class="lab-page">
+      <div>
+        <form id="impForm" class="lab-panel">
+          <h2>From a repository</h2>
+          <div class="lab-seg" role="group" aria-label="Source">${[['github', 'GitHub'], ['huggingface', 'Hugging Face']].map(([k, v]) => html`<button type="button" data-src="${k}" class="${k === source ? 'on' : ''}">${v}</button>`)}</div>
+          <label class="k-label" for="impRepo">Repository</label>
+          <input class="k-input" id="impRepo" placeholder="${source === 'github' ? 'jakecapmeil/kestrel@main:models/riegel.json' : 'owner/model-name'}" autocomplete="off" required>
+          <p class="k-small">A name like <code>owner/name</code>, a link, or <code>owner/name@branch:path/kestrel.json</code>. Kestrel reads only <code>kestrel.json</code> and <code>README.md</code>, and never runs anything.</p>
+          <details><summary class="k-small">Private repository?</summary>
+            <label class="k-label" for="impTok">Access token</label><input class="k-input" id="impTok" type="password" autocomplete="off">
+            <p class="k-small">Used for this import only and never stored.</p></details>
+          <div class="k-row"><button class="k-btn primary">Preview</button></div>
+        </form>
+        <div id="impOut"></div>
+      </div>
+      <aside>
+        <section class="lab-panel"><h2>What is checked</h2>
+          <p class="k-small">The file goes through the same validation as an upload: known kinds only, numbers only, 1 MB at most. You see the result before anything is saved.</p>
+          <p class="k-small">The model card's licence and base model carry over. The repository link is kept, so you can update from source later.</p></section>
+        <section class="lab-panel"><h2>No kestrel.json yet?</h2>
+          <p class="k-small">Start from a tiny valid file, edit the numbers, and commit it to any repository.</p>
+          <button class="k-btn small" type="button" id="impStarter">Download a starter</button></section>
+      </aside>
+    </div>`);
+    $lab.querySelectorAll('[data-src]').forEach((b) => { b.onclick = () => { source = b.dataset.src; const v = $('impRepo').value; draw(); $('impRepo').value = v; }; });
+    $('impStarter').onclick = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(STARTER, null, 2) + '\n'], { type: 'application/json' }));
+      a.download = 'kestrel.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    $('impForm').onsubmit = (e) => {
+      e.preventDefault();
+      attempt(async () => {
+        const req = { source, repo: $('impRepo').value.trim(), token: $('impTok').value.trim() };
+        const p = await api('/api/lab/import', { method: 'POST', body: JSON.stringify({ ...req, dry: true }) });
+        $('impOut').innerHTML = html`<section class="lab-panel"><h2>${p.model.name} <span class="k-small">${p.model.version}</span></h2>
+          <div class="lab-model-meta"><span class="lab-chip">${TASK_LABEL[p.model.task] || p.model.task}</span><span class="lab-chip">${KIND_LABEL[p.model.kind] || p.model.kind}</span>${p.model.license ? html`<span class="lab-chip">${p.model.license}</span>` : ''}<span class="lab-chip">${fmtSize(p.model.size)}</span>${p.base_model ? html`<span class="lab-chip red">fine-tuned from ${p.base_model}</span>` : ''}</div>
+          <p class="k-small">${p.model.description || 'No description.'}</p>
+          <p class="k-small">Read: <code>${p.files.model}</code>${p.files.readme ? html`, <code>${p.files.readme}</code>` : ' (no README.md, so no model card)'}. Valid.</p>
+          ${p.update_of ? html`<p class="k-small k-good">You already imported this file as version ${p.update_of.version || '–'}. Importing adds a new version.</p>` : html`<label class="k-check"><input type="checkbox" id="impPrivate"> Private: only I can see and use it</label>`}
+          <div class="k-row"><button class="k-btn primary" id="impGo" type="button">${p.update_of ? 'Add as a new version' : 'Import'}</button></div></section>`.s;
+        $('impGo').onclick = (ev) => attempt(async () => {
+          const out = await api('/api/lab/import', { method: 'POST', body: JSON.stringify({ ...req, dry: false, visibility: $('impPrivate')?.checked ? 'private' : 'public' }) });
+          toast(out.updated ? 'Updated.' : 'Imported.');
+          location.hash = `#/m/${encodeURIComponent(out.id)}/files`;
+        }, ev.currentTarget);
+      }, e.submitter);
+    };
+  };
+  draw();
+}
+
+// ---------- workbench: test models on your own PRs, then decide
+
+async function viewWorkbench() {
+  if (!(await signedIn())) {
+    render(html`<div class="k-kicker">Workbench</div>${title('Workbench')}<section class="lab-panel"><p>Sign in to Kestrel to test models on your own race results.</p><a class="k-btn primary" href="/">Sign in</a></section>`);
+    return;
+  }
+  const want = new URLSearchParams(location.hash.split('?')[1] || '').get('m') || '';
+  const list = await attempt(() => api('/api/lab/models'));
+  if (!list) return;
+  const models = list.models.filter((m) => m.task !== 'marathon');
+  const picked = new Set(want ? [want] : models.filter((m) => m.builtin).slice(0, 2).map((m) => m.id));
+  render(html`
+  <div class="k-kicker">Workbench</div>
+  ${title('Test models on your results')}
+  <div class="lab-page">
+    <div>
+      <section class="lab-panel"><h2>Plan</h2>
+        <p class="k-small">Each model predicts every PR you have from your <i>other</i> PRs, then Kestrel compares that with what you really ran. Nothing is saved or changed.</p>
+        <div class="lab-pick">${models.map((m) => html`<label class="k-check"><input type="checkbox" value="${m.id}" ${picked.has(m.id) ? raw('checked') : ''}> <span><b>${m.name}</b> <span class="k-small">${m.version} · ${TASK_LABEL[m.task]} · ${m.owner}</span></span></label>`)}</div>
+        <div class="k-row"><button class="k-btn primary" type="button" id="wbRun">Run on my PRs</button></div></section>
+      <div id="wbOut"></div>
+    </div>
+    <aside><section class="lab-panel"><h2>Act</h2>
+      <p class="k-small">When a model beats the one you use, press <b>Use this model</b> under its results. That sets it as your default for that task in Kestrel. You can switch back any time.</p>
+      <p class="k-small">You need at least two PRs per task. Add them in Kestrel under You.</p></section></aside>
+  </div>`);
+  $('wbRun').onclick = (e) => attempt(async () => {
+    const ids = [...$lab.querySelectorAll('.lab-pick input:checked')].map((i) => i.value).slice(0, 4);
+    if (!ids.length) throw new Error('Pick at least one model.');
+    const out = await api('/api/lab/workbench', { method: 'POST', body: JSON.stringify({ models: ids }) });
+    const pct = (x) => `${x > 0 ? '+' : ''}${(x * 100).toFixed(1)}%`;
+    $('wbOut').innerHTML = out.results.map((r) => html`<section class="lab-panel"><h2>${r.name} <span class="k-small">${r.version}</span></h2>
+      ${r.rows.length ? html`<div class="lab-stats"><div><b>${(r.mae * 100).toFixed(1)}%</b><span>average error</span></div><div><b>${Math.round(r.coverage * 100)}%</b><span>inside the 80% range</span></div><div><b>${r.rows.length}</b><span>results tested</span></div></div>
+        <table class="lab-table"><thead><tr><th>Event</th><th>You ran</th><th>Model said</th><th>Off by</th></tr></thead><tbody>${r.rows.map((x) => html`<tr><td>${x.label}</td><td>${fmtTime(x.actual)}</td><td>${fmtTime(x.predicted)} <span class="k-small">(${fmtTime(x.lo)}–${fmtTime(x.hi)})</span></td><td>${pct(x.err)}</td></tr>`)}</tbody></table>
+        <div class="k-row"><button class="k-btn small" type="button" data-use="${r.id}" data-task="${r.task}">Use this model</button></div>`
+      : html`<p class="k-small">${r.note}</p>`}</section>`.s).join('');
+    $lab.querySelectorAll('[data-use]').forEach((b) => { b.onclick = () => attempt(async () => { await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [b.dataset.task]: b.dataset.use } }) }); toast('Set as your model in Kestrel.'); }, b); });
+  }, e.currentTarget);
+}
+
+// ---------- providers: what powers Kestrel AI (the key stays in this browser)
+
+async function viewProviders() {
+  let state = AI.loadAi();
+  const draw = (id) => {
+    const p = AI.PROVIDERS[id];
+    const c = AI.configFor(state, id);
+    render(html`
+    <div class="k-kicker">Providers</div>
+    ${title('What powers Kestrel AI')}
+    <div class="lab-page">
+      <form id="provForm" class="lab-panel">
+        <p class="k-small">Kestrel is the coach: the plan rules, your data and the safety checks are the same whatever model you choose. Your key stays in this browser and goes straight to the provider, never to Kestrel.</p>
+        <label class="k-label" for="provP">Provider</label>
+        <select class="k-input" id="provP" name="provider">${Object.entries(AI.PROVIDERS).map(([k, v]) => html`<option value="${k}" ${k === id ? raw('selected') : ''}>${v.label}</option>`)}</select>
+        ${p.kind === 'kestrel' ? html`<p class="k-small">Free, with a daily limit. Runs on Google Gemini, with an open-weight Llama model on Cloudflare as backup.</p>` : html`
+        <label class="k-label" for="provB">Server address</label><input class="k-input" id="provB" name="base" value="${c.base}" placeholder="https://…/v1" required>
+        <label class="k-label" for="provM">Model</label><div class="k-row" style="margin-top:0"><input class="k-input grow" id="provM" name="model" value="${c.model}" list="provList" placeholder="model name" required><button type="button" class="k-btn small" id="provLs">List models</button></div><datalist id="provList"></datalist>
+        <label class="k-label" for="provK">API key ${p.needsKey ? '' : '(optional)'}</label><input class="k-input" id="provK" name="key" type="password" value="${c.key}" autocomplete="off" ${p.needsKey ? raw('required') : ''}>
+        <p class="k-small">${p.keyUrl ? html`<a href="${p.keyUrl}" target="_blank" rel="noopener">Get a key</a>` : ''}</p>
+        ${p.local ? html`<p class="k-small">${id === 'ollama'
+          ? html`Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, run <code>ollama pull ${c.model || 'llama3.2'}</code>, then start it so this site may call it: <code>OLLAMA_ORIGINS=${location.origin} ollama serve</code>`
+          : html`In LM Studio, load a model, start the local server and turn on "Enable CORS".`}</p>` : ''}`}
+        <div class="k-row"><button class="k-btn primary">Save</button><button type="button" class="k-btn" id="provTest">Test</button></div>
+        <p class="k-small" id="provMsg"></p>
+      </form>
+      <aside>
+        <section class="lab-panel"><h2>In use now</h2><p><b>${AI.describe(AI.loadAi())}</b></p><p class="k-small">Kestrel's coach and the AI tools in the app use this.</p></section>
+        <section class="lab-panel"><h2>Tools (MCP)</h2><p class="k-small">Kestrel also speaks MCP at <code>${location.origin}/mcp/</code>, so Claude, Cursor and other agents can read your plan and log with your sign-in.</p></section>
+      </aside>
+    </div>`);
+    const f = $('provForm');
+    const collect = () => {
+      const v = Object.fromEntries(new FormData(f).entries());
+      const next = { provider: v.provider, configs: { ...state.configs } };
+      if (id !== 'kestrel') next.configs[id] = { base: (v.base || '').trim(), model: (v.model || '').trim(), key: (v.key || '').trim() };
+      return next;
+    };
+    $('provP').onchange = () => { const next = $('provP').value; state = { ...collect(), provider: state.provider }; draw(next); };
+    f.onsubmit = (e) => { e.preventDefault(); state = collect(); AI.saveAi(state); toast(`Kestrel AI now runs on ${AI.describe(state)}.`); draw(state.provider); };
+    $('provTest').onclick = async (e) => {
+      const msg = $('provMsg');
+      e.currentTarget.disabled = true;
+      msg.textContent = 'Testing…';
+      msg.className = 'k-small';
+      try {
+        const apiFetch = async (path, opts) => {
+          const q = JSON.parse(opts.body).messages.at(-1).content;
+          const r = await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: [{ role: 'user', text: q }] }) });
+          return { text: r.answer };
+        };
+        const out = await AI.complete(collect(), 'Reply in under ten words.', [{ role: 'user', content: 'Say hello to a runner.' }], { apiFetch });
+        msg.textContent = `Works: "${out.slice(0, 120)}"`;
+        msg.className = 'k-small k-good';
+      } catch (err) { msg.textContent = err.message; msg.className = 'k-small k-bad'; } finally { e.currentTarget.disabled = false; }
+    };
+    if ($('provLs')) $('provLs').onclick = async () => {
+      const msg = $('provMsg');
+      try {
+        const names = await AI.listModels(collect(), id);
+        $('provList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+        msg.textContent = names.length ? `${names.length} models found. Start typing in Model to pick one.` : 'The server did not list any models.';
+        msg.className = 'k-small';
+      } catch (err) { msg.textContent = err.message; msg.className = 'k-small k-bad'; }
+    };
+  };
+  draw(state.provider);
+}
+
 // ---------- boot
 
 async function signedIn() {
@@ -453,10 +715,17 @@ async function signedIn() {
 function route() {
   const h = location.hash.replace(/^#/, '') || '/';
   const [path] = h.split('?');
-  const nav = path.startsWith('/m/') ? 'home' : path === '/' || path === '/lab' ? 'home' : path === '/models' ? 'home' : path.slice(1);
-  document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('on', a.dataset.nav === nav));
-  if (path.startsWith('/m/')) return viewModel(decodeURIComponent(path.slice(3)));
+  const nav = path.startsWith('/m/') || path === '/models' ? 'models' : path === '/' ? 'home' : path.slice(1);
+  document.querySelectorAll('[data-nav]').forEach((a) => { const on = a.dataset.nav === nav; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  if (path.startsWith('/m/')) {
+    const rest = path.slice(3).split('/');
+    const tab = MODEL_TABS.some(([k]) => k === rest[rest.length - 1]) ? rest.pop() : 'card';
+    return viewModel(decodeURIComponent(rest.join('/')), tab);
+  }
   if (path === '/new') return viewNew();
+  if (path === '/import') return viewImport();
+  if (path === '/workbench') return viewWorkbench();
+  if (path === '/providers') return viewProviders();
   if (path === '/docs') return viewDocs();
   if (path === '/me') return viewMe();
   if (path === '/models') return viewModels();

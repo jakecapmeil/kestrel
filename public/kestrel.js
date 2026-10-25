@@ -71,22 +71,43 @@ function openApp() {
   $('kApp').hidden = false;
 }
 
+const HAWK_PATH = 'M5 17c4-1 7-4 9-8 1 3 3 5 6 5l7-3c-2 4-5 6-9 7l-3 6-2-5c-3 0-6-1-8-2z';
+
 function hero() {
   return html`<div class="k-hero">
+    <svg class="k-watermark" viewBox="0 0 32 32" aria-hidden="true"><path d="${HAWK_PATH}" fill="none" stroke="currentColor" stroke-opacity=".22" stroke-width=".3" stroke-linejoin="round"/><circle cx="20.5" cy="12.6" r=".75" fill="var(--accent)"/></svg>
     <div class="k-kicker">Open-source AI running coaching</div>
     <h1 class="k-display">Train together.<br>Race <span class="k-accent-text">smarter.</span></h1>
-    <p class="k-lede">AI coaching that running apps charge for, free and open source. Kestrel builds your plan and changes it day to day, syncs your watch, predicts your races, and keeps your whole team on one calendar.</p>
-    <ol class="k-points">
-      <li><span class="n">01</span><b>A coach that adapts</b>Plans by weekly mileage that move with how you feel, sleep and race. Change a day by telling it you can't make it.</li>
-      <li><span class="n">02</span><b>Your team, one place</b>Anyone can start a school team: calendar, meets, RSVPs, availability, posts and team mileage.</li>
-      <li><span class="n">03</span><b>Any AI, open models</b>Free built-in AI, your own key, or a model on your laptop. Race predictions come from open models anyone can publish in Kestrel Lab.</li>
-    </ol>
+    <p class="k-lede">The coaching that running apps charge for, free and open source. Kestrel builds your plan, changes it day to day, predicts your races, and keeps your whole team on one calendar.</p>
   </div>`;
+}
+
+function showcase() {
+  const phone = (src, alt, title, text) => html`<figure class="k-shot"><div class="k-phone"><img src="${src}" alt="${alt}" width="780" height="1688" loading="lazy"></div><figcaption><b>${title}</b>${text}</figcaption></figure>`;
+  return html`<section class="k-showcase" aria-label="What Kestrel does">
+    <h2 class="k-section-title">Everything the team needs,<br>in your pocket.</h2>
+    <div class="k-shots">
+      ${phone('/shots/phone-schedule.jpg', 'The team calendar for October with practices and a meet marked', 'One calendar', 'Practices, meets and who is coming, for the whole team.')}
+      ${phone('/shots/phone-day.jpg', 'A meet day with the bus time, location and who is coming', 'One tap to RSVP', 'See the bus time and who is in, without a group text.')}
+      ${phone('/shots/phone-train.jpg', "Today's workout and the week ahead in a training plan", 'A coach that adapts', 'Plans by weekly mileage that move with how you feel. Tell it you cannot make a day and it adjusts.')}
+    </div>
+    <div class="k-lablead">
+      <div class="k-lablead-copy">
+        <span class="k-chip ink">Kestrel Lab</span>
+        <h2 class="k-section-title">Kestrel is simple.<br>The Lab is yours.</h2>
+        <p class="k-lede">Kestrel works out of the box. Open the Lab to choose the models behind your predictions, test them on your own races, fork and fine-tune them, and move them to and from GitHub and Hugging Face. Models are plain files of numbers, never code.</p>
+        <ul class="k-checks"><li>Test any model on your own PRs before you switch</li><li>Import from and push to GitHub or Hugging Face</li><li>Bring your own AI key, or run a model on your laptop</li></ul>
+        <a class="k-btn primary" href="/lab">Open Kestrel Lab</a>
+      </div>
+      <div class="k-browser"><img src="/shots/lab-model.jpg" alt="A model page in Kestrel Lab with Fork, Push and version tabs" width="2560" height="1600" loading="lazy"></div>
+    </div>
+    <footer class="k-foot"><img src="/kestrel.svg" alt="" width="28" height="28"><span>kestrel</span><span class="k-small">Free and open source (MIT). <a href="${REPO_URL}" target="_blank" rel="noopener">Read the code</a></span></footer>
+  </section>`;
 }
 
 function renderLanding(mode = 'signin', message = '') {
   const signup = mode === 'signup';
-  gate(html`<div class="k-landing">${hero()}
+  gate(html`<header class="k-top"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="44" height="44"><span class="k-top-word">kestrel</span></a><a class="k-btn small ghost" href="/lab">Kestrel Lab</a></header><div class="k-landing">${hero()}
   <div class="k-auth">
     <span class="k-chip accent k-auth-chip">free &amp; open source</span>
     <h2>${signup ? 'Create your account' : 'Sign in'}</h2>
@@ -104,7 +125,7 @@ function renderLanding(mode = 'signin', message = '') {
       ${signup ? '' : html`<button class="k-link" type="button" id="kForgot">Forgot password?</button>`}
     </div>
     <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
-  </div></div>`);
+  </div></div>${showcase()}`);
   $('kGoogle').onclick = (e) => attempt(async () => {
     const { error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
     if (error) throw error;
@@ -365,25 +386,18 @@ function dialog() {
 window.kestrelRenderSettings = async () => {
   const ai = $('kAiBody');
   if (ai) {
-    ai.innerHTML = html`<p class="k-small">Kestrel is the coach; you choose the model behind it. The free default runs on Gemini. Or use your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer (Ollama, LM Studio). Keys stay in this browser.</p>
-      <div class="k-row"><span>Powered by <b>${AI.describe(K.ai)}</b></span><button class="k-btn small" type="button" id="kAiChange">Change</button></div>`.s;
-    $('kAiChange').onclick = openAiSettings;
+    ai.innerHTML = html`<p class="k-small">Kestrel is the coach. It works out of the box on a free model. To use your own key, or a model on your own computer, set it up in Kestrel Lab.</p>
+      <div class="k-row spread"><span>Powered by <b>${AI.describe(K.ai)}</b></span><a class="k-btn small" href="/lab#/providers">Customise in Lab</a></div>`.s;
   }
   const mb = $('kModelsBody');
   if (mb) {
     const labels = { race: 'Race times (800 m and up)', short: 'Sprints and steeple', marathon: 'Marathon' };
     const lists = await attempt(() => Promise.all(Object.keys(labels).map((t) => api(`/api/models?task=${t}`))));
     if (!lists) return;
-    mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Pick one for each, or browse and publish models in <a href="/lab">Kestrel Lab</a>.</p>
-      ${Object.keys(labels).map((t, i) => html`<label class="k-label" for="kM_${t}">${labels[t]}</label>
-        <select class="k-input" id="kM_${t}" data-task="${t}">${lists[i].models.map((m) => html`<option value="${m.id}" ${K.me.models[t] === m.id ? raw('selected') : ''}>${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}</option>`)}</select>`)}`.s;
-    mb.querySelectorAll('select[data-task]').forEach((sel) => {
-      sel.onchange = () => attempt(async () => {
-        K.me = await api('/api/me', { method: 'PUT', body: JSON.stringify({ models: { [sel.dataset.task]: sel.value } }) });
-        toast('Model switched. Fitness now uses it.');
-        await window.hawksReload();
-      });
-    });
+    const nameOf = (t, i) => { const m = lists[i].models.find((x) => x.id === K.me.models[t]); return m ? `${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}` : 'Kestrel default'; };
+    mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Kestrel picks a good one for each. To compare models on your own results, switch, fork or publish one, open Kestrel Lab.</p>
+      ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small" style="margin:0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
+      <div class="k-row"><a class="k-btn small primary" href="/lab#/workbench">Test models on my PRs</a><a class="k-btn small" href="/lab#/models">Browse models</a></div>`.s;
   }
   const acct = $('kAccountBody');
   if (acct) {
@@ -403,77 +417,8 @@ window.kestrelRenderSettings = async () => {
 
 window.kestrelRenderPower = (el) => {
   if (!el) return;
-  el.innerHTML = html`<span>Powered by <b>${AI.describe(K.ai)}</b></span> <button class="k-link" type="button" id="kPowerChange">Change</button>`.s;
-  $('kPowerChange').onclick = openAiSettings;
+  el.innerHTML = html`<span>Powered by <b>${AI.describe(K.ai)}</b></span> <a class="k-link" href="/lab#/providers">Customise in Lab</a>`.s;
 };
-
-function openAiSettings() {
-  const d = dialog();
-  const draw = (id) => {
-    const p = AI.PROVIDERS[id];
-    const c = AI.configFor(K.ai, id);
-    d.innerHTML = html`<h2>What powers Kestrel AI</h2>
-      <p class="k-small">Kestrel is the coach: the plan rules, your data and the safety checks are the same whatever model you pick.</p>
-      <form id="kAiForm">
-        <label class="k-label" for="kAiP">Provider</label>
-        <select class="k-input" id="kAiP" name="provider">${Object.entries(AI.PROVIDERS).map(([k, v]) => html`<option value="${k}" ${k === id ? raw('selected') : ''}>${v.label}</option>`)}</select>
-        ${p.kind === 'kestrel' ? html`<p class="k-small">Free, with a daily limit. Runs on Google Gemini, with an open-weight Llama model on Cloudflare as backup.</p>` : html`
-        <label class="k-label" for="kAiB">Server address</label><input class="k-input" id="kAiB" name="base" value="${c.base}" placeholder="https://…/v1" required>
-        <label class="k-label" for="kAiM">Model</label><div class="k-row"><input class="k-input grow" id="kAiM" name="model" value="${c.model}" list="kModelList" placeholder="model name" required><button type="button" class="k-btn small" id="kListModels">List models</button></div><datalist id="kModelList"></datalist>
-        <label class="k-label" for="kAiK">API key ${p.needsKey ? '' : '(optional)'}</label><input class="k-input" id="kAiK" name="key" type="password" value="${c.key}" autocomplete="off" ${p.needsKey ? raw('required') : ''}>
-        <p class="k-small">Kept only in this browser and sent straight to ${p.label}, never to Kestrel. ${p.keyUrl ? html`<a href="${p.keyUrl}" target="_blank" rel="noopener">Get a key</a>` : ''}</p>
-        ${p.local ? html`<p class="k-small">${id === 'ollama'
-          ? html`Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, run <code>ollama pull ${c.model || 'llama3.2'}</code>, then start it so this site may call it: <code>OLLAMA_ORIGINS=${location.origin} ollama serve</code>`
-          : html`In LM Studio, load a model, start the local server and turn on "Enable CORS".`}</p>` : ''}`}
-        <div class="k-row"><button class="k-btn primary">Save</button><button type="button" class="k-btn" id="kAiTest">Test</button><button type="button" class="k-link" id="kAiClose">Close</button></div>
-        <p class="k-small" id="kAiMsg"></p>
-      </form>`.s;
-    const f = $('kAiForm');
-    const collect = () => {
-      const v = form(f);
-      const next = { provider: v.provider, configs: { ...K.ai.configs } };
-      if (id !== 'kestrel') next.configs[id] = { base: (v.base || '').trim(), model: (v.model || '').trim(), key: (v.key || '').trim() };
-      return next;
-    };
-    $('kAiP').onchange = () => { const next = $('kAiP').value; K.ai = { ...collect(), provider: K.ai.provider }; draw(next); };
-    f.onsubmit = (e) => { e.preventDefault(); K.ai = collect(); AI.saveAi(K.ai); d.close(); toast(`Kestrel AI now runs on ${AI.describe(K.ai)}.`); window.kestrelRenderSettings(); window.kestrelRenderPower($('kPower')); };
-    $('kAiClose').onclick = () => d.close();
-    $('kAiTest').onclick = async (e) => {
-      const msg = $('kAiMsg');
-      e.currentTarget.disabled = true;
-      msg.textContent = 'Testing…';
-      msg.className = 'k-small';
-      try {
-        const out = await AI.complete(collect(), 'Reply in under ten words.', [{ role: 'user', content: 'Say hello to a runner.' }], { apiFetch: kestrelChatOnly });
-        msg.textContent = `Works: "${out.slice(0, 120)}"`;
-        msg.className = 'k-small k-good';
-      } catch (err) {
-        msg.textContent = err.message;
-        msg.className = 'k-small k-bad';
-      } finally { e.currentTarget.disabled = false; }
-    };
-    const lm = $('kListModels');
-    if (lm) lm.onclick = async () => {
-      const msg = $('kAiMsg');
-      try {
-        const names = await AI.listModels(collect(), id);
-        $('kModelList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
-        msg.textContent = names.length ? `${names.length} models found. Start typing in Model to pick one.` : 'The server did not list any models.';
-        msg.className = 'k-small';
-      } catch (err) { msg.textContent = err.message; msg.className = 'k-small k-bad'; }
-    };
-  };
-  draw(K.ai.provider);
-  d.showModal();
-}
-
-// The free default, used by the settings Test button: one question through the coach endpoint.
-async function kestrelChatOnly(path, opts) {
-  const body = JSON.parse(opts.body);
-  const q = body.messages[body.messages.length - 1].content;
-  const r = await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: [{ role: 'user', text: q }] }) });
-  return { text: r.answer };
-}
 
 // ---------- Kestrel AI: the coach chat with whatever model the athlete picked
 

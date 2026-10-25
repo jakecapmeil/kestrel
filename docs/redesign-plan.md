@@ -131,7 +131,7 @@ Team tab becomes five segments: **Feed · Chat · Calendar · Roster · Mileage*
 
 ### Data
 
-The schema already has `posts` and `comments` (day notes). New (migration `0003_team_social.sql`):
+The schema already has `posts` and `comments` (day notes). New (migration `0004_team_social.sql`; `0003` is the Lab versions migration):
 
 ```
 channels(id, team_id, name, kind[general|announce|event|group], event_id, created_by, created_at)
@@ -222,9 +222,18 @@ Each phase ships on its own and leaves the app working.
 | **0. Fix what the push broke** | Hide landing for signed-in users (route it to `/welcome` or show it only signed out); fix hero clipping; one `.k-btn`; correct plan-level copy; fix tab-label collision; "not on a team" empty state instead of a network error; rename `hawks*` storage keys (with migration read); fix coach prompt copy. | S |
 | **1. Design system** | `public/ds/*` (tokens, base, components, hawk sprite), living style guide, final hawk redraw (header, avatar, empty, loading, favicon). New tokens aliased over old names so nothing breaks. | M |
 | **2. App shell** | Bottom tab bar / desktop rail, new header, Kestrel · Lab switcher. Port screens one at a time: Schedule → Train → You. Delete `kestrel.css` overrides screen by screen; split `index.html` into per-view modules as each moves. | L |
+
+_Status: **shell shipped** (tab bar, rail, sticky header, switcher in `ds/shell.css`; no-team empty state; AI settings and model picker moved to Lab). **Not done:** porting Schedule, Train and You to ds components, splitting `index.html`, deleting the `kestrel.css` compat layer, and the Train "today" home and coach bottom sheet from section 7._
+
 | **3. Team** | Migration `0003`, Feed with RSVP cards and announcements, reactions, seen-by, then chat via Durable Object, then safety tooling and retention. | L |
 | **4. Lab** | Dense shell, model page tabs, versions and lineage, Import (GitHub first, then Hugging Face), Export, Workbench, Providers moved from the main app. | L |
+
+_Status: **shipped** (migration `0003_lab_versions.sql`, `src/labsync.js`, Lab pages Import / Workbench / Providers, model tabs, fork, versions, lineage). Hugging Face endpoints were checked against the Hub OpenAPI spec. Import was tested against live GitHub and Hugging Face; **export was tested only against mocked endpoints**, not live. Not built: webhook auto-publish, token-remembering option, diff between versions._
+
 | **5. Landing and brand** | Rebuilt landing with the hawk, real product screenshots instead of emoji demo boxes, Lab landing copy. | S |
+
+_Status: **shipped** (signed-out landing with hawk mark and watermark, three real phone screenshots, Lab section; Lab home rewritten). Screenshots are of a local demo team and live in `public/shots/`; retake them when the UI changes._
+
 
 Risks:
 - `index.html` is a 6.8k-line monolith with global state; the port will find coupling. Mitigation: port per view and keep the old view alive behind the same tab until the new one is done.

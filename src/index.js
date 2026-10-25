@@ -489,7 +489,12 @@ async function syncBudget(db, me) {
 // Leave-one-out on your own PRs: hide each result, ask the model for it from the others, compare. Nothing is saved.
 async function workbench(db, me, ids) {
   const prs = await getPrs(db, me.id);
-  const have = EVENTS.filter((e) => prs[e.key]?.time).map((e) => ({ key: e.key, m: e.m, surf: e.surf, steeple: !!e.steeple, sec: parseTime(prs[e.key].time), ev: e })).filter((p) => p.sec > 0);
+  // PRs are stored under the app's names (5K, 2000 SC, XC 5K); the Lab's events use metres.
+  const PR_TO_EVENT = { '100': '100', '200': '200', '400': '400', '600': '600', '800': '800', '1000': '1000', '1600': '1600', '3200': '3200', '5K': '5000', '2000 SC': 'S2000', '3000 SC': 'S3000', 'XC 5K': 'xc5k' };
+  const have = Object.entries(PR_TO_EVENT).filter(([k]) => prs[k]?.time).map(([k, key]) => {
+    const e = EVENT.get(key);
+    return { key: e.key, m: e.m, surf: e.surf, steeple: !!e.steeple, sec: parseTime(prs[k].time), ev: e };
+  }).filter((p) => p.sec > 0);
   const out = [];
   for (const id of ids.slice(0, 4)) {
     const model = await findModel(db, me.id, id);

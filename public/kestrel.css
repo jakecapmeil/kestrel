@@ -91,10 +91,6 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-display{font-size:clamp(40px,11vw,104px);line-height:.95;letter-spacing:-.04em;margin:10px 0 22px;font-weight:800;overflow-wrap:anywhere;}
 .k-title{font-size:clamp(36px,8vw,60px);line-height:1;letter-spacing:-.035em;margin:8px 0 22px;font-weight:800;}
 .k-lede{font-size:19px;line-height:1.45;max-width:36em;color:var(--text-2);margin:0 0 10px;}
-.k-points{list-style:none;padding:0;margin:26px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--s-3);}
-.k-points li{background:var(--surface);border-radius:var(--r-lg);padding:var(--s-4) var(--s-4) var(--s-5);font-size:14.5px;color:var(--text-2);box-shadow:var(--shadow-1);}
-.k-points li b{display:block;color:var(--text);font:700 17px var(--font-display);margin:4px 0 4px;}
-.k-points .n{font:500 12px var(--font-mono);color:var(--accent-ink);}
 .k-auth{background:var(--surface);border-radius:var(--r-xl);padding:var(--s-5);box-shadow:var(--shadow-2);align-self:start;position:relative;}
 .k-auth.narrow{max-width:480px;margin:24px auto 0;}
 .k-auth h2{margin:0 0 14px;font-size:24px;}
@@ -107,4 +103,41 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-panel .k-btn{margin-top:14px;}
 @media (min-width:900px){
   .k-landing{grid-template-columns:1.35fr 1fr;gap:64px;padding-top:24px;}
+}
+
+/* landing: hero watermark, product showcase */
+.k-hero{position:relative;isolation:isolate;}
+.k-watermark{position:absolute;z-index:-1;right:-6%;bottom:-70px;width:min(70vw,380px);color:var(--text);pointer-events:none;}
+.k-auth a,.k-foot a{color:var(--text);text-decoration-color:var(--accent);text-underline-offset:3px;}
+.k-top{display:flex;align-items:center;justify-content:space-between;padding:var(--s-3) 0 var(--s-2);}
+.k-top .k-brand{gap:var(--s-3);}
+.k-top .k-brand img{border-radius:13px;}
+.k-top-word{font:800 30px var(--font-display);letter-spacing:-.04em;}
+.k-section-title{font-size:clamp(30px,5vw,52px);line-height:1.02;letter-spacing:-.035em;margin:0 0 var(--s-5);font-weight:800;}
+.k-showcase{margin-top:var(--s-8);display:grid;gap:var(--s-8);}
+.k-shots{display:grid;gap:var(--s-6);grid-template-columns:repeat(auto-fit,minmax(230px,1fr));align-items:start;}
+.k-shot{margin:0;}
+.k-phone{padding:8px;border-radius:38px;background:var(--inverse);box-shadow:var(--shadow-2);}
+.k-phone img{display:block;width:100%;height:auto;border-radius:30px;}
+.k-shot figcaption{margin-top:var(--s-4);color:var(--text-2);font-size:15px;line-height:1.45;}
+.k-shot figcaption b{display:block;color:var(--text);font:700 19px var(--font-display);margin-bottom:4px;}
+.k-lablead{display:grid;gap:var(--s-6);align-items:center;padding:var(--s-6) var(--s-5);border-radius:var(--r-xl);background:var(--surface);box-shadow:var(--shadow-1);}
+.k-lablead .k-chip{margin-bottom:var(--s-4);}
+.k-checks{list-style:none;margin:var(--s-4) 0 var(--s-5);padding:0;display:grid;gap:var(--s-2);}
+.k-checks li{position:relative;padding-left:28px;font-size:15.5px;}
+.k-checks li::before{content:"";position:absolute;left:0;top:3px;width:18px;height:18px;border-radius:50%;background:var(--accent);}
+.k-checks li::after{content:"";position:absolute;left:6px;top:7px;width:5px;height:9px;border:solid var(--on-accent);border-width:0 2px 2px 0;transform:rotate(40deg);}
+.k-browser{border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-2);background:var(--inverse);padding:6px;}
+.k-browser img{display:block;width:100%;height:auto;border-radius:calc(var(--r-lg) - 6px);}
+.k-foot{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap;padding:var(--s-5) 0;border-top:1px solid var(--line);font:800 18px var(--font-display);letter-spacing:-.03em;}
+.k-foot img{border-radius:8px;}
+.k-foot .k-small{margin:0 0 0 auto;font:400 13.5px var(--font-ui);letter-spacing:0;}
+@media (min-width:900px){
+  .k-lablead{grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);padding:var(--s-7) var(--s-7);}
+  .k-watermark{right:4%;bottom:-175px;width:520px;}
+}
+@media (max-width:699px){
+  .k-shots{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:74%;overflow-x:auto;scroll-snap-type:x mandatory;gap:var(--s-4);margin:0 -16px;padding:0 16px var(--s-3);scrollbar-width:none;}
+  .k-shots::-webkit-scrollbar{display:none;}
+  .k-shot{scroll-snap-align:center;}
 }
