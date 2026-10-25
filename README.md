@@ -74,9 +74,9 @@ To develop locally without Supabase:
 - Start the server with `npx wrangler dev --port 8788 --var SUPABASE_URL:http://localhost:8799 --var SUPABASE_KEY:stub`.
 - Sign in with any email and the password `password`.
 
-## Origin, AI use and credits
+## Origin and credits
 
-Kestrel started as a calendar for the Hunter Kessler running team, so everyone could say whether they were coming to practice, and grew feature by feature into a training platform for any team. It is an entry in the 2026 Congressional App Challenge. How AI tools were used to build it is disclosed in [AI_USAGE.md](AI_USAGE.md); the libraries, services and datasets it builds on are in [THIRD_PARTY.md](THIRD_PARTY.md).
+Kestrel started as a calendar for the Hunter Kessler running team, so everyone could say whether they were coming to practice, and grew feature by feature into a training platform for any team. It is an entry in the 2026 Congressional App Challenge. The libraries, services and datasets it builds on are in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Licence
 
