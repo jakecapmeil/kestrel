@@ -17,6 +17,7 @@ import { gradeRun } from './grade.js';
 import { VC_RE } from './conditions.js';
 import { courseAt } from './courses.js';
 import { vo2rFor, withPlans } from './coach.js';
+import { splitsFromFile } from './fitlaps.js';
 import { looksLikeTrack, snap100, trackMilesFromMeters, TRACK_MILE_M } from './workouts.js';
 
 export class IntervalsError extends Error {}
@@ -26,7 +27,7 @@ const RUN_TYPES = new Set(['Run', 'TrailRun', 'VirtualRun', 'Treadmill', 'TrackR
 const FIRST_SYNC_DAYS = 28;
 const MAX_LAP_FETCHES = 8; // Workers cap subrequests per invocation
 const IMPORT_WINDOW_DAYS = 90;
-const IMPORT_LAP_FETCHES = 20;
+const IMPORT_LAP_FETCHES = 12; // each run costs two requests (intervals + original file)
 const IMPORT_MAX_YEARS = 6;
 const AI_REPORT_DAYS = 10; // only recent sessions get an AI report
 export const SYNC_CRON = '17 * * * *';
@@ -291,6 +292,12 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
         const iv = await icu(key, `/activity/${encodeURIComponent(a.id)}/intervals`, env);
         ({ work, laps, trackM } = splitsFrom(iv?.icu_intervals));
       } catch { /* laps are a nice-to-have */ }
+      // Splits are the watch's own laps (what Garmin shows), from the original
+      // file. intervals.icu's analysed intervals are only the fallback.
+      try {
+        const file = await splitsFromFile(await fetch(`${env?.ICU_API_BASE || API}/activity/${encodeURIComponent(a.id)}/file`, { headers: { Authorization: 'Basic ' + btoa('API_KEY:' + key) } }));
+        if (file.length >= 2) laps = file;
+      } catch { /* keep the analysed intervals */ }
     }
     let gpsStart = startOf(a);
     if (!gpsStart && VC_RE.test(`${a.name || ''} ${a.description || ''}`) && gpsFetches < 8) { gpsFetches++; gpsStart = await streamStart(key, a.id, env); }
