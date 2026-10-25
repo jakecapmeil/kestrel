@@ -42,7 +42,8 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 |---|---|
 | `src/index.js` | Cloudflare Worker: the API and the rules above. |
 | `src/train/` | The training engine from [Hawks Calendar](https://github.com/jakecapmeil/hawks): plans, coach, log, fitness, workouts, watch sync, plan push, calculators. |
-| `src/models.js` | Kestrel Lab's model engine (one evaluator per model kind, plus upload validation) and the adapters the fitness engine calls. |
+| `docs/model-research.md` | Which models are on Kestrel, which to add next, and how purposes and courses work. |
+| `src/models.js` | Kestrel Lab's model engine (purposes, courses, one evaluator per model kind, plus upload validation) and the adapters the fitness engine calls. |
 | `public/index.html` | The app (the Hawks views). `public/kestrel.js` adds sign-in, teams, the AI choice and settings; `public/kestrel.css` is the design. |
 | `public/lab/` | Kestrel Lab. |
 | `migrations/` | Cloudflare D1 (SQLite) schema. |

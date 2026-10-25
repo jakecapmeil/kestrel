@@ -14,15 +14,41 @@ import LITE from '../models/hawkspredict-lite.json' with { type: 'json' };
 import SHORT from '../models/hawkspredict-short.json' with { type: 'json' };
 import MARATHON from '../models/hawkspredict-marathon.json' with { type: 'json' };
 import RIEGEL from '../models/riegel.json' with { type: 'json' };
+import VDOT from '../models/vdot.json' with { type: 'json' };
+import TANDA from '../models/tanda-2011.json' with { type: 'json' };
+import VC_FLAT from '../models/vc-flat-factor.json' with { type: 'json' };
 
-export const BUILTIN = [LITE, SHORT, MARATHON, RIEGEL].map((m) => ({ ...m, id: `kestrel/${m.slug}`, builtin: true }));
-export const DEFAULTS = { race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon' };
-export const TASKS = {
-  race: 'Race times, 800 m and up (track, cross country, road)',
-  short: 'Sprints, 400-1000 m and steeplechase',
-  marathon: 'Marathon from your last 16 weeks of training',
+// The platform's name, in one place. Server text uses it directly; /api/config hands it to the browser.
+export const PLATFORM_NAME = 'Kestrel Lab';
+
+export const BUILTIN = [LITE, SHORT, MARATHON, RIEGEL, VDOT, TANDA, VC_FLAT].map((m) => ({ ...m, id: `kestrel/${m.slug}`, builtin: true }));
+
+// Courses that can have their own models. Add one here, name it in conditions.js (courseOf), and ship a default
+// `course-transfer` model for it; athletes can then pick a model per course.
+export const COURSES = {
+  vc: { label: 'Van Cortlandt Park', blurb: 'The Bronx cross-country course: Cemetery Hill, the Back Hills, gravel and grass.' },
 };
-export const KINDS = { 'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'] };
+
+// PURPOSES are the places in the app where a model does a job. A published model declares exactly one (its `task`),
+// and an athlete picks one model per purpose. `model: false` purposes are not weight files: coaching is powered by
+// a provider (free Gemini, your own key, or a local model) chosen in Providers, never stored with a model.
+export const PURPOSES = {
+  race: { group: 'Predict', label: 'Race times, 800 m and up (track, cross country, road)', model: true },
+  short: { group: 'Predict', label: 'Sprints, 400-1000 m and steeplechase', model: true },
+  marathon: { group: 'Predict', label: 'Marathon from your last 16 weeks of training', model: true },
+  ...Object.fromEntries(Object.entries(COURSES).map(([k, c]) => [k, { group: 'Course', label: `${c.label}: what a flat-course time is worth here`, model: true, course: k }])),
+  coach: { group: 'Coach', label: 'Coaching chat and run reports', model: false },
+};
+// The purposes a weights file can fill.
+export const TASKS = Object.fromEntries(Object.entries(PURPOSES).filter(([, p]) => p.model).map(([k, p]) => [k, p.label]));
+export const DEFAULTS = {
+  race: 'kestrel/hawkspredict-lite', short: 'kestrel/hawkspredict-short', marathon: 'kestrel/hawkspredict-marathon',
+  vc: 'kestrel/vc-flat-factor',
+};
+export const KINDS = {
+  'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'],
+  vdot: ['race'], tanda: ['marathon'], 'course-transfer': Object.keys(COURSES),
+};
 export const LITE_FEATS = LITE.weights.feats;
 export const MARATHON_FEATS = MARATHON.weights.feats;
 
@@ -284,6 +310,76 @@ function riegelPredict(w, results, target) {
   return { sec: Math.exp(mu), lo: Math.exp(mu - Z80 * sd), hi: Math.exp(mu + Z80 * sd) };
 }
 
+// ---------- vdot ----------
+
+// Daniels & Gilbert (1979): oxygen cost of running at v m/min, and the fraction of VO2max a runner holds for t minutes.
+const vo2At = (v) => -4.6 + 0.182258 * v + 0.000104 * v * v;
+const pctAt = (t) => 0.8 + 0.1894393 * Math.exp(-0.012778 * t) + 0.2989558 * Math.exp(-0.1932605 * t);
+const vdotOf = (m, sec) => vo2At(m / (sec / 60)) / pctAt(sec / 60);
+
+// Seconds for `m` metres at a given VDOT: vdotOf falls as time grows, so bisect.
+function vdotTime(vdot, m) {
+  let lo = 60 * 0.5;
+  let hi = 60 * 600;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (vdotOf(m, mid) > vdot) lo = mid; else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+function vdotPredict(w, results, target) {
+  let best = null;
+  for (const r of results) {
+    const d = Math.abs(Math.log(target.m / r.m));
+    if (!best || d < best.d) best = { r, d };
+  }
+  if (!best) return null;
+  const mu = Math.log(vdotTime(vdotOf(best.r.m, best.r.sec), target.m));
+  const sd = w.sd * (1 + best.d);
+  return { sec: Math.exp(mu), lo: Math.exp(mu - Z80 * sd), hi: Math.exp(mu + Z80 * sd) };
+}
+
+// ---------- tanda ----------
+
+// Tanda (2011): marathon pace (s/km) = a + b e^(-c K) + d P, from K = mean weekly km and P = mean training pace
+// (s/km) over the 8 weeks before the race. Fitted on 22 runners at 2:47-3:36, so it answers nothing outside that.
+export function tandaPredict(w, training, today) {
+  const t0 = dayNumber(today);
+  let km = 0;
+  let min = 0;
+  let longest = 0;
+  const days = new Set();
+  for (const d of training) {
+    if (!(d.miles > 0 && d.minutes > 0) || d.type === 'cross-train') continue;
+    const off = t0 - dayNumber(d.date);
+    if (off < 1 || off > w.weeks * 7) continue;
+    km += d.miles * KM_PER_MI;
+    min += d.minutes;
+    longest = Math.max(longest, d.miles * KM_PER_MI);
+    days.add(off);
+  }
+  if (days.size < w.min_days) return null;
+  const K = km / w.weeks;
+  const P = (min * 60) / km;
+  const sec = (w.a + w.b * Math.exp(-w.c * K) + w.d * P) * 42.195;
+  if (sec < w.range_sec[0] || sec > w.range_sec[1]) return null;
+  return { sec, lo: sec - Z80 * w.see_sec, hi: sec + Z80 * w.see_sec, feats: { wk_mean: K, longest }, run_days: days.size, tanda: { km_per_week: K, pace_s_per_km: P } };
+}
+
+// ---------- course-transfer ----------
+
+// ln t_course = a + b ln t_flat + c male. toFlat undoes it. sex '' uses c/2.
+const courseLine = (w, sex) => ({ a: w.a, b: w.b, c: w.c * (sex === 'm' ? 1 : sex === 'f' ? 0 : 0.5) });
+export function toCourse(w, flatSec, sex = '') {
+  const l = courseLine(w, sex);
+  return Math.exp(l.a + l.b * Math.log(flatSec) + l.c);
+}
+export function toFlat(w, courseSec, sex = '') {
+  const l = courseLine(w, sex);
+  return Math.exp((Math.log(courseSec) - l.a - l.c) / l.b);
+}
+
 // ---------- one entry point ----------
 
 // prs: [{ m, sec, surf, key }] the athlete's PRs; ev: an EVENTS entry; sex: '', 'f' or 'm'.
@@ -292,6 +388,7 @@ export function predictEvent(model, prs, ev, sex) {
   const others = prs.filter((p) => p.key !== ev.key);
   if (!others.length) return null;
   if (model.kind === 'riegel') return riegelPredict(w, others, ev);
+  if (model.kind === 'vdot') return vdotPredict(w, others.filter((p) => !p.steeple), ev);
   if (model.kind === 'lite-trees') {
     const results = others.filter((p) => !p.steeple);
     if (!results.length) return null;
@@ -358,6 +455,23 @@ export function validateModel(m) {
   if (!w || typeof w !== 'object') throw new ModelError('weights is required');
   if (m.kind === 'lite-trees') checkTrees(w, LITE_FEATS);
   if (m.kind === 'marathon-trees') checkTrees(w, MARATHON_FEATS);
+  if (m.kind === 'vdot') {
+    if (!num(w.sd) || w.sd <= 0 || w.sd > 0.5) throw new ModelError('weights.sd must be above 0 and at most 0.5');
+  }
+  if (m.kind === 'tanda') {
+    for (const k of ['a', 'b', 'c', 'd', 'see_sec']) if (!num(w[k])) throw new ModelError(`weights.${k} must be a number`);
+    if (w.c <= 0 || w.see_sec <= 0 || w.see_sec > 3600) throw new ModelError('weights.c and weights.see_sec must be above 0 (see_sec at most 3600)');
+    if (!int(w.weeks, 1, 17)) throw new ModelError('weights.weeks: 1-16');
+    if (!int(w.min_days, 1, 113)) throw new ModelError('weights.min_days: 1-112');
+    if (!Array.isArray(w.range_sec) || w.range_sec.length !== 2 || !w.range_sec.every(num) || w.range_sec[0] <= 0 || w.range_sec[0] >= w.range_sec[1]) throw new ModelError('weights.range_sec: [shortest, longest] marathon seconds the model is valid for');
+  }
+  if (m.kind === 'course-transfer') {
+    if (![w.a, w.b, w.c].every(num)) throw new ModelError('weights.a, b and c must be numbers');
+    if (w.b < 0.5 || w.b > 1.5) throw new ModelError('weights.b must be 0.5-1.5');
+    if (Math.abs(w.a) > 2 || Math.abs(w.c) > 0.5) throw new ModelError('weights.a must be within +-2 and weights.c within +-0.5');
+    // A course is never faster than the flat: refuse a line that makes a slow runner's course time shorter than the flat time.
+    if (toCourse(w, 600, 'm') < 600 * 0.9 || toCourse(w, 1800, 'f') > 1800 * 1.5) throw new ModelError('That line gives implausible course times (outside 0.9x-1.5x the flat time)');
+  }
   if (m.kind === 'riegel') {
     if (!num(w.exponent) || w.exponent < 0.9 || w.exponent > 1.3) throw new ModelError('weights.exponent must be 0.9-1.3');
     if (!num(w.sd) || w.sd <= 0 || w.sd > 0.5) throw new ModelError('weights.sd must be above 0 and at most 0.5');
@@ -403,6 +517,7 @@ export function modelSet(picked = {}, sex = '') {
   const race = picked.race || BY_ID.get(DEFAULTS.race);
   const short = picked.short || BY_ID.get(DEFAULTS.short);
   const marathon = picked.marathon || BY_ID.get(DEFAULTS.marathon);
+  const courses = Object.fromEntries(Object.keys(COURSES).map((k) => [k, picked[k] || BY_ID.get(DEFAULTS[k])]));
   const shortEvents = short.kind === 'short-pairs' ? short.weights.events : SHORT_METERS;
   const label = (m) => ({ name: m.name, version: m.version || '' });
 
@@ -411,6 +526,7 @@ export function modelSet(picked = {}, sex = '') {
     const clean = (results || []).filter((r) => r && r.m > 0 && r.sec > 0);
     if (!clean.length) return null;
     if (race.kind === 'riegel') { const r = riegelPredict(race.weights, clean, target); return r && { ...r, buckets: 1 }; }
+    if (race.kind === 'vdot') { const r = vdotPredict(race.weights, clean, target); return r && { ...r, buckets: 1 }; }
     const one = (male) => liteOne(race.weights, clean, { ...target, male });
     const buckets = liteFeatures(clean, target).n_buckets;
     if (sex) { const r = one(sex === 'm' ? 1 : 0); return r && { ...r, buckets }; }
@@ -438,14 +554,21 @@ export function modelSet(picked = {}, sex = '') {
   function marathonFrom(workouts, today) {
     const training = (workouts || []).filter((w) => w.category !== 'crosstrain')
       .map((w) => ({ date: w.date, miles: w.distance_mi, minutes: (w.moving_sec || 0) / 60 }));
-    return marathonPredict(marathon.weights, training, today);
+    return marathon.kind === 'tanda' ? tandaPredict(marathon.weights, training, today) : marathonPredict(marathon.weights, training, today);
   }
+
+  // What a flat-course time is worth on a course, and back. A course without a model is the flat time.
+  const toCourseSec = (course, flatSec) => (courses[course] ? toCourse(courses[course].weights, flatSec, sex) : flatSec);
+  const toFlatSec = (course, courseSec) => (courses[course] ? toFlat(courses[course].weights, courseSec, sex) : courseSec);
 
   return {
     raceAny, shortAny, marathon: marathonFrom,
     shortSource: (m, sec) => shortSourceIn(shortEvents, m, sec),
-    info: { race: label(race), short: label(short), marathon: label(marathon) },
-    ids: { race: race.id, short: short.id, marathon: marathon.id },
+    toCourse: toCourseSec, toFlat: toFlatSec,
+    // The time ratio course/flat for a run of this many seconds (conditionsOf multiplies by it).
+    courseFactor: (course, courseSec) => courseSec / toFlatSec(course, courseSec),
+    info: { race: label(race), short: label(short), marathon: label(marathon), ...Object.fromEntries(Object.keys(courses).map((k) => [k, label(courses[k])])) },
+    ids: { race: race.id, short: short.id, marathon: marathon.id, ...Object.fromEntries(Object.entries(courses).map(([k, m]) => [k, m.id])) },
   };
 }
 

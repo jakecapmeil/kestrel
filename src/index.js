@@ -9,7 +9,7 @@
 
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
-import { BUILTIN, DEFAULTS, TASKS, KINDS, predictEvent, marathonPredict, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
+import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, COURSES, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
@@ -500,6 +500,7 @@ async function workbench(db, me, ids) {
     const model = await findModel(db, me.id, id);
     if (!model) throw new NotFound('Model not found.');
     if (model.task === 'marathon') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Marathon models read training logs, not PRs, so the Workbench cannot test them here.' }); continue; }
+    if (COURSES[model.task]) { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: `${COURSES[model.task].label} models convert a flat-course time into a course time, so the Workbench cannot score them on PRs. Use one in your account to see it in Fitness.` }); continue; }
     const rows = [];
     for (const p of have) {
       if (p.ev.task !== model.task) continue;
@@ -519,7 +520,7 @@ const API_DAILY = 1000;
 async function apiKeyUser(db, request) {
   const h = request.headers.get('Authorization') || '';
   const key = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
-  if (!/^kst_[0-9a-f]{32}$/.test(key)) throw new AuthError('Send your Kestrel Lab API key as "Authorization: Bearer kst_...".');
+  if (!/^kst_[0-9a-f]{32}$/.test(key)) throw new AuthError(`Send your ${PLATFORM_NAME} API key as "Authorization: Bearer kst_...".`);
   const row = await db.prepare('SELECT id, person_id FROM api_keys WHERE key_hash = ?').bind(await sha256(key)).first();
   if (!row) throw new AuthError('Unknown API key.');
   const day = todayInTz();
@@ -536,8 +537,14 @@ async function apiPredict(db, viewerId, b) {
   if (model.task === 'marathon') {
     const days = (Array.isArray(b.training) ? b.training : []).slice(0, 400).map((d) => ({ date: str(d?.date, 10), miles: Number(d?.miles) || 0, minutes: Number(d?.minutes) || 0 }));
     const today = isDate(b.today) ? b.today : todayInTz();
-    const r = marathonPredict(model.weights, days, today);
-    return { model: model.id, event: 'marathon', prediction: r && { sec: r.sec, lo: r.lo, hi: r.hi }, note: r ? undefined : 'Needs at least 15 running days in the 16 weeks before today.' };
+    const r = model.kind === 'tanda' ? tandaPredict(model.weights, days, today) : marathonPredict(model.weights, days, today);
+    return { model: model.id, event: 'marathon', prediction: r && { sec: r.sec, lo: r.lo, hi: r.hi }, note: r ? undefined : model.kind === 'tanda' ? 'Needs enough running days in the 8 weeks before today, and a predicted time between 2:47 and 3:36.' : 'Needs at least 15 running days in the 16 weeks before today.' };
+  }
+  if (COURSES[model.task]) {
+    const flat = Number(b.flat_sec);
+    if (!(flat > 30 && flat < 100000)) throw new BadRequest('Send flat_sec: the time in seconds the runner would run on a flat course in good weather.');
+    const sex = ['f', 'm'].includes(b.sex) ? b.sex : '';
+    return { model: model.id, course: model.task, flat_sec: flat, prediction: { sec: toCourse(model.weights, flat, sex) } };
   }
   const ev = EVENT.get(str(b.event, 20));
   if (!ev) throw new BadRequest('event must be one of: ' + [...EVENT.keys()].join(', '));
@@ -673,7 +680,7 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, courses: COURSES, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: Object.keys(PLANS).map((r) => ({ level: Number(r), miles: PLANS[r].weeks[0].miles })) });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));

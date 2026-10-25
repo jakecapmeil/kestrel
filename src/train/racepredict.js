@@ -4,7 +4,8 @@
 // Behind env.HAWKS_PREDICT === '1'.
 import { getPrs } from './log.js';
 import { getFitness, fmtTime } from './fitness.js';
-import { heatCost, hillCost, VC_FACTOR } from './conditions.js';
+import { heatCost, hillCost } from './conditions.js';
+import { modelSet, pickedModels } from '../models.js';
 
 const DAY = 86400000;
 const MILE = 1609.344;
@@ -81,12 +82,15 @@ export async function racePredictions(env, personId, today) {
     const e = fitness.estimates.find((x) => x.event === r.key);
     if (e?.lo) rows.push({ key: r.key, label: r.label, sec: e.sec, lo: e.lo, hi: e.hi, pr: prs[r.key]?.time || null });
   }
-  // Van Cortlandt: the same fitness on the home course (x1.055, 2.5 mi by Riegel from the 5K).
+  // Van Cortlandt: the same fitness on the home course (the picked Van Cortlandt model, 2.5 mi by Riegel from the 5K).
   const five = fitness.estimates.find((x) => x.event === '5K');
   if (five?.lo) {
+    const person = await db.prepare('SELECT sex, settings FROM people WHERE id = ?').bind(personId).first();
+    const RM = modelSet(await pickedModels(db, personId, person?.settings), person?.sex || '');
     for (const [key, label, m] of [['VC 2.5 mi', '2.5 mi at Van Cortlandt', 2.5 * MILE], ['VC 5K', '5K at Van Cortlandt', 5000]]) {
-      const k = VC_FACTOR * Math.pow(m / 5000, 1.06);
-      rows.push({ key, label, sec: five.sec * k, lo: five.lo * k, hi: five.hi * k, pr: prs[key === 'VC 5K' ? 'XC 5K' : key]?.time || null });
+      const k = Math.pow(m / 5000, 1.06);
+      const vc = (s) => RM.toCourse('vc', s) * k;
+      rows.push({ key, label, sec: vc(five.sec), lo: vc(five.lo), hi: vc(five.hi), pr: prs[key === 'VC 5K' ? 'XC 5K' : key]?.time || null });
     }
   }
   const predictions = rows.map((p) => {

@@ -23,7 +23,7 @@
 // 2.5% plus their hills, and heat by temperature + dew point. Heart rate on
 // steady runs is read the same way. PRs stay the raw times.
 import { parseReps, snap100 } from './workouts.js';
-import { conditionsOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_RE } from './conditions.js';
+import { conditionsOf, heatCost, hillCost, XC_FACTOR, VC_RE } from './conditions.js';
 // Race models come from Kestrel Lab: whichever the athlete picked for each task (HawksPredict by default).
 import { modelSet, pickedModels, SHORT_METERS } from '../models.js';
 const Z80 = 1.2816;
@@ -242,7 +242,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // unless the PR says it was somewhere else.
     const onCourse = event === 'XC 5K' || event === 'VC 2.5 mi';
     const vc = event === 'VC 2.5 mi' || (event === 'XC 5K' && (!v?.meet || VC_RE.test(v.meet)));
-    const t = onCourse ? sec / (vc ? VC_FACTOR : XC_FACTOR) : sec;
+    const t = onCourse ? (vc ? RM.toFlat('vc', sec) : sec / XC_FACTOR) : sec;
     sources.push({
       kind: 'pr', max: true, event, m, s: t, age, date: dated ? v.date : null,
       quality: (dated ? 0.9 : 0.5) * (onCourse ? 0.8 : 1),
@@ -278,7 +278,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // Races are timed gun to finish: elapsed time, unless the watch was left running.
     const t = w.elapsed_sec && w.elapsed_sec <= w.moving_sec * 1.05 ? w.elapsed_sec : w.moving_sec;
     // Credited back to a flat course in good weather.
-    const cond = conditionsOf(w, events);
+    const cond = conditionsOf(w, events, { courseFactor: RM.courseFactor });
     const adj = t / cond.factor;
     const credit = cond.factor > 1.004 ? `; ${cond.note}: worth ${fmtTime(adj)} flat and cool` : '';
     const label = `${raceDay ? 'Race' : 'Hard run'} ${m === MILE ? 'mile' : m === 2 * MILE ? '2 mi' : m === 2.5 * MILE ? '2.5 mi' : m === 3 * MILE ? '3 mi' : `${m >= 1000 && m % 1000 === 0 ? m / 1000 + 'K' : m + 'm'}`} in ${fmtTime(t)} (${w.date}${credit})`;
@@ -304,7 +304,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const stitched = e.meters >= 1500 && (!e.category || e.category === 'workout' || e.laps); // unknown run: can't rule out reps
     const prEvent = { 400: '400', 800: '800', 1600: '1600', 1609: '1600', 3200: '3200', 5000: '5K' }[e.meters];
     if (prEvent && !stitched) {
-      const pc = conditionsOf(e, events);
+      const pc = conditionsOf(e, events, { courseFactor: RM.courseFactor });
       const ev = prEvent === '5K' && pc.course ? 'XC 5K' : prEvent;
       const sec = e.meters === 1609 ? (e.sec * 1600) / 1609.344 : e.sec;
       prCandidates.push({ event: ev, sec, date: e.date || '', name: ev === 'XC 5K' ? (pc.course === 'vc' ? 'Van Cortlandt' : e.name || '') : `best nonstop ${prEvent === '5K' ? '5K' : prEvent + ' m'}`, fill: true });
@@ -317,7 +317,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     if (age > 365) continue;
     // Conditions of the run it came from. A short burst is often the downhill
     // part of a hilly run, so only long efforts get the course and hill credit.
-    const cond = e.distance_mi ? conditionsOf(e, events, { reps: e.meters < 1500 }) : null;
+    const cond = e.distance_mi ? conditionsOf(e, events, { reps: e.meters < 1500, courseFactor: RM.courseFactor }) : null;
     const factor = !cond ? 1 : e.meters >= 1500 ? cond.factor : 1 + cond.heat;
     const s = e.sec / factor;
     const what = `Fastest ${e.meters === 1609 ? 'mile' : e.meters >= 1000 && e.meters % 1000 === 0 ? e.meters / 1000 + 'K' : e.meters + 'm'} in a run: ${fmtTime(e.sec, { tenths: e.meters <= 800 })}`;
@@ -613,7 +613,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
 
   // The same fitness on the team's home course: what to expect at Van
   // Cortlandt (the 5K, and the 2.5-mile course by Riegel from the 5K).
-  const vc5 = est['5K'].sec * VC_FACTOR;
+  const vc5 = RM.toCourse('vc', est['5K'].sec);
   const courseEstimates = [
     { key: 'vc5k', label: '5K at Van Cortlandt', meters: 5000, sec: Math.round(vc5 * 10) / 10 },
     { key: 'vc2.5', label: '2.5 mi at Van Cortlandt', meters: 2.5 * MILE, sec: Math.round(vc5 * Math.pow((2.5 * MILE) / 5000, 1.06) * 10) / 10 },

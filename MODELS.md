@@ -27,11 +27,14 @@ A Kestrel model is one JSON file. It holds numbers, never code: Kestrel has one 
 
 The whole file is at most 1 MB. Each user can upload up to 20 models, public or private.
 
-## Tasks
+## Purposes (the `task` field)
+
+A purpose is a place in the app where a model does a job. A model declares one; each athlete picks one model per purpose in the Lab's Purposes page. Coaching is also a purpose, but it is powered by a provider (the free Kestrel model, your own key, or a local model), not a weights file.
 
 - `race`: 800 m and up on track, cross country and road (XC 5K, 3200 m, half marathon, ...).
 - `short`: 100-1000 m and the steeplechases.
 - `marathon`: marathon time from the last 16 weeks of training.
+- `vc`: a course purpose. What a flat-course time is worth at Van Cortlandt, used to credit Van Cortlandt races back to flat and to predict the park's 5K and 2.5 mi. Every course in `COURSES` (`src/models.js`) gets its own purpose, so a course model never changes track predictions.
 
 ## Kinds
 
@@ -41,6 +44,18 @@ The whole file is at most 1 MB. Each user can upload up to 20 models, public or 
 
 - `exponent`: 0.9-1.3
 - `sd`: above 0, at most 0.5
+
+### `vdot` (task `race`)
+
+Daniels' VDOT. The nearest PR sets a VDOT; that VDOT sets the target time. `weights`: `{ "sd": 0.035 }` (log-SD for the 80% range, above 0, at most 0.5).
+
+### `tanda` (task `marathon`)
+
+Tanda (2011): pace (s/km) = `a + b e^(-c K) + d P` from K = mean weekly km and P = mean training pace (s/km) over `weeks` weeks. `weights`: `a, b, c, d, weeks` (1-16), `min_days` running days needed, `see_sec` (standard error in seconds, for the 80% range) and `range_sec` (`[shortest, longest]` marathon the formula is valid for; outside it, no answer).
+
+### `course-transfer` (task: a course key, e.g. `vc`)
+
+`ln t_course = a + b ln t_flat + c male`, where `t_flat` is what the runner would run on a flat course in good weather. `weights`: `a` (within ±2), `b` (0.5-1.5), `c` (within ±0.5; halved when sex is unknown) and optional `sd` and `n`. A line that makes a course time under 0.9x or over 1.5x the flat time is refused. Fit one from your own races with `node scripts/fit-course.mjs races.csv "Name" vc`.
 
 ### `lite-trees` (task `race`)
 

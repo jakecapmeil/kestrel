@@ -80,11 +80,15 @@ export function courseOf(w, events = []) {
 const fmtF = (f) => `${Math.round(f)}°F`;
 
 // What a run's time is worth on a flat course in good weather: divide by factor.
-export function conditionsOf(w, events = [], { reps = false } = {}) {
+// courseFactor(course, sec) -> course/flat time ratio, from the athlete's picked course model (modelSet().courseFactor);
+// without it the course constants above apply.
+export function conditionsOf(w, events = [], { reps = false, courseFactor = null } = {}) {
   const course = courseOf(w, events);
   const heat = heatCost(w.temp_f, w.dew_point_f) * (reps ? 0.5 : 1);
   const hill = course === 'vc' || w.surface === 'track' ? 0 : hillCost(w.elev_gain_ft, w.distance_mi);
-  const factor = (course === 'vc' ? VC_FACTOR : course === 'xc' ? XC_FACTOR : 1) * (1 + hill) * (1 + heat);
+  const secs = w.sec || w.elapsed_sec || w.moving_sec;
+  const vcf = course === 'vc' && courseFactor && secs > 0 ? courseFactor('vc', secs) : VC_FACTOR;
+  const factor = (course === 'vc' ? vcf : course === 'xc' ? XC_FACTOR : 1) * (1 + hill) * (1 + heat);
   const parts = [
     course === 'vc' ? 'Van Cortlandt course' : course === 'xc' ? 'cross-country course' : '',
     hill >= 0.005 ? `${Math.round(w.elev_gain_ft)} ft of climbing` : '',
