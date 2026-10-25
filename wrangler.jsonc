@@ -19,8 +19,8 @@
   // Supabase project values. Both are public by design (the publishable key
   // ships to every browser); sign-in itself is enforced by Supabase.
   "vars": {
-    "SUPABASE_URL": "",
-    "SUPABASE_KEY": "",
+    "SUPABASE_URL": "https://nalkviwzobfatwknyeeu.supabase.co",
+    "SUPABASE_KEY": "sb_publishable_CGZ55wWJx7lJPMfXF_hqNg_l_fZUv-a",
     // Kestrel AI default: free-tier Gemini calls per user per day.
     "AI_DAILY_LIMIT": "40"
   },
