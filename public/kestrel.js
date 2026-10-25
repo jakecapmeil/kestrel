@@ -264,7 +264,8 @@ function renderHeader() {
   $('kAddTeam').onclick = () => renderTeamStart(true);
   const w = $('kWho');
   const u = K.me.user;
-  w.innerHTML = html`<span class="dot" style="background:${u.color}"></span><span>${u.name || 'You'}</span>`.s;
+  w.innerHTML = html`<span class="k-avatar" style="background:${u.color}">${(u.name || 'You').trim().slice(0, 1).toUpperCase()}</span><span class="k-who-name">${u.name || 'You'}</span>`.s;
+  w.setAttribute('aria-label', `${u.name || 'You'}: profile`);
   w.onclick = () => window.hawksSetPage('you', 'profile');
 }
 

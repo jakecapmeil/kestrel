@@ -43,21 +43,9 @@ input,select,textarea{border-radius:var(--r-md);}
 .wordmark{font-family:var(--font-display);}
 .wordmark #secretTapZone{font-weight:800;letter-spacing:-.03em;}
 .k-team{display:flex;align-items:center;gap:6px;min-width:0;}
-.k-team select{height:36px;max-width:220px;border:0;border-radius:var(--r-pill);background:var(--surface-2);color:var(--text);padding:0 var(--s-3);font:600 14px var(--font-ui);}
-.k-lab{font:600 13px var(--font-ui);color:var(--text);text-decoration:none;padding:7px 14px;border-radius:var(--r-pill);background:var(--surface-2);white-space:nowrap;}
-.k-lab:hover{background:var(--accent-subtle);color:var(--accent-ink);}
-.k-who{display:flex;align-items:center;gap:7px;background:transparent;color:var(--text);border:0;height:36px;padding:0 4px;font:600 14px var(--font-ui);}
-.k-who .dot{width:22px;height:22px;border-radius:50%;}
+.k-team select{border:0;border-radius:var(--r-pill);background:var(--surface-2);color:var(--text);padding:0 var(--s-3);font:600 14px var(--font-ui);max-width:220px;}
+.k-who{display:flex;align-items:center;background:transparent;color:var(--text);border:0;font:600 14px var(--font-ui);cursor:pointer;}
 header .head-right{display:flex;align-items:center;gap:12px;}
-header{flex-wrap:wrap;}
-@media (min-width:1024px){
-  .wrap{grid-template-columns:auto minmax(180px,280px) minmax(0,1fr) auto;}
-  .wrap > header > .k-team{grid-area:who;}
-}
-@media (max-width:1023px){
-  header .k-team{order:3;width:100%;}
-  header .k-team select{flex:1;max-width:none;}
-}
 
 /* ---------- Kestrel AI */
 .hawky-mark{width:32px;height:32px;margin-right:var(--s-2);border-radius:var(--r-sm);background:none;}

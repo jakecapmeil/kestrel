@@ -1641,6 +1641,7 @@
 <link rel="stylesheet" href="/ds/tokens.css">
 <link rel="stylesheet" href="/ds/base.css">
 <link rel="stylesheet" href="/ds/components.css">
+<link rel="stylesheet" href="/ds/shell.css">
 <link rel="stylesheet" href="/kestrel.css">
 </head>
 <body>
@@ -1662,7 +1663,7 @@
         <button type="button" id="syncSetupItem">Watch setup</button>
       </div>
     </div>
-    <a class="k-lab" href="/lab">Kestrel Lab</a>
+    <nav class="k-switch" aria-label="Product"><a href="/" aria-current="page">Kestrel</a><a href="/lab">Lab</a></nav>
     <button type="button" class="k-who" id="kWho"></button>
     <div hidden><a id="whatsappBtn"></a><button id="emailMenuBtn"></button><div id="emailMenu"></div><button id="emailCoachMenuItem"></button><button id="emailTeamMenuItem"></button></div>
     </div>
@@ -1713,7 +1714,7 @@
 
   <div class="page-tabs" role="tablist" aria-label="Sections">
     <button type="button" class="page-tab active" id="pageTabSchedule" role="tab" aria-selected="true" aria-controls="pageSchedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle class="fill" cx="8.5" cy="14.5" r="1.1"/><circle class="fill" cx="12" cy="14.5" r="1.1"/><circle class="fill" cx="15.5" cy="14.5" r="1.1"/></svg><span>Schedule</span></button>
-    <button type="button" class="page-tab" id="pageTabTraining" role="tab" aria-selected="false" aria-controls="pageTraining"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.500c0-1.7.5-3 1.8-3.400l3.2-1 1.4 1.800c.7.9 1.7 1.4 2.8 1.400H17c2.2 0 4 1.4 4 3.200V17H3z"/><path d="M8 11.100V8.500M3.5 19.500h17M12.7 13.300l.8-1.300M15 13.600l.8-1.3"/></svg><span>Training</span></button>
+    <button type="button" class="page-tab" id="pageTabTraining" role="tab" aria-selected="false" aria-controls="pageTraining"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.500c0-1.7.5-3 1.8-3.400l3.2-1 1.4 1.800c.7.9 1.7 1.4 2.8 1.400H17c2.2 0 4 1.4 4 3.200V17H3z"/><path d="M8 11.100V8.500M3.5 19.500h17M12.7 13.300l.8-1.300M15 13.600l.8-1.3"/></svg><span>Train</span></button>
     <button type="button" class="page-tab" id="pageTabTeam" role="tab" aria-selected="false" aria-controls="pageTeam"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8" r="2.6"/><circle cx="16.5" cy="9" r="2.2"/><path d="M3.5 19c.4-3 2.5-4.8 5-4.8s4.6 1.8 5 4.8M13.6 14.6c.8-.6 1.8-.9 2.9-.9 2.2 0 3.7 1.5 4 4.3"/></svg><span>Team</span></button>
     <button type="button" class="page-tab" id="pageTabYou" role="tab" aria-selected="false" aria-controls="pageYou"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.700 3.5-5.800 7-5.800s6.300 2.100 7 5.800"/></svg><span>You</span></button>
   </div>
@@ -2193,7 +2194,13 @@
         <h2 class="page-title" id="teamTitle">Team mileage</h2>
       </div>
     </div>
-    <div class="split split-team">
+    <div class="k-empty k-team-empty" id="teamEmpty" hidden>
+      <img src="/kestrel.svg" alt="" width="96" height="96">
+      <h3>You're flying solo</h3>
+      <p>Your training works on its own. A team adds a shared calendar, a mileage board and a place to talk.</p>
+      <button type="button" class="k-btn primary" id="teamEmptyStart">Start or join a team</button>
+    </div>
+    <div class="split split-team" id="teamBody">
       <section class="card">
         <div class="section-head">
           <div>
@@ -5982,12 +5989,11 @@ async function renderPredictor(){
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
 async function renderTeam(){
-  if(!(window.KESTREL && window.KESTREL.teamId)){
-    $('teamStats').innerHTML = ''; $('teamBars').innerHTML = '';
-    $('teamHint').textContent = 'Start or join a team to see how your miles add up.';
-    $('teamLeader').innerHTML = '<div class="hint">No team yet. Your training works on its own; a team adds a shared calendar and mileage board.</div>';
-    return;
-  }
+  const hasTeam = !!(window.KESTREL && window.KESTREL.teamId);
+  $('teamEmpty').hidden = hasTeam;
+  $('teamBody').hidden = !hasTeam;
+  $('teamEmptyStart').onclick = ()=> $('kAddTeam') && $('kAddTeam').click();
+  if(!hasTeam) return;
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
   if(currentPage !== 'team') return;
