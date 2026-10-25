@@ -2252,7 +2252,7 @@
       <div class="seg" id="teamViews" role="tablist" aria-label="Team view">
         <button type="button" class="seg-btn active" role="tab" data-tmview="miles">Miles</button>
         <button type="button" class="seg-btn" role="tab" data-tmview="roster">Roster</button>
-        <button type="button" class="seg-btn" role="tab" data-tmview="training">Training</button>
+        <button type="button" class="seg-btn" role="tab" data-tmview="training">Plan</button>
       </div>
     </div>
     <div class="k-empty k-team-empty" id="teamEmpty" hidden>
@@ -6091,7 +6091,9 @@ function healthHtml(h){
 function levelHtml(h){
   const l = h.level;
   if(!l) return '<div class="hint">Set your class on the You tab to get a plan.</div>';
-  const hist = h.level_history.length ? `<div class="list" style="margin-top:var(--sp-3);">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'kai' ? 'Kestrel AI' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
+  const hist = h.level_history.length ? `<div class="list" style="margin-top:var(--sp-3);">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'kai' ? 'Kestrel AI' : x.source === 'captain' ? 'Captain' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
+  if(l.team) return `<div class="level-now"><b>${l.weekly_miles}</b><span>miles a week</span></div>
+    <div class="hint" style="margin:var(--sp-2) 0;">Your captain sets your level.</div>${hist}`;
   return `<div class="level-now"><b>${l.weekly_miles}</b><span>miles a week</span>${l.next_weekly_miles ? `<i>Next: ${l.next_weekly_miles}</i>` : ''}</div>
     <div class="hint" style="margin:var(--sp-2) 0;">${l.ready ? 'You\'re ready for the next level. Kestrel AI moves you up at the start of a week.' : l.next_weekly_miles ? 'Kestrel AI moves you up once all of these are true:' : 'You\'re at the top level Kestrel AI can set.'}</div>
     ${l.next_weekly_miles ? `<ul class="gates">${l.gates.map(g=>`<li class="${g.ok ? 'ok' : ''}">${escapeHtml(g.label)}</li>`).join('')}</ul>` : ''}${hist}`;

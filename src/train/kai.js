@@ -336,13 +336,14 @@ export async function levelStatus(db, person, today, health) {
     weekly_miles: target,
     next_weekly_miles: rank < cap ? milesOfRank(person, rank + 1) : null,
     ready: gates.every((g) => g.ok),
+    team: person.plan_source === 'team',
     gates,
     recent_weeks: weeks,
     _rank: rank, _cap: cap,
   };
 }
 
-async function setRank(db, person, to, reason, source) {
+export async function setRank(db, person, to, reason, source) {
   const from = rankOf(person);
   await db.batch([
     db.prepare('UPDATE people SET plan_rank = ?, coach_rank = COALESCE(coach_rank, ?) WHERE id = ?').bind(to, from, person.id),
@@ -356,6 +357,7 @@ async function setRank(db, person, to, reason, source) {
 // Kai moves a runner up by itself early in the week, so a week's plan
 // never changes halfway through.
 export async function autoLevel(db, person, today, health) {
+  if (person.plan_source === 'team') return null; // the captain moves team athletes; Kestrel AI only recommends
   const dow = new Date(today + 'T12:00:00Z').getUTCDay();
   if (dow < 1 || dow > 3) return null;
   const st = await levelStatus(db, person, today, health);
@@ -369,6 +371,7 @@ export async function changeLevel(db, person, direction, reason, today, health) 
   const st = await levelStatus(db, person, today, health);
   if (!st) throw new PlanError('No plan yet.');
   if (direction === 'up') {
+    if (person.plan_source === 'team') throw new PlanError(st.ready ? 'You are ready for the next level, but your captain decides when to move up. Kestrel AI has flagged it for them.' : 'Your captain decides when you move up a level.');
     if (!st.ready) throw new PlanError(`Not ready to level up yet: ${st.gates.filter((g) => !g.ok).map((g) => g.label).join('; ')}.`);
     return await setRank(db, person, st._rank + 1, reason || 'Ready for more', 'kai');
   }
@@ -397,7 +400,10 @@ export async function kaiState(db, personId, today = todayInTz()) {
     "SELECT id, date, type, miles, detail, reason, source FROM plan_changes WHERE person_id = ? AND date >= ? AND cleared = 0 AND source != 'athlete' ORDER BY date"
   ).bind(person.id, today).all();
   const levels = await db.prepare('SELECT from_rank, to_rank, reason, source, created_at FROM level_changes WHERE person_id = ? ORDER BY created_at DESC LIMIT 5').bind(person.id).all();
-  const strip = (l) => l && { weekly_miles: l.weekly_miles, next_weekly_miles: l.next_weekly_miles, ready: l.ready, gates: l.gates, recent_weeks: l.recent_weeks };
+  // Team athletes see where they are, not what is next: their captain decides the next level.
+  const strip = (l) => l && (l.team
+    ? { weekly_miles: l.weekly_miles, team: true }
+    : { weekly_miles: l.weekly_miles, next_weekly_miles: l.next_weekly_miles, ready: l.ready, gates: l.gates, recent_weeks: l.recent_weeks });
   return {
     today: week?.days.find((d) => d.date === today) || null,
     today_done: ranToday ? {
