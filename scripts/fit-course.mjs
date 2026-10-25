@@ -5,12 +5,12 @@
 //   course_sec  what they ran on the course
 //   sex         m or f (optional; leave out to fit one line for everyone)
 // It fits ln(course) = a + b ln(flat) + c male by least squares, validates the result as a Kestrel model, and prints it.
-// Upload the file in the Lab under the course's purpose. With fewer than 30 rows the fit is a sketch: say so in the model's trained_on.
+// The optional course id (vc, franklin-park, ...) records which course it was fitted for. Upload the file in the Lab, then pick it for that course on the Purposes page. With fewer than 30 rows the fit is a sketch: say so in the model's trained_on.
 import { readFileSync } from 'node:fs';
 import { validateModel } from '../src/models.js';
 
-const [file, name = 'My course model', course = 'vc'] = process.argv.slice(2);
-if (!file) { console.error('usage: node scripts/fit-course.mjs races.csv "Model name" vc > model.json'); process.exit(2); }
+const [file, name = 'My course model', course = ''] = process.argv.slice(2);
+if (!file) { console.error('usage: node scripts/fit-course.mjs races.csv "Model name" [course-id] > model.json'); process.exit(2); }
 const rows = readFileSync(file, 'utf8').trim().split(/\r?\n/).slice(1).map((l) => l.split(',').map((x) => x.trim()))
   .map(([f, c, sex]) => ({ x: Math.log(Number(f)), y: Math.log(Number(c)), male: sex === 'm' ? 1 : 0, known: sex === 'm' || sex === 'f' }))
   .filter((r) => Number.isFinite(r.x) && Number.isFinite(r.y));
@@ -34,7 +34,7 @@ const [a, b, c = 0] = A.map((row) => row[k]);
 const resid = rows.map((r) => r.y - (a + b * r.x + c * r.male));
 const sd = Math.sqrt(resid.reduce((s, e) => s + e * e, 0) / Math.max(1, rows.length - k));
 const model = validateModel({
-  kestrel: 1, name, version: 'fit-' + new Date().toISOString().slice(0, 10), kind: 'course-transfer', task: course, license: 'CC0-1.0',
+  kestrel: 1, name, version: 'fit-' + new Date().toISOString().slice(0, 10), kind: 'course-transfer', task: 'course', ...(course ? { course } : {}), license: 'CC0-1.0',
   description: `Least-squares line from ${rows.length} runners: course time = flat time x ${(Math.exp(a + b * Math.log(1080)) / 1080).toFixed(3)} at an 18:00 flat 5K. Residual SD ${(sd * 100).toFixed(1)}%.`,
   trained_on: `${rows.length} paired flat/course results. Describe where they came from and their licence here before you publish.`,
   weights: { a, b, c, sd, n: rows.length },

@@ -78,7 +78,7 @@ async function meView(db, me) {
       id: me.id, email: me.email, name: me.name, color: me.color, sex: me.sex, class_year: me.class_year,
       age_ok: !!me.age_ok, share_miles: !!me.share_miles, plan_rank: me.plan_rank,
     },
-    models: { ...DEFAULTS, ...(settingsOf(me).models || {}) },
+    models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
     teams,
   };
@@ -428,10 +428,15 @@ async function findModel(db, viewerId, id) {
   return { ...file, ...row, weights: file.weights, owner: row.owner || 'someone' };
 }
 
-// Athletes whose pick for the model's task is this model (an athlete who never picked uses the default).
+// Athletes who use this model: whose pick for its purpose is this model (an athlete who never picked uses the
+// default), or who picked it for a single event or course (a slot). A purpose with no default, like `course`, counts only picks.
 async function usedBy(db, id, task) {
   if (!TASKS[task]) return 0;
-  const r = await db.prepare(`SELECT COUNT(*) AS n FROM people WHERE age_ok = 1 AND COALESCE(json_extract(settings, '$.models.${task}'), ?) = ?`).bind(DEFAULTS[task], id).first();
+  const r = await db.prepare(
+    `SELECT COUNT(*) AS n FROM people p WHERE p.age_ok = 1 AND (
+       COALESCE(json_extract(p.settings, '$.models.${task}'), ?) = ?
+       OR EXISTS (SELECT 1 FROM json_each(COALESCE(json_extract(p.settings, '$.event_models'), '{}')) j WHERE j.value = ?))`
+  ).bind(DEFAULTS[task] ?? '', id, id).first();
   return r?.n || 0;
 }
 

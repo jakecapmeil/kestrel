@@ -759,7 +759,7 @@ async function viewPurposes() {
     for (const t of cat?.tracked || []) { if (!rows.has(t.course)) rows.set(t.course, new Set()); rows.get(t.course).add(t.m); }
     for (const k of Object.keys(eventPicks)) { const m = /^course:([^:]+)(?::(\d+))?$/.exec(k); if (m) { if (!rows.has(m[1])) rows.set(m[1], new Set()); if (m[2]) rows.get(m[1]).add(Number(m[2])); } }
     const pick = (slot, none) => html`<select class="k-input" data-slot="${slot}"><option value="">${none}</option>${options.map((m) => opt(m, eventPicks[slot]))}</select>`;
-    const dist = (m) => (m % 1609 < 40 || m % 1609 > 1569 ? `${(Math.round(m / 160.9) / 10)} mi` : m % 1000 === 0 ? `${m / 1000}K` : `${m} m`);
+    const dist = (m) => { const mi = m / 1609.344; return Math.abs(mi * 2 - Math.round(mi * 2)) < 0.03 && m % 1000 ? `${Math.round(mi * 2) / 2} mi` : m % 1000 === 0 ? `${m / 1000}K` : `${m} m`; };
     return html`<div class="lab-purpose"><div><h3>${p.label}</h3>
       <p class="k-small">A course with no model uses its catalogue factor (Van Cortlandt runs 5.5% slower than flat, other cross-country courses 2.5%). Pick a model to replace that for one course, or for one distance on it; a distance beats its course, and a course beats the setting below. ${options.length} course model${options.length === 1 ? '' : 's'}. <a href="#/models?task=course">Browse</a></p></div>
       ${me ? html`<div class="k-row"><label class="k-small">All courses <select class="k-input" data-pick="course"><option value="">Catalogue factors (default)</option>${options.map((m) => opt(m, mine?.models?.course))}</select></label></div>
