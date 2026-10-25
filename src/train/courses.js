@@ -23,7 +23,8 @@ export const COURSE_DISTANCES = [
 
 // Every course below was checked against a published source: a championship or invitational held there, or the
 // venue's own page. `geo` is a start-position box [south, north, west, east]: the venue's OpenStreetMap bounds with
-// a little margin (Panorama Farms: Cvillepedia's coordinates, +-0.012 degrees). A run that starts inside one is
+// a little margin (Panorama Farms: Cvillepedia's coordinates, +-0.012 degrees; Hershey Parkview and Thetford, where OSM
+// maps only the course path or the school, +-0.006). A run that starts inside one is
 // matched to that course from its GPS. Add a course here only with a source and a box you have looked at.
 // `distances` are the ones raced there (metres): NCAA courses 6K and 8K/10K, high school courses a 5K or 3 miles.
 const M3 = 4828;
@@ -56,6 +57,26 @@ export const BUILTIN_COURSES = [
   { id: 'morley-field', name: 'Morley Field (Balboa Park)', place: 'San Diego, CA', distances: [5000], geo: [32.733, 32.743, -117.146, -117.132] },
   { id: 'glendoveer', name: 'Glendoveer Golf Course', place: 'Portland, OR', distances: [5000], geo: [45.524, 45.536, -122.53, -122.506] },
   { id: 'sun-willows', name: 'Sun Willows Golf Course', place: 'Pasco, WA', distances: [5000], geo: [46.246, 46.258, -119.117, -119.099] },
+  { id: 'bowdoin-park', name: 'Bowdoin Park', place: 'Wappingers Falls, NY', distances: [5000], geo: [41.589, 41.613, -73.951, -73.927] },
+  { id: 'saratoga-spa', name: 'Saratoga Spa State Park', place: 'Saratoga Springs, NY', distances: [5000], geo: [43.013, 43.072, -73.835, -73.765] },
+  { id: 'hershey-parkview', name: 'Hershey Parkview Cross Country Course', place: 'Hershey, PA', distances: [5000], geo: [40.274, 40.291, -76.675, -76.658] },
+  { id: 'killens-pond', name: 'Killens Pond State Park', place: 'Felton, DE', distances: [5000], geo: [38.968, 39.002, -75.568, -75.505] },
+  { id: 'derryfield', name: 'Derryfield Park', place: 'Manchester, NH', distances: [5000], geo: [42.992, 43.007, -71.448, -71.432] },
+  { id: 'thetford', name: 'Thetford Academy (Woods Trail)', place: 'Thetford, VT', distances: [5000], geo: [43.807, 43.824, -72.242, -72.223] },
+  { id: 'gardner-golf', name: 'Gardner Municipal Golf Course', place: 'Gardner, MA', distances: [5000], geo: [42.586, 42.605, -72.002, -71.983] },
+  { id: 'wakemed', name: 'WakeMed Soccer Park', place: 'Cary, NC', distances: [5000, 6000, 8000], geo: [35.779, 35.794, -78.764, -78.746] },
+  { id: 'mcalpine', name: 'McAlpine Creek Park', place: 'Charlotte, NC', distances: [5000, 8000], geo: [35.144, 35.157, -80.749, -80.731] },
+  { id: 'furman', name: 'Furman University', place: 'Greenville, SC', distances: [5000, 6000, 8000], geo: [34.911, 34.94, -82.454, -82.43] },
+  { id: 'horse-park', name: 'Kentucky Horse Park', place: 'Lexington, KY', distances: [5000], geo: [38.137, 38.175, -84.54, -84.491] },
+  { id: 'tom-sawyer', name: 'E.P. "Tom" Sawyer State Park', place: 'Louisville, KY', distances: [6000, 8000, 10000], geo: [38.269, 38.295, -85.573, -85.544] },
+  { id: 'mis', name: 'Michigan International Speedway', place: 'Brooklyn, MI', distances: [5000], geo: [42.047, 42.084, -84.261, -84.222] },
+  { id: 'ridges', name: 'The Ridges Golf Course', place: 'Wisconsin Rapids, WI', distances: [5000], geo: [44.348, 44.364, -89.804, -89.783] },
+  { id: 'les-bolstad', name: 'Les Bolstad Golf Course (Minnesota)', place: 'Falcon Heights, MN', distances: [5000, 6000, 8000], geo: [44.987, 45.002, -93.201, -93.184] },
+  { id: 'norris-penrose', name: 'Norris Penrose Event Center', place: 'Colorado Springs, CO', distances: [5000], geo: [38.816, 38.829, -104.855, -104.838] },
+  { id: 'cave-creek', name: 'Cave Creek Golf Course', place: 'Phoenix, AZ', distances: [5000], geo: [33.608, 33.629, -112.114, -112.096] },
+  { id: 'eagle-island', name: 'Eagle Island State Park', place: 'Eagle, ID', distances: [5000], geo: [43.671, 43.699, -116.407, -116.382] },
+  { id: 'huntington-central', name: 'Huntington Central Park', place: 'Huntington Beach, CA', distances: [M3], geo: [33.692, 33.712, -118.018, -117.996] },
+  { id: 'lane-cc', name: 'Lane Community College', place: 'Eugene, OR', distances: [5000], geo: [44.002, 44.018, -123.042, -123.025] },
 ].map((c) => ({ ...c, builtin: true }));
 
 const BUILTIN = new Map(BUILTIN_COURSES.map((c) => [c.id, c]));
