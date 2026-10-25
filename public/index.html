@@ -212,7 +212,6 @@
     justify-content:space-between;
     gap:12px;
   }
-  #whoCard{padding:10px 14px;margin-bottom:12px;}
   h1{
     font-family:var(--font-display);
     font-weight:900;
@@ -384,16 +383,12 @@
   }
   button:disabled{opacity:0.4;cursor:default;}
   /* The one committing action in a form gets body-sized emphasis. */
-  #submitPostBtn,#saveEventBtn,#addPersonBtn,#saveEditPersonBtn,#saveNoteBtn{
+  #submitPostBtn,#saveEventBtn,#saveNoteBtn{
     font-size:var(--fs-headline);letter-spacing:var(--tr-headline);padding:0 18px;
   }
 
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;}
 
-  #newPersonRow{display:none;flex-direction:column;gap:10px;margin-top:10px;}
-  #newPersonRow.show{display:flex;}
-  #editPersonRow{display:none;flex-direction:column;gap:10px;margin-top:10px;}
-  #editPersonRow.show{display:flex;}
 
   .personal-form{display:none;flex-direction:column;gap:10px;margin-top:10px;}
   .personal-form.show{display:flex;}
@@ -1122,38 +1117,6 @@
   }
   .admin-past-toggle{margin-top:10px;}
 
-  /* traditional-week formatter */
-  .week-intro{
-    font-size:var(--fs-subhead);line-height:var(--lh-subhead);
-    letter-spacing:var(--tr-subhead);color:var(--ink-soft);margin-bottom:10px;
-  }
-  .week-tools{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
-  .week-tools label{
-    font-size:var(--fs-footnote);font-weight:600;letter-spacing:var(--tr-footnote);
-    color:var(--ink-soft);flex-shrink:0;
-  }
-  .week-tools input{width:110px;}
-  .week-row{display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--line);}
-  .week-row:last-child{border-bottom:none;}
-  .week-check{width:22px;height:22px;flex-shrink:0;accent-color:var(--gold);cursor:pointer;}
-  .week-row-main{flex:1;min-width:0;}
-  .week-range{
-    font-weight:600;font-size:var(--fs-callout);
-    letter-spacing:var(--tr-callout);font-variant-numeric:tabular-nums;
-  }
-  .week-strip{display:flex;gap:3px;margin-top:5px;}
-  .week-cell{
-    width:25px;height:22px;border-radius:var(--r-row);flex-shrink:0;
-    display:flex;align-items:center;justify-content:center;
-    font-size:var(--fs-caption2);font-weight:700;letter-spacing:var(--tr-caption2);
-    background:var(--muted-bg);color:var(--ink-soft);
-  }
-  .week-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
-  .week-legend span{
-    display:flex;align-items:center;gap:5px;
-    font-size:var(--fs-footnote);letter-spacing:var(--tr-footnote);color:var(--ink-soft);
-  }
-
   /* body map — dark "phone mockup" panel, muscular silhouette, Strava-style */
   .bodymap-panel{
     background:linear-gradient(180deg,#1a1720,#100e14);
@@ -1249,10 +1212,10 @@
   .gates li.ok::before{content:'✓';color:var(--int-1);font-weight:800;}
 
   /* ---- Kestrel AI tab ------------------------------------------------------------ */
-  .hawky-chat{display:flex;flex-direction:column;gap:var(--sp-3);}
-  .hawky-chat .hawky-thread{max-height:none;min-height:240px;height:clamp(240px, calc(100vh - 420px), 560px);}
-  .hawky-chat .chip-scroll{margin:0 calc(-1 * var(--sp-4));}
-  .hawky-saved.refused span{background:var(--int-2-bg);color:var(--int-2-ink);}
+  .kai-chat{display:flex;flex-direction:column;gap:var(--sp-3);}
+  .kai-chat .kai-thread{max-height:none;min-height:240px;height:clamp(240px, calc(100vh - 420px), 560px);}
+  .kai-chat .chip-scroll{margin:0 calc(-1 * var(--sp-4));}
+  .kai-saved.refused span{background:var(--int-2-bg);color:var(--int-2-ink);}
 
   /* ---- Log: sessions open to their splits ------------------------------------ */
   .session{padding:0;overflow:hidden;}
@@ -1360,31 +1323,31 @@
   .sync-menu hr{border:0;height:1px;background:var(--line);margin:2px 4px;}
 
   /* ---- Kestrel AI ------------------------------------------------------------ */
-  .hawky-mark{
+  .kai-mark{
     width:28px;height:28px;border-radius:9px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
     background:var(--gold);color:var(--on-fill);font-family:var(--font-display);font-weight:900;font-size:15px;margin-right:8px;
   }
-  @media (prefers-color-scheme:dark){ .hawky-mark{color:#141119;} }
-  .hawky-card .chip-scroll{margin-bottom:var(--sp-3);}
-  .hawky-today{background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-3);font-size:var(--fs-subhead);line-height:1.45;margin-bottom:var(--sp-3);}
-  .hawky-today b{display:block;font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+  @media (prefers-color-scheme:dark){ .kai-mark{color:#141119;} }
+  .kai-card .chip-scroll{margin-bottom:var(--sp-3);}
+  .kai-today{background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-3);font-size:var(--fs-subhead);line-height:1.45;margin-bottom:var(--sp-3);}
+  .kai-today b{display:block;font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
   .full-btn{width:100%;}
-  .hawky-box{max-width:560px;}
-  .hawky-box .modal-head h3{display:flex;align-items:center;}
-  .hawky-body{padding:4px 16px 18px;display:flex;flex-direction:column;gap:var(--sp-3);}
-  .hawky-body .chip-scroll{margin:0 -16px;padding:0 16px 2px;}
-  .hawky-thread{display:flex;flex-direction:column;gap:var(--sp-2);max-height:min(52vh,460px);overflow-y:auto;padding:2px 0;}
-  .hawky-msg{max-width:88%;padding:var(--sp-2) var(--sp-3);border-radius:14px;white-space:pre-wrap;font-size:var(--fs-subhead);line-height:1.45;}
-  .hawky-msg.hawky{align-self:flex-start;background:var(--bg);border-bottom-left-radius:4px;}
-  .hawky-msg.user{align-self:flex-end;background:var(--fill);color:var(--on-fill);border-bottom-right-radius:4px;}
-  .hawky-msg.typing{color:var(--ink-soft);}
-  .hawky-saved{align-self:flex-start;display:flex;flex-wrap:wrap;gap:4px;margin-top:-2px;}
-  .hawky-saved span{font-size:var(--fs-caption);font-weight:600;background:var(--int-1-bg);color:var(--int-1-ink);border-radius:var(--r-pill);padding:2px 8px;}
-  .hawky-compose{display:flex;gap:var(--sp-2);align-items:flex-end;}
-  .hawky-compose textarea{flex:1;min-height:48px;}
-  .hawky-line{font-size:var(--fs-subhead);line-height:1.45;background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-3);}
-  .hawky-note{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-subhead);line-height:1.45;background:var(--bg);border-radius:var(--r-control);padding:var(--sp-3);}
-  .hawky-note b{font-size:var(--fs-caption);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
+  .kai-box{max-width:560px;}
+  .kai-box .modal-head h3{display:flex;align-items:center;}
+  .kai-body{padding:4px 16px 18px;display:flex;flex-direction:column;gap:var(--sp-3);}
+  .kai-body .chip-scroll{margin:0 -16px;padding:0 16px 2px;}
+  .kai-thread{display:flex;flex-direction:column;gap:var(--sp-2);max-height:min(52vh,460px);overflow-y:auto;padding:2px 0;}
+  .kai-msg{max-width:88%;padding:var(--sp-2) var(--sp-3);border-radius:14px;white-space:pre-wrap;font-size:var(--fs-subhead);line-height:1.45;}
+  .kai-msg.kai{align-self:flex-start;background:var(--bg);border-bottom-left-radius:4px;}
+  .kai-msg.user{align-self:flex-end;background:var(--fill);color:var(--on-fill);border-bottom-right-radius:4px;}
+  .kai-msg.typing{color:var(--ink-soft);}
+  .kai-saved{align-self:flex-start;display:flex;flex-wrap:wrap;gap:4px;margin-top:-2px;}
+  .kai-saved span{font-size:var(--fs-caption);font-weight:600;background:var(--int-1-bg);color:var(--int-1-ink);border-radius:var(--r-pill);padding:2px 8px;}
+  .kai-compose{display:flex;gap:var(--sp-2);align-items:flex-end;}
+  .kai-compose textarea{flex:1;min-height:48px;}
+  .kai-line{font-size:var(--fs-subhead);line-height:1.45;background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-3);}
+  .kai-note{display:flex;flex-direction:column;gap:2px;font-size:var(--fs-subhead);line-height:1.45;background:var(--bg);border-radius:var(--r-control);padding:var(--sp-3);}
+  .kai-note b{font-size:var(--fs-caption);color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
 
   /* ---- Plan tags (replace letter grades) -------------------------------- */
   .tone-on{background:var(--int-1-bg);color:var(--int-1-ink);}
@@ -1509,9 +1472,9 @@
   .wo-tile small{display:block;font-size:var(--fs-caption);font-weight:500;color:var(--ink-soft);line-height:1.3;margin-top:2px;}
   .wo-tile.on{background:var(--fill);border-color:var(--fill);color:var(--on-fill);}
   .wo-tile.on svg,.wo-tile.on small{color:var(--on-fill);opacity:.9;}
-  .wo-tile.hawky svg{color:var(--gold);}
-  .wo-tile.hawky{background:var(--gold-bg);border-color:transparent;color:var(--gold-ink);}
-  .wo-tile.hawky small{color:var(--gold-ink);opacity:.85;}
+  .wo-tile.kai svg{color:var(--gold);}
+  .wo-tile.kai{background:var(--gold-bg);border-color:transparent;color:var(--gold-ink);}
+  .wo-tile.kai small{color:var(--gold-ink);opacity:.85;}
   .lib-targets{display:flex;flex-direction:column;gap:4px;margin-top:6px;}
   .lib-target{display:flex;align-items:baseline;gap:6px;font-size:var(--fs-footnote);flex-wrap:wrap;}
   .lib-target b{font-variant-numeric:tabular-nums;}
@@ -1604,10 +1567,11 @@
   .import-bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .4s ease;}
 
   /* ---- Calendar: event chips (desktop) and the log link ------------------- */
-  /* Posts sit under the calendar (desktop places them with grid areas). */
   #schCalView{display:flex;flex-direction:column;}
-  #schCalView > #postCard{order:3;}
   #schCalView > #dayDetail{order:2;}
+  #rosterList{margin-top:var(--sp-3);}
+  #rosterList .roster-line{padding:6px 0;}
+  #rosterActions{flex-wrap:wrap;}
   .ev-chips{display:none;flex-direction:column;gap:2px;margin-top:3px;min-width:0;}
   .ev-chip{font-size:10.5px;line-height:1.25;font-weight:600;padding:1px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
   .ev-more{font-size:10px;color:var(--ink-soft);padding-left:5px;}
@@ -1695,19 +1659,8 @@
     .wrap > header{display:contents;}
     .wrap > header > .wordmark{grid-area:brand;font-size:1.375rem;}
     .wrap > header > .head-right{grid-area:right;}
-    .wrap > #whoCard{grid-area:who;margin:0;padding:0 var(--sp-3);height:52px;display:flex;flex-direction:column;justify-content:center;position:relative;}
     .wrap > .page-tabs{grid-area:tabs;margin:0;}
     .wrap > [id^="page"]{grid-area:page;margin-top:var(--sp-5);align-self:start;}
-    #whoCard .who-row{flex-wrap:nowrap;}
-    #whoCard .who-name{min-width:0;overflow:hidden;white-space:nowrap;}
-    #whoCard .who-label{overflow:hidden;text-overflow:ellipsis;}
-    #whoCard button{height:var(--btn-h-sm);}
-    /* The add/edit person forms drop down from the bar instead of growing it. */
-    #newPersonRow.show,#editPersonRow.show{
-      position:absolute;top:calc(100% + 8px);left:0;width:340px;z-index:30;
-      background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);
-      padding:var(--sp-4);box-shadow:var(--elev-2);margin:0;
-    }
     .page-tab{flex-direction:row;height:46px;gap:var(--sp-2);font-size:var(--fs-subhead);letter-spacing:var(--tr-subhead);}
     .page-tab svg{width:19px;height:19px;}
     .page-head{margin-bottom:var(--sp-3);}
@@ -1718,11 +1671,10 @@
        and posts scroll beside it, so nothing needs a long page scroll. */
     /* Schedule: a compact month on the left with posts under it; the day,
        events and availability fill the right. */
-    #schCalView{display:grid;grid-template-columns:minmax(0,780px) minmax(380px,1fr);grid-template-areas:"cal detail" "posts detail";gap:var(--sp-5);align-items:start;}
+    #schCalView{display:grid;grid-template-columns:minmax(0,780px) minmax(380px,1fr);grid-template-areas:"cal detail";gap:var(--sp-5);align-items:start;}
     #schCalView > .card{margin-bottom:0;}
     #schCalView > .card:has(#calendarSection){grid-area:cal;}
     #schCalView > #dayDetail{grid-area:detail;position:sticky;top:var(--sp-4);max-height:calc(100vh - 2 * var(--sp-4));overflow-y:auto;}
-    #schCalView > #postCard{grid-area:posts;}
     #calGrid .day{aspect-ratio:auto;height:clamp(54px, calc((100vh - 360px) / 6), 104px);align-items:stretch;padding:5px 6px;}
     #calGrid .day .num{text-align:left;font-size:var(--fs-footnote);}
     #calGrid .day .event-marks{display:none;}
@@ -1732,7 +1684,7 @@
 
     .split-team{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);}
     .split-fit{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);}
-    .split-hawky{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);}
+    .split-kai{grid-template-columns:minmax(0,1.5fr) minmax(320px,1fr);}
     .wo-tiles{grid-template-columns:repeat(6,minmax(0,1fr));}
 
     .page-head{margin-top:0;}
@@ -1773,54 +1725,10 @@
         <button type="button" id="syncSetupItem">Watch setup</button>
       </div>
     </div>
-    <nav class="k-switch" aria-label="Product"><a href="/" aria-current="page">Kestrel</a><a href="/lab">Lab</a></nav>
+    <nav class="k-switch" aria-label="Product"><a href="/" aria-current="page">Run</a><a href="/lab">Lab</a></nav>
     <button type="button" class="k-who" id="kWho"></button>
-    <div hidden><a id="whatsappBtn"></a><button id="emailMenuBtn"></button><div id="emailMenu"></div><button id="emailCoachMenuItem"></button><button id="emailTeamMenuItem"></button></div>
     </div>
   </header>
-
-  <div class="card" id="whoCard" hidden>
-    <div class="identity-block" style="padding-bottom:0;margin-bottom:0;border-bottom:none;">
-      <div class="who-row">
-        <div class="who-name">
-          <span class="dot" id="whoDot" hidden></span>
-          <span class="who-label" id="whoLabel">Guest</span>
-          <span id="whoTags"></span>
-        </div>
-        <button class="ghost" id="editProfileBtn" hidden>Edit</button>
-        <button class="ghost" id="newPersonBtn">+ New person</button>
-      </div>
-      <div id="newPersonRow">
-        <input type="text" id="newPersonName" placeholder="Your name">
-        <div class="color-pick-row">
-          <input type="color" id="colorPicker" value="#6b4c8a">
-          <span class="color-hex" id="colorHex">#6B4C8A</span>
-          <span class="hint">Pick any color you like</span>
-        </div>
-        <input type="tel" id="newPersonPhone" placeholder="Phone" required>
-        <input type="email" id="newPersonEmail" placeholder="Email" required>
-        <div style="display:flex; gap:8px;">
-          <button id="addPersonBtn">Add me</button>
-          <button class="ghost" id="cancelNewBtn">Cancel</button>
-        </div>
-      </div>
-      <div id="editPersonRow">
-        <span class="hint" style="margin:0 0 2px;">Editing your info</span>
-        <input type="text" id="editPersonName" placeholder="Your name">
-        <div class="color-pick-row">
-          <input type="color" id="editPersonColor" value="#6b4c8a">
-          <span class="color-hex" id="editPersonColorHex">#6B4C8A</span>
-          <span class="hint">Pick any color you like</span>
-        </div>
-        <input type="tel" id="editPersonPhone" placeholder="Phone" required>
-        <input type="email" id="editPersonEmail" placeholder="Email" required>
-        <div style="display:flex; gap:8px;">
-          <button id="saveEditPersonBtn">Save</button>
-          <button class="ghost" id="cancelEditPersonBtn">Cancel</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <div class="page-tabs" role="tablist" aria-label="Sections">
     <button type="button" class="page-tab active" id="pageTabSchedule" role="tab" aria-selected="true" aria-controls="pageSchedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle class="fill" cx="8.5" cy="14.5" r="1.1"/><circle class="fill" cx="12" cy="14.5" r="1.1"/><circle class="fill" cx="15.5" cy="14.5" r="1.1"/></svg><span>Schedule</span></button>
@@ -1843,19 +1751,6 @@
       </div>
     </div>
     <div id="schCalView">
-    <div class="card" id="postCard">
-      <div class="card-title">Posts</div>
-      <div class="post-composer" id="postComposer">
-        <input type="text" id="postHeaderInput" placeholder="Header (optional)" maxlength="80">
-        <div class="post-composer-row">
-          <textarea id="postText" placeholder="Write a post for the team…"></textarea>
-          <button id="submitPostBtn">Post</button>
-        </div>
-      </div>
-      <div class="post-hint" id="postHint">Reload and pick your name to post.</div>
-      <div id="postList"></div>
-      <button class="ghost" id="viewAllPostsBtn">See all posts</button>
-    </div>
 
     <div class="card">
       <div id="calendarSection">
@@ -1971,7 +1866,7 @@
         <button type="button" class="seg-btn" role="tab" data-tview="log">Log</button>
         <button type="button" class="seg-btn" role="tab" data-tview="library">Workouts</button>
         <button type="button" class="seg-btn" role="tab" data-tview="fitness">Fitness</button>
-        <button type="button" class="seg-btn" role="tab" data-tview="hawky">Coach</button>
+        <button type="button" class="seg-btn" role="tab" data-tview="kai">Coach</button>
       </div>
     </div>
 
@@ -2030,11 +1925,11 @@
       </div>
     </div>
 
-    <div id="tpHawkyView" class="split split-hawky" style="display:none;">
-      <section class="card hawky-chat">
+    <div id="tpKaiView" class="split split-kai" style="display:none;">
+      <section class="card kai-chat">
         <div class="section-head">
           <div class="cluster" style="gap:var(--sp-2);flex-wrap:nowrap;">
-            <img class="k-hawk md hawky-mark" src="/kestrel.svg" alt="" width="32" height="32">
+            <img class="k-hawk md kai-mark" src="/kestrel.svg" alt="" width="32" height="32">
             <div>
               <div class="card-title">Kestrel AI</div>
               <div class="hint">Your coach for every day. Tell it how runs felt, what hurts, or what you can't make, and it adjusts your plan.</div>
@@ -2042,10 +1937,10 @@
           </div>
         </div>
         <div class="k-power" id="kPower"></div>
-        <div class="hawky-off hint" id="hawkyOff" style="display:none;">The free Kestrel AI isn't switched on for this server. Pick another model to power it: Change, above.</div>
-        <div class="hawky-thread" id="hawkyThread" aria-live="polite"></div>
-        <div class="chip-scroll" id="hawkySuggest"></div>
-        <div class="hawky-compose">
+        <div class="kai-off hint" id="kaiOff" style="display:none;">The free Kestrel AI isn't switched on for this server. Pick another model to power it: Change, above.</div>
+        <div class="kai-thread" id="kaiThread" aria-live="polite"></div>
+        <div class="chip-scroll" id="kaiSuggest"></div>
+        <div class="kai-compose">
           <textarea id="askInput" rows="2" maxlength="1000" placeholder="Tell Kestrel AI how it went, or ask anything"></textarea>
           <button id="askBtn" type="button" aria-label="Send">Send</button>
         </div>
@@ -2054,15 +1949,15 @@
       <div class="split-side">
         <section class="card">
           <div class="card-title">Kestrel AI's changes</div>
-          <div id="hawkyChanges"></div>
+          <div id="kaiChanges"></div>
         </section>
         <section class="card">
           <div class="card-title">Health</div>
-          <div id="hawkyHealth"></div>
+          <div id="kaiHealth"></div>
         </section>
         <section class="card">
           <div class="card-title">Your level</div>
-          <div id="hawkyLevel"></div>
+          <div id="kaiLevel"></div>
         </section>
       </div>
     </div>
@@ -2107,7 +2002,7 @@
             </div>
           </div>
           <div class="plan-note" id="tlPlanNote" style="display:none;"></div>
-          <div class="hawky-line" id="tlDayLine" style="display:none;"></div>
+          <div class="kai-line" id="tlDayLine" style="display:none;"></div>
           <div class="stat-grid" id="tlDayStats"></div>
           <label class="track-toggle" id="tlTrackWrap"><input type="checkbox" id="tlTrack"><span><b>On the track</b><small id="tlTrackHint">Reps round to the nearest 100 m, miles to eighths, no elevation.</small></span></label>
           <div class="lock-note" id="tlLockNote" style="display:none;"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Miles, time and difficulty come from your watch.</div>
@@ -2157,7 +2052,7 @@
           <div class="stack-lg">
             <label class="field"><span>Library workout</span><select id="tlLibrary"><option value="">None</option></select></label>
             <div class="eyebrow">Notes</div>
-            <div class="hawky-note" id="tlCoachWrap" style="display:none;"><b>Kestrel AI's note</b><span id="tlCoach"></span></div>
+            <div class="kai-note" id="tlCoachWrap" style="display:none;"><b>Kestrel AI's note</b><span id="tlCoach"></span></div>
             <label class="field"><span>What happened</span><textarea id="tlSummary" rows="3" maxlength="4000"></textarea></label>
             <label class="field"><span>Your notes</span><textarea id="tlNotes" rows="2" maxlength="2000"></textarea></label>
             <div class="eyebrow">Recovery</div>
@@ -2364,6 +2259,33 @@
         <div class="card-title">Team</div>
         <div id="teamStatusList"></div>
       </section>
+      <section class="card" id="rosterCard">
+        <div class="section-head">
+          <div>
+            <div class="card-title">Roster &amp; messages</div>
+            <div class="hint" id="rosterHint">Reach everyone on the team.</div>
+          </div>
+        </div>
+        <div class="k-row" id="rosterActions">
+          <button type="button" class="k-btn small" id="rosterEmailBtn">Email everyone</button>
+          <button type="button" class="k-btn small" id="rosterTextBtn">Text everyone</button>
+          <button type="button" class="k-btn small" id="rosterWhatsAppBtn">WhatsApp</button>
+        </div>
+        <div id="rosterList"></div>
+      </section>
+      <section class="card" id="postCard">
+        <div class="card-title">Posts</div>
+        <div class="post-composer" id="postComposer">
+          <input type="text" id="postHeaderInput" placeholder="Header (optional)" maxlength="80">
+          <div class="post-composer-row">
+            <textarea id="postText" placeholder="Write a post for the team…"></textarea>
+            <button id="submitPostBtn">Post</button>
+          </div>
+        </div>
+        <div class="post-hint" id="postHint">Reload and pick your name to post.</div>
+        <div id="postList"></div>
+        <button class="ghost" id="viewAllPostsBtn">See all posts</button>
+      </section>
       </div>
     </div>
   </div>
@@ -2428,6 +2350,16 @@
           </div>
           <div class="pr-grid" id="recCourseList"></div>
         </div>
+        <div class="card" id="shoeCard">
+          <div class="section-head">
+            <div>
+              <div class="card-title">Shoes</div>
+              <div class="hint">Kestrel counts the miles from your runs and tells you when a pair is nearly done (most last 300 to 500 miles).</div>
+            </div>
+            <button type="button" id="shoeAdd">Add shoes</button>
+          </div>
+          <div id="shoeList"></div>
+        </div>
       </div>
     </div>
     <div id="youBodyView" class="you-stack" style="display:none;">
@@ -2465,7 +2397,7 @@
           <span><span class="swatch" style="background:var(--pain);"></span>Pain</span>
         </div>
         <div class="hint" id="bodyMapHint" style="margin-top:10px;">Tap a body part to mark it — tap again to cycle sore → pain → clear.</div>
-        <button type="button" class="ghost full-btn" id="bodyHawkyBtn" style="margin-top:var(--sp-3);">Tell Kestrel AI how it feels</button>
+        <button type="button" class="ghost full-btn" id="bodyKaiBtn" style="margin-top:var(--sp-3);">Tell Kestrel AI how it feels</button>
       </div>
     </div>
     <div id="youSettingsView" class="you-stack" style="display:none;">
@@ -2654,7 +2586,6 @@
 <div class="share-menu pop-menu" id="postShareMenu">
   <button type="button" data-share-action="whatsapp">Share to WhatsApp</button>
   <button type="button" data-share-action="team">Email Team</button>
-  <button type="button" data-share-action="coach">Email Coach</button>
 </div>
 
 <div class="share-menu pop-menu" id="eventShareMenu">
@@ -2681,16 +2612,6 @@
 <!-- Body Muscles — Apache-2.0, self-hosted (vendor/body-muscles/): https://github.com/vulovix/body-muscles -->
 <script src="/vendor/body-muscles/body-muscles.umd.min.js"></script>
 <script>
-// Hawks-era storage keys became kestrel.*; carry each value across once.
-try{
-  ['ScheduleView','LastUser','ShowAvailability','PracticeTime','Page','CoachSource','TrainingView','WoGroup','FitEvents'].forEach(function(n){
-    var old = localStorage.getItem('hawks' + n), key = 'kestrel.' + n.charAt(0).toLowerCase() + n.slice(1);
-    if(old !== null && localStorage.getItem(key) === null) localStorage.setItem(key, old);
-    localStorage.removeItem('hawks' + n);
-  });
-}catch(e){}
-</script>
-<script>
 // Kestrel: every API call carries the Supabase sign-in and the team on screen (kestrel.js keeps window.KESTREL current).
 (function(){
   const plain = window.fetch.bind(window);
@@ -2710,7 +2631,6 @@ try{
   };
 })();
 const DOW = ['S','M','T','W','T','F','S'];
-const COACH_EMAIL = '';
 const COACH_ID = 'coach';
 const COACH_COLOR = '#7a4fae';
 
@@ -3000,84 +2920,6 @@ function selectPerson(personId){
   renderAll();
 }
 
-// Who you are is chosen once, in the welcome pop-up; this just shows it.
-function renderPersonSelect(){
-  const dot = $('whoDot');
-  let name = 'Guest', color = '', tagHtml = '';
-  if(activePersonId === COACH_ID){
-    name = 'Coach'; color = COACH_COLOR;
-  } else if(activePersonId){
-    const p = people.find(x=>x.id===activePersonId);
-    if(p){ name = p.name; color = p.color; tagHtml = personTagsHtml(p.id); }
-  }
-  $('whoLabel').textContent = name;
-  dot.hidden = !color;
-  if(color) dot.style.background = color;
-  $('whoTags').innerHTML = tagHtml;
-  $('editProfileBtn').hidden = !isRealPerson();
-}
-
-async function addPerson(name){
-  name = name.trim();
-  if(!name) return;
-  const existing = people.find(p=>p.name.toLowerCase()===name.toLowerCase());
-  if(existing){
-    activePersonId = existing.id;
-    renderAll();
-    return;
-  }
-  const phone = $('newPersonPhone').value.trim();
-  const email = $('newPersonEmail').value.trim();
-  if(!phone){ $('newPersonPhone').focus(); return; }
-  if(!email){ $('newPersonEmail').focus(); return; }
-  const p = {
-    id: 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000),
-    name,
-    color: $('colorPicker').value,
-    phone,
-    email,
-    default_status: 'available',
-    health_status: 'healthy',
-    training_status: 'resting',
-  };
-  people.push(p);
-  activePersonId = p.id;
-  await savePerson(p);
-  renderAll();
-}
-
-function openEditProfile(){
-  const p = people.find(x=>x.id===activePersonId);
-  if(!p) return;
-  $('newPersonRow').classList.remove('show');
-  $('editPersonName').value = p.name;
-  $('editPersonColor').value = p.color;
-  $('editPersonColorHex').textContent = p.color.toUpperCase();
-  $('editPersonPhone').value = p.phone || '';
-  $('editPersonEmail').value = p.email || '';
-  $('editPersonRow').classList.add('show');
-  $('editPersonName').focus();
-  $('editPersonName').select();
-}
-
-async function saveEditProfile(){
-  const p = people.find(x=>x.id===activePersonId);
-  if(!p) return;
-  const newName = $('editPersonName').value.trim();
-  if(!newName){ $('editPersonName').focus(); return; }
-  const phone = $('editPersonPhone').value.trim();
-  const email = $('editPersonEmail').value.trim();
-  if(!phone){ $('editPersonPhone').focus(); return; }
-  if(!email){ $('editPersonEmail').focus(); return; }
-  p.name = newName;
-  p.color = $('editPersonColor').value;
-  p.phone = phone;
-  p.email = email;
-  await savePerson(p);
-  $('editPersonRow').classList.remove('show');
-  renderAll();
-}
-
 function renderDow(){ $('dowRow').innerHTML = DOW.map(d=>`<div class="dow">${d}</div>`).join(''); }
 
 function renderCalendar(){
@@ -3325,11 +3167,6 @@ function eventReminderText(ev){
   const subject = `${ev.title}${timeRange ? ' — ' + timeRange : ''}`;
   const body = `Reminder: ${ev.title} on ${formatEventDate(ev.date)}${timeRange ? ' at ' + timeRange : ''}.${ev.desc ? '\n\n' + ev.desc : ''}\n\n${window.location.href}`;
   return { subject, body };
-}
-
-function emailCoach(ev){
-  const { subject, body } = eventReminderText(ev);
-  sendMailto(COACH_EMAIL, subject, body);
 }
 
 function emailTeam(ev){
@@ -3583,11 +3420,6 @@ function sharePostToWhatsApp(post){
   window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
-function emailPostToCoach(post){
-  const { subject, body } = postReminderText(post);
-  sendMailto(COACH_EMAIL, subject, body);
-}
-
 function emailPostToTeam(post){
   const emails = people.map(p => p.email).filter(Boolean);
   if(!emails.length){
@@ -3642,6 +3474,7 @@ function renderPostItem(post){
       ${post.header ? `<div class="post-header" data-post-toggle="${post.id}">${escapeHtml(post.header)}</div>` : ''}
       <div class="post-text ${expanded ? '' : 'clamped'}" data-post-toggle="${post.id}">${escapeHtml(post.text)}</div>
     </div>
+    ${post.personId === activePersonId || (window.KESTREL && window.KESTREL.role === 'owner') ? `<button type="button" class="post-share-btn" data-post-delete="${post.id}" aria-label="Delete this post" title="Delete">✕</button>` : ''}
     <button type="button" class="post-share-btn" data-post-share="${post.id}" aria-label="Share this post" title="Share">${SHARE_ICON}</button>
   </div>`;
 }
@@ -3652,6 +3485,16 @@ function wirePostItems(container, rerender){
       const id = el.dataset.postToggle;
       if(expandedPostIds.has(id)) expandedPostIds.delete(id);
       else expandedPostIds.add(id);
+      rerender();
+    });
+  });
+  container.querySelectorAll('[data-post-delete]').forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      e.stopPropagation();
+      if(!confirm('Delete this post?')) return;
+      const id = btn.dataset.postDelete;
+      await apiPost('/api/posts/delete', { postId: id });
+      posts = posts.filter(x => x.id !== id);
       rerender();
     });
   });
@@ -3698,99 +3541,6 @@ function renderPostModal(){
   wirePostItems(list, renderPostModal);
 }
 
-// ---------------------------------------------------------------------------
-// Traditional week formatter
-//
-// Mirrors the template the worker applies: easy Monday, workout Tuesday, easy
-// Wednesday, workout Thursday, easy Friday. This side only draws the picker
-// and reads back what actually landed on the calendar.
-// ---------------------------------------------------------------------------
-
-const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F'];
-const WEEKS_SHOWN = 8;
-const FALLBACK_PRACTICE_TIME = '4:00 PM';
-
-let weekPracticeTime = FALLBACK_PRACTICE_TIME;
-try{ weekPracticeTime = localStorage.getItem('kestrel.practiceTime') || FALLBACK_PRACTICE_TIME; }catch(e){}
-
-function mondayOf(date){
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));  // Sunday closes the week rather than opening it
-  return d;
-}
-
-function upcomingWeekStarts(n){
-  const first = mondayOf(new Date());
-  return Array.from({length: n}, (_, i)=>{
-    const d = new Date(first.getFullYear(), first.getMonth(), first.getDate() + i * 7);
-    return keyOf(d.getFullYear(), d.getMonth(), d.getDate());
-  });
-}
-
-function weekdayKeys(weekStart){
-  const [y, m, d] = weekStart.split('-').map(Number);
-  return [0, 1, 2, 3, 4].map(i=>{
-    const x = new Date(y, m - 1, d + i);
-    return keyOf(x.getFullYear(), x.getMonth(), x.getDate());
-  });
-}
-
-function shortDate(dateKey){
-  return new Date(dateKey + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-// The rhythm goes onto all five weekdays, so a week reads as formatted only
-// once every one of them carries a generated practice.
-function weekIsFormatted(weekStart){
-  return weekdayKeys(weekStart).every(dk => (events[dk] || []).some(ev => ev.auto));
-}
-
-// A day can hold several events, so its cell bands together every distinct
-// style on it — a meet with a workout alongside reads as two stripes, not one.
-function dayCellStyle(dateKey){
-  const list = events[dateKey] || [];
-  if(!list.length) return { css: '', hint: 'Nothing scheduled' };
-  const keys = STYLE_KEYS.filter(k => list.some(ev => styleKeyOf(ev) === k));
-  const step = 100 / keys.length;
-  const bands = keys.map((k, i) => `${STYLES_BY_KEY[k].color} ${i * step}% ${(i + 1) * step}%`);
-  return {
-    css: `background:linear-gradient(90deg, ${bands.join(', ')});color:#fff;text-shadow:0 0 3px rgba(0,0,0,0.65)`,
-    hint: list.map(ev => `${ev.title}${formatEventTimeRange(ev) ? ' · ' + formatEventTimeRange(ev) : ''}`).join('\n'),
-  };
-}
-
-function weekPlannerHtml(){
-  const rows = upcomingWeekStarts(WEEKS_SHOWN).map(weekStart => {
-    const days = weekdayKeys(weekStart);
-    const strip = days.map((dk, i) => {
-      const { css, hint } = dayCellStyle(dk);
-      return `<span class="week-cell" style="${css}" title="${escapeHtml(hint)}">${WEEKDAY_LETTERS[i]}</span>`;
-    }).join('');
-    return `
-      <div class="week-row">
-        <input type="checkbox" class="week-check" data-week="${weekStart}" ${weekIsFormatted(weekStart) ? 'checked' : ''}>
-        <div class="week-row-main">
-          <div class="week-range">${shortDate(days[0])} – ${shortDate(days[4])}</div>
-          <div class="week-strip">${strip}</div>
-        </div>
-      </div>`;
-  }).join('');
-
-  const legend = STYLE_KEYS
-    .map(k => `<span><span class="dot" style="background:${STYLES_BY_KEY[k].color}"></span>${STYLES_BY_KEY[k].label}</span>`)
-    .join('');
-
-  return `
-    <div class="week-intro">Tick a week to put the usual rhythm on all five weekdays — easy, workout, easy, workout, easy. Nothing already scheduled is touched or replaced; a day can hold a meet and a practice at once. Un-ticking removes only the practices this tool added.</div>
-    <div class="week-tools">
-      <label for="weekPracticeTime">Practice time</label>
-      <input type="text" id="weekPracticeTime" value="${escapeHtml(weekPracticeTime)}" placeholder="${FALLBACK_PRACTICE_TIME}">
-    </div>
-    ${rows}
-    <div class="week-legend">${legend}</div>
-  `;
-}
-
 function renderAdminModal(){
   const peopleHtml = people.length
     ? people.map(p => `
@@ -3803,18 +3553,6 @@ function renderAdminModal(){
         <button type="button" class="admin-delete-btn" data-delete-person="${p.id}">Delete</button>
       </div>`).join('')
     : '<div class="admin-empty">No one on the roster.</div>';
-
-  const sortedPosts = [...posts].sort((a, b) => b.createdAt - a.createdAt);
-  const postsHtml = sortedPosts.length
-    ? sortedPosts.map(post => `
-      <div class="admin-row">
-        <div class="admin-row-main">
-          <div class="admin-row-title">${post.header ? escapeHtml(post.header) : escapeHtml(postAuthorName(post.personId))}</div>
-          <div class="admin-row-sub">${post.header ? `${escapeHtml(postAuthorName(post.personId))}: ` : ''}${escapeHtml(post.text)}</div>
-        </div>
-        <button type="button" class="admin-delete-btn" data-delete-post="${post.id}">Delete</button>
-      </div>`).join('')
-    : '<div class="admin-empty">No posts yet.</div>';
 
   const adminEventRow = ev => {
       if(ev.id === editingEventId){
@@ -3887,10 +3625,6 @@ function renderAdminModal(){
     <div class="admin-section-label">Events</div>
     ${upcomingHtml}
     ${pastHtml}
-    <div class="admin-section-label">Week schedule</div>
-    ${weekPlannerHtml()}
-    <div class="admin-section-label">Posts</div>
-    ${postsHtml}
 
   `;
 
@@ -3912,16 +3646,6 @@ function renderAdminModal(){
       if(activePersonId === id) activePersonId = null;
       renderAdminModal();
       renderAll();
-    });
-  });
-  $('adminModalList').querySelectorAll('[data-delete-post]').forEach(btn=>{
-    btn.addEventListener('click', async ()=>{
-      if(!confirm('Delete this post?')) return;
-      const id = btn.dataset.deletePost;
-      await apiPost('/api/posts/delete', { postId: id });
-      posts = posts.filter(x => x.id !== id);
-      renderAdminModal();
-      renderPosts();
     });
   });
   $('adminModalList').querySelectorAll('[data-delete-event]').forEach(btn=>{
@@ -3976,25 +3700,6 @@ function renderAdminModal(){
       if(currentPage === 'schedule' && scheduleView === 'meets') renderMeets();
     });
   });
-  $('weekPracticeTime').addEventListener('input', e=>{
-    weekPracticeTime = e.target.value;
-    try{ localStorage.setItem('kestrel.practiceTime', weekPracticeTime); }catch(err){}
-  });
-  $('adminModalList').querySelectorAll('.week-check').forEach(box=>{
-    box.addEventListener('change', async ()=>{
-      box.disabled = true;
-      const path = box.checked ? '/api/schedule/week/apply' : '/api/schedule/week/clear';
-      await apiPost(path, {
-        weekStart: box.dataset.week,
-        time: weekPracticeTime.trim() || FALLBACK_PRACTICE_TIME,
-      });
-      await loadState();
-      renderAdminModal();
-      renderCalendar();
-      renderDayDetail();
-    });
-  });
-
   if(editingEventId) renderAdminEventTypePicker();
 }
 
@@ -4113,7 +3818,6 @@ async function setHealth(status){
   if(p) p.health_status = status;
   await setHealthStatusRemote(activePersonId, status);
   renderHealthPicker();
-  renderPersonSelect();
   renderDayDetail();
   renderTeamStatus();
 }
@@ -4127,7 +3831,6 @@ async function setTraining(status){
   if(p) p.training_status = status;
   await setTrainingStatusRemote(activePersonId, status);
   renderTrainingPicker();
-  renderPersonSelect();
   renderDayDetail();
   renderTeamStatus();
 }
@@ -4450,32 +4153,32 @@ const ASK_SUGGESTIONS = ['How was my week?', 'What should I run tomorrow?', 'My 
 
 // Kestrel AI is a chat. Each person's thread lives for this page load; the last
 // 12 turns go to the server so Kestrel AI remembers what it just asked.
-let hawkyChat = { personId: null, turns: [] };
+let kaiChat = { personId: null, turns: [] };
 
-function hawkyBubble(role, html, saved, refused){
+function kaiBubble(role, html, saved, refused){
   const el = document.createElement('div');
-  el.className = `hawky-msg ${role}`;
+  el.className = `kai-msg ${role}`;
   el.innerHTML = html;
-  $('hawkyThread').appendChild(el);
+  $('kaiThread').appendChild(el);
   if(saved?.length){
     const s = document.createElement('div');
-    s.className = 'hawky-saved';
+    s.className = 'kai-saved';
     s.innerHTML = saved.map(x=>`<span>Saved: ${escapeHtml(x)}</span>`).join('');
-    $('hawkyThread').appendChild(s);
+    $('kaiThread').appendChild(s);
   }
   if(refused?.length){
     const r = document.createElement('div');
-    r.className = 'hawky-saved refused';
+    r.className = 'kai-saved refused';
     r.innerHTML = refused.map(x=>`<span>Not changed: ${escapeHtml(x)}</span>`).join('');
-    $('hawkyThread').appendChild(r);
+    $('kaiThread').appendChild(r);
   }
-  $('hawkyThread').scrollTop = $('hawkyThread').scrollHeight;
+  $('kaiThread').scrollTop = $('kaiThread').scrollHeight;
   return el;
 }
 
 // Kestrel AI opens like a coach would: asks about the last run if it has no feel
 // logged, or about anything marked sore on the body map.
-async function hawkyOpener(){
+async function kaiOpener(){
   const p = people.find(x=>x.id===activePersonId);
   const name = p?.first_name || p?.name?.split(' ')[0] || '';
   const marks = Object.entries(bodyMarks[activePersonId] || {});
@@ -4493,38 +4196,38 @@ async function hawkyOpener(){
   const parts = [`Hey ${name}!`];
   if(recent && recent.feel == null) parts.push(`How did ${when}'s ${what} feel, 1 to 10?${recent.sleep_hours == null ? ' And how did you sleep?' : ''}`);
   if(sore.length) parts.push(`Your body map has ${sore.join(' and ')} marked. How's that feeling?`);
-  const h = await loadHawky();
+  const h = await loadKai();
   // Today's run until it's done, then tomorrow's.
   const next = h?.today && !h.today_done ? { t: h.today, when: 'Today' } : h?.tomorrow ? { t: h.tomorrow, when: 'Tomorrow' } : null;
   if(next && parts.length === 1){
     const t = next.t;
-    parts.push(`${next.when} is ${t.type === 'Off' ? 'a rest day' : `${t.type.toLowerCase()} ${t.miles} mi`}${t.source === 'hawky' || t.source === 'auto' ? ' (I changed it)' : ''}. Can you make it?`);
+    parts.push(`${next.when} is ${t.type === 'Off' ? 'a rest day' : `${t.type.toLowerCase()} ${t.miles} mi`}${['kai','hawky'].includes(t.source) || t.source === 'auto' ? ' (I changed it)' : ''}. Can you make it?`);
   }
   if(parts.length === 1) parts.push('How are the legs today? Ask me anything about your training.');
   return parts.join(' ');
 }
 
 // Kestrel AI lives in Training > Kestrel AI; anything that opens Kestrel AI goes there.
-async function openHawky(question, ask){
+async function openKai(question, ask){
   if(!isRealPerson()){ alert('Pick your name first so Kestrel AI knows whose training to look at.'); return; }
-  trainingView = 'hawky';
+  trainingView = 'kai';
   setPage('training');
-  await startHawkyChat();
+  await startKaiChat();
   if(question !== undefined) $('askInput').value = question;
   if(ask) askCoachNow(); else setTimeout(()=>{ $('askInput').focus(); $('askInput').setSelectionRange(9999, 9999); }, 50);
 }
 
-async function startHawkyChat(){
-  if(!$('hawkySuggest').children.length){
-    $('hawkySuggest').innerHTML = ASK_SUGGESTIONS.map(q=>`<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
-    $('hawkySuggest').querySelectorAll('[data-q]').forEach(b=> b.addEventListener('click', ()=>{ $('askInput').value = b.dataset.q; askCoachNow(); }));
+async function startKaiChat(){
+  if(!$('kaiSuggest').children.length){
+    $('kaiSuggest').innerHTML = ASK_SUGGESTIONS.map(q=>`<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
+    $('kaiSuggest').querySelectorAll('[data-q]').forEach(b=> b.addEventListener('click', ()=>{ $('askInput').value = b.dataset.q; askCoachNow(); }));
   }
-  if(hawkyChat.personId !== activePersonId){
-    hawkyChat = { personId: activePersonId, turns: [] };
-    $('hawkyThread').innerHTML = '';
-    const opener = await hawkyOpener();
-    hawkyChat.turns.push({ role: 'hawky', text: opener });
-    hawkyBubble('hawky', escapeHtml(opener));
+  if(kaiChat.personId !== activePersonId){
+    kaiChat = { personId: activePersonId, turns: [] };
+    $('kaiThread').innerHTML = '';
+    const opener = await kaiOpener();
+    kaiChat.turns.push({ role: 'kai', text: opener });
+    kaiBubble('kai', escapeHtml(opener));
   }
 }
 
@@ -4533,24 +4236,24 @@ async function askCoachNow(){
   if(!q || !isRealPerson() || $('askBtn').disabled) return;
   const personId = activePersonId;
   $('askInput').value = '';
-  hawkyChat.turns.push({ role: 'user', text: q });
-  hawkyBubble('user', escapeHtml(q));
-  const typing = hawkyBubble('hawky typing', 'Kestrel AI is thinking…');
+  kaiChat.turns.push({ role: 'user', text: q });
+  kaiBubble('user', escapeHtml(q));
+  const typing = kaiBubble('kai typing', 'Kestrel AI is thinking…');
   $('askBtn').disabled = true; $('askStatus').textContent = '';
-  const res = await window.kestrelAsk(hawkyChat.turns.slice(-12));
+  const res = await window.kestrelAsk(kaiChat.turns.slice(-12));
   $('askBtn').disabled = false;
   typing.remove();
   if(personId !== activePersonId) return;
   if(!res?.answer){
-    hawkyChat.turns.pop();
-    hawkyBubble('hawky', escapeHtml(res?.error || 'Couldn’t reach Kestrel. Check your connection.'));
+    kaiChat.turns.pop();
+    kaiBubble('kai', escapeHtml(res?.error || 'Couldn’t reach Kestrel. Check your connection.'));
     return;
   }
-  hawkyChat.turns.push({ role: 'hawky', text: res.answer });
-  hawkyBubble('hawky', miniMarkdown(res.answer), res.saved, res.refused);
+  kaiChat.turns.push({ role: 'kai', text: res.answer });
+  kaiBubble('kai', miniMarkdown(res.answer), res.saved, res.refused);
   // Anything Kestrel AI saved or changed shows up everywhere right away.
   if(res.saved?.length){
-    hawkyData = null; fitnessData = null;
+    kaiData = null; fitnessData = null;
     await loadState();
     renderAll();
   }
@@ -4996,11 +4699,8 @@ async function savePersonal(){
 }
 
 function renderAll(){
-  renderPersonSelect();
   renderPosts();
   $('editModeBtn').style.display = isRealPerson() ? '' : 'none';
-  $('newPersonBtn').style.display = activePersonId ? 'none' : '';
-  $('whatsappBtn').style.visibility = isRealPerson() ? 'visible' : 'hidden';
   if(!isRealPerson() && editMode) setEditMode(false);
   renderCalendar();
   renderDayDetail();
@@ -5076,11 +4776,6 @@ function wireUI(){
     closeShareMenu();
     if(post) emailPostToTeam(post);
   });
-  $('postShareMenu').querySelector('[data-share-action="coach"]').addEventListener('click', ()=>{
-    const post = posts.find(p => p.id === shareMenuPostId);
-    closeShareMenu();
-    if(post) emailPostToCoach(post);
-  });
   document.addEventListener('click', e=>{
     if(!$('postShareMenu').contains(e.target) && !e.target.closest('.post-share-btn')){
       closeShareMenu();
@@ -5122,67 +4817,6 @@ function wireUI(){
     if(!$('attendeesContactMenu').contains(e.target) && !e.target.closest('.info-btn')){
       closeContactMenu();
     }
-  });
-
-  $('emailMenuBtn').addEventListener('click', e=>{
-    e.stopPropagation();
-    $('emailMenu').classList.toggle('show');
-  });
-  $('emailCoachMenuItem').addEventListener('click', ()=>{
-    $('emailMenu').classList.remove('show');
-    emailCoach();
-  });
-  $('emailTeamMenuItem').addEventListener('click', ()=>{
-    $('emailMenu').classList.remove('show');
-    emailTeam();
-  });
-  document.addEventListener('click', e=>{
-    if(!$('emailMenu').contains(e.target) && e.target !== $('emailMenuBtn')){
-      $('emailMenu').classList.remove('show');
-    }
-  });
-
-  $('newPersonBtn').addEventListener('click', ()=>{
-    $('newPersonRow').classList.add('show');
-    $('newPersonName').focus();
-  });
-  $('cancelNewBtn').addEventListener('click', ()=>{
-    $('newPersonRow').classList.remove('show');
-    $('newPersonName').value='';
-    $('newPersonPhone').value='';
-    $('newPersonEmail').value='';
-  });
-  $('addPersonBtn').addEventListener('click', ()=>{
-    addPerson($('newPersonName').value);
-    $('newPersonName').value='';
-    $('newPersonPhone').value='';
-    $('newPersonEmail').value='';
-    $('newPersonRow').classList.remove('show');
-  });
-  $('newPersonName').addEventListener('keydown', e=>{
-    if(e.key==='Enter'){
-      addPerson($('newPersonName').value);
-      $('newPersonName').value='';
-      $('newPersonPhone').value='';
-      $('newPersonEmail').value='';
-      $('newPersonRow').classList.remove('show');
-    }
-  });
-  $('colorPicker').addEventListener('input', e=>{
-    $('colorHex').textContent = e.target.value.toUpperCase();
-  });
-
-  $('editProfileBtn').addEventListener('click', openEditProfile);
-
-  $('editPersonColor').addEventListener('input', e=>{
-    $('editPersonColorHex').textContent = e.target.value.toUpperCase();
-  });
-  $('cancelEditPersonBtn').addEventListener('click', ()=>{
-    $('editPersonRow').classList.remove('show');
-  });
-  $('saveEditPersonBtn').addEventListener('click', saveEditProfile);
-  $('editPersonName').addEventListener('keydown', e=>{
-    if(e.key==='Enter') saveEditProfile();
   });
 
   $('prevMonth').addEventListener('click', ()=>{ viewMonth--; if(viewMonth<0){viewMonth=11; viewYear--;} renderCalendar(); });
@@ -5399,12 +5033,12 @@ function wireUI(){
   $('syncNowItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); runSync(); });
   $('syncImportItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); runImport(); });
   $('syncSetupItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); setPage('you'); setYouView('settings'); });
-  $('tmCant').addEventListener('click', ()=> openHawky("I can't do today's run as planned because ", false));
-  $('tmAsk').addEventListener('click', ()=> openHawky());
-  $('tmReset').addEventListener('click', ()=>{ const t = hawkyData?.today; if(t) resetPlanDay(t.date, t.source === 'auto'); });
+  $('tmCant').addEventListener('click', ()=> openKai("I can't do today's run as planned because ", false));
+  $('tmAsk').addEventListener('click', ()=> openKai());
+  $('tmReset').addEventListener('click', ()=>{ const t = kaiData?.today; if(t) resetPlanDay(t.date, t.source === 'auto'); });
   $('askBtn').addEventListener('click', askCoachNow);
   $('askInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); askCoachNow(); } });
-  $('bodyHawkyBtn').addEventListener('click', ()=> openHawky());
+  $('bodyKaiBtn').addEventListener('click', ()=> openKai());
   $('coachSource').querySelectorAll('[data-src]').forEach(b=> b.addEventListener('click', ()=>{
     coachSource = b.dataset.src;
     try{ localStorage.setItem('kestrel.coachSource', coachSource); }catch(e){}
@@ -6002,7 +5636,7 @@ const WO_ICON = {
   long: '<svg viewBox="0 0 24 24"><path d="M3 15h5v-5h8v5h5"/><path d="M3 21h18"/></svg>',
   fartlek: '<svg viewBox="0 0 24 24"><path d="M3 14l3-4 3 6 3-8 3 6 3-3 3 3"/><path d="M3 21h18"/></svg>',
   all: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>',
-  hawky: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 19l-5-3-5 3 1.4-6.2L4 9l5.8-.7z"/></svg>',
+  kai: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 19l-5-3-5 3 1.4-6.2L4 9l5.8-.7z"/></svg>',
 };
 const WO_TILES = [
   { key:'tempo', label:'Tempo', sub:'Threshold, cruise reps, progressions' },
@@ -6010,7 +5644,7 @@ const WO_TILES = [
   { key:'long', label:'Long intervals', sub:'800m to 2 mile reps' },
   { key:'fartlek', label:'Fartlek', sub:'Timed surges, on/off' },
   { key:'all', label:'All workouts', sub:'Every session in the library' },
-  { key:'hawky', label:'Ask Kestrel AI', sub:'Build one for today' },
+  { key:'kai', label:'Ask Kestrel AI', sub:'Build one for today' },
 ];
 const PACE_SHORT = { recovery:'Recovery', easy:'Easy', steady:'Steady', tempo:'Tempo', threshold:'Threshold', cv:'CV', '10k':'10K', '5k':'5K', '3200':'3200', mile:'Mile', '800':'800', '400':'400' };
 
@@ -6019,10 +5653,10 @@ function pacesHtml(zones){
 }
 
 function setWoGroup(g){
-  if(g === 'hawky'){
+  if(g === 'kai'){
     const filt = [$('libRace').value && `for the ${$('libRace').value}`, $('libLen').value && $('libLen').value !== '999' && `in under ${$('libLen').value} minutes`].filter(Boolean).join(' ');
     const kind = woGroup !== 'all' ? (WO_TILES.find(t=>t.key === woGroup)?.label.toLowerCase() || 'a') : '';
-    openHawky(`Build me ${kind ? 'a ' + kind : 'a'} workout for tomorrow${filt ? ' ' + filt : ''}, with my rep targets.`, false);
+    openKai(`Build me ${kind ? 'a ' + kind : 'a'} workout for tomorrow${filt ? ' ' + filt : ''}, with my rep targets.`, false);
     return;
   }
   woGroup = g; libType = '';
@@ -6033,7 +5667,7 @@ function setWoGroup(g){
 async function renderLibrary(){
   const lib = await loadLibrary();
   if(currentPage !== 'training' || trainingView !== 'library') return;
-  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'hawky' ? 'hawky' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.key]}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
+  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'kai' ? 'kai' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.key]}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
   $('woTiles').querySelectorAll('[data-g]').forEach(b=> b.addEventListener('click', ()=> setWoGroup(b.dataset.g)));
   if(!lib){ $('libList').innerHTML = '<div class="hint">Couldn’t load the library.</div>'; return; }
   const me = isRealPerson();
@@ -6082,14 +5716,14 @@ async function renderLibrary(){
         <div class="lib-why"><b>How to run it</b><span>${escapeHtml(w.cues)}</span></div>
         <div class="lib-why"><b>Next time</b><span>${escapeHtml(w.progress)}</span></div>
         <div class="lib-why"><b>Good for</b><span>${escapeHtml(w.races.length === lib.races.length ? 'All races' : w.races.join(', '))} · ${escapeHtml(w.phase.map(cap).join(', '))}</span></div>
-        ${me ? `<div class="lib-actions"><button type="button" class="ghost sm-btn" data-hawky="${w.id}">Ask Kestrel AI to fit it into my week</button></div>` : ''}
+        ${me ? `<div class="lib-actions"><button type="button" class="ghost sm-btn" data-kai="${w.id}">Ask Kestrel AI to fit it into my week</button></div>` : ''}
       </div>
     </details>`;
   }).join('') : '<div class="hint">No workouts match. Try fewer filters.</div>';
   $('libList').querySelectorAll('details').forEach(el=> el.addEventListener('toggle', ()=>{ if(el.open) libOpen = el.dataset.id; }));
-  $('libList').querySelectorAll('[data-hawky]').forEach(b=> b.addEventListener('click', ()=>{
-    const w = lib.workouts.find(x=>x.id === b.dataset.hawky);
-    openHawky(`Can I fit "${w.name}" into my week? Which day works best?`, false);
+  $('libList').querySelectorAll('[data-kai]').forEach(b=> b.addEventListener('click', ()=>{
+    const w = lib.workouts.find(x=>x.id === b.dataset.kai);
+    openKai(`Can I fit "${w.name}" into my week? Which day works best?`, false);
   }));
 }
 
@@ -6247,12 +5881,30 @@ async function renderPredictor(){
 
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
+function renderRoster(){
+  const owner = window.KESTREL && window.KESTREL.role === 'owner';
+  const emails = people.map(p => p.email).filter(Boolean);
+  const phones = people.map(p => p.phone).filter(Boolean);
+  $('rosterHint').textContent = people.length ? `${people.length} on the team · ${emails.length} email${emails.length === 1 ? '' : 's'} · ${phones.length} phone${phones.length === 1 ? '' : 's'} on file.` : 'No one on the roster yet.';
+  $('rosterEmailBtn').disabled = !emails.length;
+  $('rosterTextBtn').disabled = !phones.length;
+  $('rosterList').innerHTML = people.map(p=>`<div class="roster-line"><div style="flex:1;min-width:0;"><div class="roster-main"><span class="dot" style="background:${p.color}"></span><span class="roster-name">${escapeHtml(p.name)}</span>${personTagsHtml(p.id)}</div>${p.phone || p.email ? `<div class="hint">${escapeHtml(p.phone || '')}${p.phone && p.email ? ' · ' : ''}${escapeHtml(p.email || '')}</div>` : ''}</div></div>`).join('')
+    + (owner ? '<div class="k-row"><button type="button" class="k-btn small" id="rosterManageBtn">Manage roster &amp; calendar</button></div>' : '');
+  if($('rosterManageBtn')) $('rosterManageBtn').onclick = ()=> window.openTeamAdmin();
+  const note = ()=> prompt('Message to the team (optional)', '') ;
+  $('rosterEmailBtn').onclick = ()=>{ const m = note(); if(m === null) return; sendMailto(emails.join(','), 'Team message', m); };
+  $('rosterTextBtn').onclick = ()=>{ const m = note(); if(m === null) return; window.location.href = `sms:${phones.join(',')}?&body=${encodeURIComponent(m)}`; };
+  $('rosterWhatsAppBtn').onclick = ()=>{ const m = note(); if(m === null) return; window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(m)}`, '_blank'); };
+}
+
 async function renderTeam(){
   const hasTeam = !!(window.KESTREL && window.KESTREL.teamId);
   $('teamEmpty').hidden = hasTeam;
   $('teamBody').hidden = !hasTeam;
   $('teamEmptyStart').onclick = ()=> $('kAddTeam') && $('kAddTeam').click();
   if(!hasTeam) return;
+  renderRoster();
+  renderPosts();
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
   if(currentPage !== 'team') return;
@@ -6284,21 +5936,21 @@ function openCalendarDay(date){
 }
 
 // --- Kestrel AI's plan: tomorrow, this week, health and level ----------------------
-let hawkyData = null;
-async function loadHawky(force){
+let kaiData = null;
+async function loadKai(force){
   if(!isRealPerson()) return null;
   const personId = activePersonId;
-  if(!force && hawkyData && hawkyData._for === personId && Date.now() - hawkyData._at < 60000) return hawkyData;
+  if(!force && kaiData && kaiData._for === personId && Date.now() - kaiData._at < 60000) return kaiData;
   try{
-    const res = await fetch('/api/hawky?personId=' + encodeURIComponent(personId), { cache:'no-store' });
-    if(res.ok){ hawkyData = await res.json(); hawkyData._for = personId; hawkyData._at = Date.now(); }
+    const res = await fetch('/api/kai?personId=' + encodeURIComponent(personId), { cache:'no-store' });
+    if(res.ok){ kaiData = await res.json(); kaiData._for = personId; kaiData._at = Date.now(); }
   }catch(e){}
-  return hawkyData && hawkyData._for === personId ? hawkyData : null;
+  return kaiData && kaiData._for === personId ? kaiData : null;
 }
 
 const dayLabel = (d)=> new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
 const sessionText = (d)=> d.detail ? d.detail : d.session ? d.session.text : '';
-const SOURCE_LABEL = { plan:'From your plan', kept:'From your plan', hawky:'Changed by Kestrel AI', auto:'Adjusted by Kestrel AI' };
+const SOURCE_LABEL = { plan:'From your plan', kept:'From your plan', kai:'Changed by Kestrel AI', hawky:'Changed by Kestrel AI', auto:'Adjusted by Kestrel AI' };
 
 function targetsHtml(targets){
   return targets?.length ? `<div class="lib-targets">${targets.map(t=>`<div class="lib-target"><b>${escapeHtml(t.text)}</b><span class="tz">${escapeHtml(t.zone)} · ${escapeHtml(t.per_mile)}/mi</span><span class="tr">${escapeHtml(t.per_rep)}</span></div>`).join('')}</div>` : '';
@@ -6313,7 +5965,7 @@ function renderToday(h){
   $('tmEyebrow').textContent = `Today · ${dayLabel(t.date)}`;
   $('tmType').textContent = t.type === 'Off' ? 'Rest day' : t.type;
   $('tmMiles').textContent = t.miles ? `${t.miles} mi` : '';
-  const changed = t.source === 'hawky' || t.source === 'auto';
+  const changed = ['kai','hawky'].includes(t.source) || t.source === 'auto';
   $('tmBadge').innerHTML = `<span class="badge ${changed ? 'tone-race' : 'tone-cross'}">${SOURCE_LABEL[t.source] || ''}</span>`;
   const detail = sessionText(t);
   const base = t.base && changed ? `Plan had: ${t.base.type === 'Off' ? 'rest' : `${t.base.type} ${t.base.miles} mi`}` : '';
@@ -6333,7 +5985,7 @@ function renderToday(h){
     $('tmDone').querySelectorAll('[data-key]').forEach(b=> b.addEventListener('click', ()=> openLogDay(b.dataset.date, b.dataset.key)));
   }
   const tm = h.tomorrow;
-  $('tmNext').innerHTML = tm ? `<span class="eyebrow">Tomorrow</span> ${escapeHtml(tm.type === 'Off' ? 'Rest' : `${tm.type}${tm.miles ? ` ${tm.miles} mi` : ''}`)}${tm.source === 'hawky' || tm.source === 'auto' ? ' <span class="badge tone-race">Kestrel AI</span>' : ''}${tm.session && !tm.detail ? ` <span class="hint">${escapeHtml(tm.session.text)}</span>` : tm.detail ? ` <span class="hint">${escapeHtml(tm.detail)}</span>` : ''}` : '';
+  $('tmNext').innerHTML = tm ? `<span class="eyebrow">Tomorrow</span> ${escapeHtml(tm.type === 'Off' ? 'Rest' : `${tm.type}${tm.miles ? ` ${tm.miles} mi` : ''}`)}${tm.source === 'kai' || tm.source === 'auto' ? ' <span class="badge tone-race">Kestrel AI</span>' : ''}${tm.session && !tm.detail ? ` <span class="hint">${escapeHtml(tm.session.text)}</span>` : tm.detail ? ` <span class="hint">${escapeHtml(tm.detail)}</span>` : ''}` : '';
 }
 
 function renderOwnWeek(h){
@@ -6344,7 +5996,7 @@ function renderOwnWeek(h){
   $('tpWeeks').innerHTML = ''; $('tpWeeks').style.display = 'none';
   const today = todayKey();
   $('tpDays').innerHTML = w.days.map(d=>{
-    const changed = d.source === 'hawky' || d.source === 'auto';
+    const changed = ['kai','hawky'].includes(d.source) || d.source === 'auto';
     const off = d.type === 'Off';
     const text = sessionText(d);
     return `<button type="button" class="tp-day tp-day-btn ${off ? 'off' : ''} ${changed ? 'changed' : ''} ${d.date === today ? 'is-today' : ''}" data-date="${d.date}">
@@ -6384,7 +6036,7 @@ function healthHtml(h){
 function levelHtml(h){
   const l = h.level;
   if(!l) return '<div class="hint">Set your class on the You tab to get a plan.</div>';
-  const hist = h.level_history.length ? `<div class="list" style="margin-top:var(--sp-3);">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'hawky' ? 'Kestrel AI' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
+  const hist = h.level_history.length ? `<div class="list" style="margin-top:var(--sp-3);">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'kai' ? 'Kestrel AI' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
   return `<div class="level-now"><b>${l.weekly_miles}</b><span>miles a week</span>${l.next_weekly_miles ? `<i>Next: ${l.next_weekly_miles}</i>` : ''}</div>
     <div class="hint" style="margin:var(--sp-2) 0;">${l.ready ? 'You\'re ready for the next level. Kestrel AI moves you up at the start of a week.' : l.next_weekly_miles ? 'Kestrel AI moves you up once all of these are true:' : 'You\'re at the top level Kestrel AI can set.'}</div>
     ${l.next_weekly_miles ? `<ul class="gates">${l.gates.map(g=>`<li class="${g.ok ? 'ok' : ''}">${escapeHtml(g.label)}</li>`).join('')}</ul>` : ''}${hist}`;
@@ -6392,17 +6044,17 @@ function levelHtml(h){
 
 function changesHtml(h){
   if(!h.changes.length && !h.leveled_up) return '<div class="hint">No changes to your plan right now. Tell Kestrel AI if you can\'t make a day, or how a run felt, and it adjusts.</div>';
-  return (h.leveled_up ? `<div class="hawky-today"><b>Leveled up</b>${h.leveled_up.from_miles} → ${h.leveled_up.to_miles} miles a week. ${escapeHtml(h.leveled_up.reason)}</div>` : '')
+  return (h.leveled_up ? `<div class="kai-today"><b>Leveled up</b>${h.leveled_up.from_miles} → ${h.leveled_up.to_miles} miles a week. ${escapeHtml(h.leveled_up.reason)}</div>` : '')
     + h.changes.map(c=>`<div class="list-row"><div class="list-main"><div class="list-title">${escapeHtml(dayLabel(c.date))}: ${escapeHtml(c.type)}${c.miles ? ` ${c.miles} mi` : ''}</div><div class="list-meta">${escapeHtml(c.reason || '')}</div></div><button type="button" class="ghost sm-btn" data-undo="${c.date}">Undo</button></div>`).join('');
 }
 
 async function resetPlanDay(date, keep){
   const res = await apiPost('/api/plan/reset', { personId: activePersonId, date, keep });
-  if(res && !res.error){ hawkyData = { ...res, _for: activePersonId, _at: Date.now() }; renderTraining(); }
+  if(res && !res.error){ kaiData = { ...res, _for: activePersonId, _at: Date.now() }; renderTraining(); }
 }
 
 async function renderPlanSide(){
-  const h = await loadHawky();
+  const h = await loadKai();
   if(!h || currentPage !== 'training') return;
   if(trainingView === 'plan'){
     renderToday(h);
@@ -6410,30 +6062,30 @@ async function renderPlanSide(){
     $('levelCard').style.display = h.level ? '' : 'none'; $('levelBody').innerHTML = levelHtml(h);
     if(h.week) renderOwnWeek(h);
   }
-  if(trainingView === 'hawky'){
-    $('hawkyChanges').innerHTML = changesHtml(h);
-    $('hawkyChanges').querySelectorAll('[data-undo]').forEach(b=> b.addEventListener('click', ()=> resetPlanDay(b.dataset.undo, false)));
-    $('hawkyHealth').innerHTML = healthHtml(h.health);
-    $('hawkyLevel').innerHTML = levelHtml(h);
+  if(trainingView === 'kai'){
+    $('kaiChanges').innerHTML = changesHtml(h);
+    $('kaiChanges').querySelectorAll('[data-undo]').forEach(b=> b.addEventListener('click', ()=> resetPlanDay(b.dataset.undo, false)));
+    $('kaiHealth').innerHTML = healthHtml(h.health);
+    $('kaiLevel').innerHTML = levelHtml(h);
   }
 }
 
 async function renderTraining(){
-  if(!['plan','log','library','fitness','hawky'].includes(trainingView)) trainingView = 'plan';
+  if(!['plan','log','library','fitness','kai'].includes(trainingView)) trainingView = 'plan';
   $('tpViews').querySelectorAll('[data-tview]').forEach(b=>{ const on = b.dataset.tview === trainingView; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
-  ['plan','log','library','fitness','hawky'].forEach(v=> $('tp' + { plan:'Plan', log:'Log', library:'Library', fitness:'Fitness', hawky:'Hawky' }[v] + 'View').style.display = trainingView === v ? '' : 'none');
+  ['plan','log','library','fitness','kai'].forEach(v=> $('tp' + { plan:'Plan', log:'Log', library:'Library', fitness:'Fitness', kai:'Kai' }[v] + 'View').style.display = trainingView === v ? '' : 'none');
   const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
-  $('trTitle').textContent = { plan: p ? `${p.first_name || p.name.split(' ')[0]}’s plan` : 'Training plans', log: 'Training log', library: 'Workouts', fitness: 'Fitness States', hawky: 'Kestrel AI' }[trainingView];
+  $('trTitle').textContent = { plan: p ? `${p.first_name || p.name.split(' ')[0]}’s plan` : 'Training plans', log: 'Training log', library: 'Workouts', fitness: 'Fitness States', kai: 'Kestrel AI' }[trainingView];
   if(trainingView === 'log') return renderTrainingLog();
   if(trainingView === 'library') return renderLibrary();
   if(trainingView === 'fitness') return renderFitness();
-  if(trainingView === 'hawky') return renderHawkyTab();
+  if(trainingView === 'kai') return renderKaiTab();
   const own = isRealPerson();
   $('todayCard').style.display = 'none';
   ['healthCard','levelCard'].forEach(id=> $(id).style.display = own ? $(id).style.display : 'none');
   renderWeekCard();
   if(own){
-    const h = await loadHawky();
+    const h = await loadKai();
     if(h?.week){ renderPlanSide(); return; }
   }
   // No plan of your own (guest, coach, or no class year): browse the plans.
@@ -6467,22 +6119,22 @@ async function renderTraining(){
   $('tpTotal').textContent = `${plan.weeks[week].miles} miles a week. WO = workout miles, WU/CD = warm-up/cool-down.`;
 }
 
-async function renderHawkyTab(){
+async function renderKaiTab(){
   const st = isRealPerson() ? (icuState[activePersonId] || await fetchIcuStatus(activePersonId)) : null;
   const off = isRealPerson() && st && !st.ai && (window.KESTREL?.aiProvider || 'kestrel') === 'kestrel';
   if(window.kestrelRenderPower) window.kestrelRenderPower($('kPower'));
-  $('hawkyOff').style.display = off ? '' : 'none';
+  $('kaiOff').style.display = off ? '' : 'none';
   // With Kestrel AI off there is nothing to chat with: hide the prompts and the box,
   // but the plan changes, health and level still show.
-  ['hawkySuggest', 'askStatus'].forEach(id=> $(id).style.display = off ? 'none' : '');
-  document.querySelector('.hawky-compose').style.display = off ? 'none' : '';
+  ['kaiSuggest', 'askStatus'].forEach(id=> $(id).style.display = off ? 'none' : '');
+  document.querySelector('.kai-compose').style.display = off ? 'none' : '';
   if(!isRealPerson()){
-    $('hawkyThread').innerHTML = '<div class="hint">Pick your name to talk to Kestrel AI.</div>';
-    ['hawkyChanges','hawkyHealth','hawkyLevel'].forEach(id=> $(id).innerHTML = '');
+    $('kaiThread').innerHTML = '<div class="hint">Pick your name to talk to Kestrel AI.</div>';
+    ['kaiChanges','kaiHealth','kaiLevel'].forEach(id=> $(id).innerHTML = '');
     return;
   }
-  if(off){ hawkyChat = { personId: null, turns: [] }; $('hawkyThread').innerHTML = ''; }
-  else await startHawkyChat();
+  if(off){ kaiChat = { personId: null, turns: [] }; $('kaiThread').innerHTML = ''; }
+  else await startKaiChat();
   renderPlanSide();
 }
 
@@ -6540,9 +6192,7 @@ async function init(){
   // reloading. Skips a cycle if a form is open so it doesn't yank the page
   // out from under someone mid-edit.
   setInterval(async ()=>{
-    const formOpen = $('newPersonRow').classList.contains('show')
-      || $('editPersonRow').classList.contains('show')
-      || $('eventFormRow').classList.contains('show')
+    const formOpen = $('eventFormRow').classList.contains('show')
       || editMode
       || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
     if(formOpen) return;
@@ -6553,12 +6203,13 @@ async function init(){
 
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
 window.hawksInit = init;
-window.hawksReload = async ()=>{ planCache = {}; hawkyData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
+window.hawksReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
 window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>
 <script src="/record.js"></script>
+<script src="/shoes.js"></script>
 <script type="module" src="/kestrel.js"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
 import { getLog, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken } from './train/coach.js';
+import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
@@ -21,8 +21,8 @@ import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
 import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
-import { hawkyState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/hawky.js';
-import { aiEnabled, askCoach, coachChat, AiError } from './train/gemini.js';
+import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/kai.js';
+import { aiEnabled, askCoach, coachChat, parseProfileText, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
@@ -78,10 +78,39 @@ async function meView(db, me) {
       id: me.id, email: me.email, name: me.name, color: me.color, sex: me.sex, class_year: me.class_year,
       age_ok: !!me.age_ok, share_miles: !!me.share_miles, plan_rank: me.plan_rank,
     },
+    profile: settingsOf(me).profile || {},
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
     teams,
   };
+}
+
+// The sign-up questionnaire. Stored in settings.profile; every field is optional and clipped.
+const PROFILE_GOALS = ['race', 'faster', 'distance', 'fitness', 'weight', 'team'];
+const PROFILE_EXPERIENCE = ['new', 'under1', '1to3', '3plus'];
+function cleanProfile(p) {
+  const num = (v, lo, hi) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 10) / 10 : null; };
+  const txt = (v, n) => String(v ?? '').trim().slice(0, n);
+  const out = {
+    height_cm: num(p.height_cm, 100, 230),
+    weight_kg: num(p.weight_kg, 25, 220),
+    birth_year: num(p.birth_year, 1930, new Date().getFullYear() - 8),
+    units: p.units === 'km' ? 'km' : 'mi',
+    experience: PROFILE_EXPERIENCE.includes(p.experience) ? p.experience : '',
+    longest_run_mi: num(p.longest_run_mi, 0, 100),
+    days_per_week: num(p.days_per_week, 1, 7),
+    goal: PROFILE_GOALS.includes(p.goal) ? p.goal : '',
+    goal_event: txt(p.goal_event, 20),
+    goal_time: /^(\d{1,2}:)?\d{1,2}:\d{2}(\.\d)?$/.test(txt(p.goal_time, 12)) ? txt(p.goal_time, 12) : '',
+    goal_date: /^\d{4}-\d{2}-\d{2}$/.test(txt(p.goal_date, 10)) ? txt(p.goal_date, 10) : '',
+    injuries: txt(p.injuries, 300),
+    resting_hr: num(p.resting_hr, 30, 120),
+    max_hr: num(p.max_hr, 120, 230),
+    watch: ['', 'garmin', 'coros', 'apple', 'strava', 'other', 'none'].includes(p.watch) ? p.watch : '',
+    completed_at: Date.now(),
+  };
+  for (const k of Object.keys(out)) if (out[k] === null) delete out[k];
+  return out;
 }
 
 async function updateMe(db, me, b) {
@@ -100,8 +129,14 @@ async function updateMe(db, me, b) {
     set('plan_rank', r);
     set('coach_rank', r);
   }
+  let settings = settingsOf(me);
+  let settingsDirty = false;
+  if (b.profile && typeof b.profile === 'object') {
+    settings = { ...settings, profile: cleanProfile(b.profile) };
+    settingsDirty = true;
+  }
+  if (b.prs && typeof b.prs === 'object' && Object.keys(b.prs).length) await setPrs(db, me.id, b.prs);
   if ((b.models && typeof b.models === 'object') || (b.event_models && typeof b.event_models === 'object')) {
-    const settings = settingsOf(me);
     const models = { ...(settings.models || {}) };
     for (const [task, id] of Object.entries(b.models || {})) {
       if (!TASKS[task]) throw new BadRequest(`Unknown task ${task}.`);
@@ -124,12 +159,39 @@ async function updateMe(db, me, b) {
       if (m.task !== purpose) throw new BadRequest(`${m.name} is a ${m.task} model, not ${purpose}.`);
       eventModels[slot] = m.id;
     }
-    set('settings', JSON.stringify({ ...settings, models, event_models: eventModels }));
+    settings = { ...settings, models, event_models: eventModels };
+    settingsDirty = true;
     // Fitness States are cached; the next read recomputes them with the new models.
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
   }
+  if (settingsDirty) set('settings', JSON.stringify(settings));
   if (!sets.length) return;
   await db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, me.id).run();
+}
+
+// Shoe tracker: shoes live in settings.shoes; miles are counted from synced and logged runs since the start date.
+async function shoesView(db, me) {
+  const shoes = Array.isArray(settingsOf(me).shoes) ? settingsOf(me).shoes : [];
+  const out = [];
+  for (const sh of shoes) {
+    const r = await db.prepare("SELECT COALESCE(SUM(distance_mi), 0) AS mi FROM workouts WHERE person_id = ? AND sport = 'Run' AND date >= ? AND date <= ?")
+      .bind(me.id, sh.since || '0000-00-00', sh.retired || '9999-12-31').first();
+    const miles = Math.round(((sh.start_mi || 0) + (r?.mi || 0)) * 10) / 10;
+    out.push({ ...sh, miles, left: Math.max(0, Math.round((sh.limit_mi - miles) * 10) / 10), status: sh.retired ? 'retired' : miles >= sh.limit_mi ? 'replace' : miles >= sh.limit_mi * 0.85 ? 'soon' : 'ok' });
+  }
+  return out;
+}
+async function saveShoes(db, me, list) {
+  if (!Array.isArray(list)) throw new BadRequest('shoes must be a list.');
+  const shoes = list.slice(0, 30).map((x) => {
+    const name = str(x.name, 60);
+    if (!name) throw new BadRequest('Name each pair of shoes.');
+    const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : d; };
+    const date = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
+    return { id: str(x.id, 40) || 's_' + crypto.randomUUID().slice(0, 8), name, since: date(x.since), start_mi: num(x.start_mi, 0, 3000, 0), limit_mi: num(x.limit_mi, 50, 1500, 400), retired: date(x.retired) };
+  });
+  await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...settingsOf(me), shoes }), me.id).run();
+  return shoesView(db, { ...me, settings: JSON.stringify({ ...settingsOf(me), shoes }) });
 }
 
 // Everything about one person, removed. Teams they own pass to the longest-standing member.
@@ -255,20 +317,6 @@ async function eventIn(db, teamId, eventId) {
 }
 const canEdit = (e, me, role) => e.created_by === me.id || role === 'owner';
 
-// The team's practice rhythm: easy, workout, easy, workout, easy (Mon-Fri). Owners apply it a week at a time;
-// generated rows carry auto = 1 so clearing removes only what this made.
-const WEEK_TEMPLATE = [
-  { offset: 0, kind: 'easy', title: 'Easy Run' },
-  { offset: 1, kind: 'workout', title: 'Workout' },
-  { offset: 2, kind: 'easy', title: 'Easy Run' },
-  { offset: 3, kind: 'workout', title: 'Workout' },
-  { offset: 4, kind: 'easy', title: 'Easy Run' },
-];
-function mondayOf(raw) {
-  const d = str(raw, 20);
-  return isDate(d) && new Date(d + 'T00:00:00Z').getUTCDay() === 1 ? d : null;
-}
-
 // Team mileage: totals and weekly bars for everyone; per-athlete rows only for those who chose to share.
 async function teamMileage(db, teamId) {
   const today = todayInTz();
@@ -330,7 +378,7 @@ async function coachContext(db, person) {
     "SELECT date, library_id, splits, summary, difficulty FROM training_days WHERE person_id = ? AND (library_id != '' OR splits != '') ORDER BY date"
   ).bind(person.id).all()).results;
   context.all_workout_sessions = sessions.map((d) => ({ date: d.date, workout: d.library_id || null, splits: d.splits || null, summary: (d.summary || '').slice(0, 200), difficulty: d.difficulty }));
-  const state = await hawkyState(db, person.id);
+  const state = await kaiState(db, person.id);
   context.plan = { today: state.today, tomorrow: state.tomorrow, week: state.week, level: state.level, changes: state.changes };
   context.health = state.health;
   const meets = await db.prepare(
@@ -377,7 +425,7 @@ async function applyCoachSaves(db, personId, out) {
   const person = (out?.plan_change || out?.level_change) ? await loadPerson(db, personId) : null;
   if (out?.plan_change && person) {
     try {
-      const c = await applyPlanChange(db, person, out.plan_change, 'hawky');
+      const c = await applyPlanChange(db, person, out.plan_change, 'kai');
       const label = new Date(c.date + 'T12:00:00Z').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
       saved.push(`plan for ${label}: ${c.type}${c.miles ? ` ${c.miles} mi` : ''}`);
     } catch (err) {
@@ -646,6 +694,19 @@ const WATCH_TOOLS = [
     inputSchema: { type: 'object', required: ['date'], properties: { date: { type: 'string' }, type: { type: 'string', enum: ['Easy', 'Recovery', 'Workout', 'Long run', 'Race', 'Shakeout', 'Cross-train', 'Off'] }, miles: { type: 'number' }, detail: { type: 'string' }, reason: { type: 'string' }, reset: { type: 'boolean' } }, additionalProperties: false },
   },
   { name: 'change_level', description: 'Move the athlete up a plan level (only when get_plan_status says ready) or down one (injury, illness, exhaustion).', inputSchema: { type: 'object', required: ['direction', 'reason'], properties: { direction: { type: 'string', enum: ['up', 'down'] }, reason: { type: 'string' } }, additionalProperties: false } },
+  { name: 'get_profile', description: "The athlete's sign-up profile: height, weight, birth year, experience, weekly miles, goal, injuries, resting and max heart rate, and PRs. Check it before asking the athlete anything you could already know.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  {
+    name: 'set_profile', description: "Fill in or update the athlete's profile from what they tell you. Only send fields they actually said; others are kept. Height and weight are metric. The athlete still confirms their age in the app.",
+    inputSchema: { type: 'object', properties: {
+      name: { type: 'string' }, sex: { type: 'string', enum: ['f', 'm', ''] },
+      height_cm: { type: 'number', minimum: 100, maximum: 230 }, weight_kg: { type: 'number', minimum: 25, maximum: 220 }, birth_year: { type: 'integer' },
+      units: { type: 'string', enum: ['mi', 'km'] }, experience: { type: 'string', enum: ['new', 'under1', '1to3', '3plus'], description: 'just starting / under a year / 1-3 years / over 3 years' },
+      weekly_miles: { type: 'number', minimum: 0, maximum: 150, description: 'Typical miles per week now. Only used to pick the starting plan level, and only before one is set.' },
+      longest_run_mi: { type: 'number' }, days_per_week: { type: 'integer', minimum: 1, maximum: 7 },
+      resting_hr: { type: 'integer' }, max_hr: { type: 'integer' }, watch: { type: 'string', enum: ['garmin', 'coros', 'apple', 'strava', 'other', 'none'] },
+      injuries: { type: 'string' }, goal: { type: 'string', enum: PROFILE_GOALS }, goal_event: { type: 'string' }, goal_time: { type: 'string', description: 'm:ss or h:mm:ss' }, goal_date: { type: 'string', description: 'YYYY-MM-DD' },
+    }, additionalProperties: false },
+  },
   { name: 'get_fitness', description: "Fitness States: race estimates, VO2max estimate, weekly mileage, pace zones and what they're based on.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 
@@ -655,39 +716,136 @@ async function callWatchTool(env, person, name, args) {
     if (name === 'watch_status') return await icuStatus(env.DB, person.id);
     if (name === 'connect_watch') return { ...(await icuConnect(env, person.id, args.athlete_id, args.api_key)), synced: await syncPerson(env, person.id), next: 'Call sync_watch with full_history: true until done.' };
     if (name === 'sync_watch') return args.full_history ? await importHistory(env, person.id) : await syncPerson(env, person.id);
+    if (name === 'get_profile') { const me = await loadMe(env.DB, person); return { ...(await meView(env.DB, me)).user, profile: settingsOf(me).profile || {}, prs: await getPrs(env.DB, person.id), plan_level: me.plan_rank }; }
+    if (name === 'set_profile') {
+      const me = await loadMe(env.DB, person);
+      const { name: nm, sex, weekly_miles, ...fields } = args;
+      const known = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== null && v !== ''));
+      if (!Object.keys(known).length && nm === undefined && sex === undefined && weekly_miles === undefined) throw new McpToolError('Nothing to save. Send at least one field.');
+      await updateMe(env.DB, me, { name: nm, sex, weekly_miles, profile: { ...(settingsOf(me).profile || {}), ...known } });
+      return { saved: true, profile: settingsOf(await loadMe(env.DB, person)).profile };
+    }
     if (name === 'get_fitness') return compactFitness(await recomputeFitness(env.DB, person.id, todayInTz()));
-    if (name === 'get_plan_status') return await hawkyState(env.DB, person.id);
+    if (name === 'get_plan_status') return await kaiState(env.DB, person.id);
     const full = await loadPerson(env.DB, person.id);
     if (name === 'change_level') return await changeLevel(env.DB, full, args.direction, args.reason, todayInTz(), await healthSummary(env.DB, full, todayInTz()));
     if (name === 'change_plan_day') {
       if (args.reset) { await resetPlanDay(env.DB, person.id, args.date, false); return { reset: args.date }; }
-      return await applyPlanChange(env.DB, full, args, 'hawky');
+      return await applyPlanChange(env.DB, full, args, 'kai');
     }
   } catch (err) {
-    if (err instanceof IntervalsError || err instanceof PlanError) throw new McpToolError(err.message);
+    if (err instanceof IntervalsError || err instanceof PlanError || err instanceof BadRequest) throw new McpToolError(err.message);
     throw err;
   }
   throw new McpToolError(`Unknown tool: ${name}`);
 }
 
-async function serveMcp(request, tools, call) {
-  let rpc;
-  try { rpc = await request.json(); } catch { return json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, 400); }
-  const { id, method, params } = rpc || {};
-  const note = id === undefined;
-  const ok = (result) => (note ? new Response(null, { status: 202 }) : json({ jsonrpc: '2.0', id, result }));
-  if (method === 'initialize') return ok({ protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'kestrel', version: '1.0.0' } });
-  if (method === 'notifications/initialized') return new Response(null, { status: 202 });
-  if (method === 'ping') return ok({});
-  if (method === 'tools/list') return ok({ tools });
-  if (method === 'tools/call') {
-    try {
-      return ok({ content: [{ type: 'text', text: JSON.stringify(await call(params?.name, params?.arguments || {})) }] });
-    } catch (err) {
-      return ok({ content: [{ type: 'text', text: err.message || 'Tool failed' }], isError: true });
+const MCP_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
+const MCP_MAX_BODY = 512 * 1024;
+const MCP_MAX_CALLS_PER_MIN = 90;
+const mcpCalls = new Map(); // per-isolate, best effort: slows a runaway client, not a determined one
+
+// Cheap argument check against a tool's inputSchema so a model gets a clear message instead of a stack trace.
+function checkArgs(schema, args, at = '') {
+  if (schema?.type === 'object') {
+    if (args === null || typeof args !== 'object' || Array.isArray(args)) return `${at || 'arguments'} must be an object`;
+    for (const k of schema.required || []) if (args[k] === undefined || args[k] === null) return `Missing required field "${at}${k}"`;
+    for (const [k, v] of Object.entries(args)) {
+      const sub = schema.properties?.[k];
+      if (!sub) { if (schema.additionalProperties === false) return `Unknown field "${at}${k}". Allowed: ${Object.keys(schema.properties || {}).join(', ') || 'none'}`; continue; }
+      const bad = checkArgs(sub, v, `${at}${k}.`);
+      if (bad) return bad;
     }
+    return '';
   }
-  return note ? new Response(null, { status: 202 }) : json({ jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } });
+  const label = at.replace(/\.$/, '');
+  if (schema?.type === 'array') {
+    if (!Array.isArray(args)) return `"${label}" must be a list`;
+    if (schema.minItems && args.length < schema.minItems) return `"${label}" needs at least ${schema.minItems} item${schema.minItems > 1 ? 's' : ''}`;
+    if (schema.maxItems && args.length > schema.maxItems) return `"${label}" can have at most ${schema.maxItems} items`;
+    for (let i = 0; i < args.length; i++) { const bad = checkArgs(schema.items, args[i], `${at}${i}.`); if (bad) return bad; }
+    return '';
+  }
+  if (schema?.type === 'string' && typeof args !== 'string') return `"${label}" must be text`;
+  if ((schema?.type === 'number' || schema?.type === 'integer')) {
+    if (typeof args !== 'number' || !Number.isFinite(args)) return `"${label}" must be a number`;
+    if (schema.type === 'integer' && !Number.isInteger(args)) return `"${label}" must be a whole number`;
+    if (schema.minimum !== undefined && args < schema.minimum) return `"${label}" must be at least ${schema.minimum}`;
+    if (schema.maximum !== undefined && args > schema.maximum) return `"${label}" must be at most ${schema.maximum}`;
+  }
+  if (schema?.type === 'boolean' && typeof args !== 'boolean') return `"${label}" must be true or false`;
+  if (schema?.enum && !schema.enum.includes(args)) return `"${label}" must be one of: ${schema.enum.join(', ')}`;
+  return '';
+}
+
+// Errors an athlete or their AI can act on. Anything else is logged here and reported generically.
+const isUserError = (err) => err instanceof McpToolError || err instanceof BadRequest || err instanceof LogError || err instanceof IntervalsError
+  || err instanceof PlanError || err instanceof CourseError || err instanceof CalcError || err instanceof AiError || err instanceof CoachError;
+
+const readOnlyTool = (name) => /^(get_|find_|watch_status)/.test(name);
+
+async function serveMcp(request, tools, call, key = '') {
+  const reply = (status, body) => json(body, status);
+  const rpcError = (id, code, message) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message } });
+  if (Number(request.headers.get('content-length')) > MCP_MAX_BODY) return reply(413, rpcError(null, -32600, 'Request too large'));
+  let raw;
+  try { raw = await request.text(); } catch { return reply(400, rpcError(null, -32700, 'Parse error')); }
+  if (raw.length > MCP_MAX_BODY) return reply(413, rpcError(null, -32600, 'Request too large'));
+  let rpc;
+  try { rpc = JSON.parse(raw); } catch { return reply(400, rpcError(null, -32700, 'Parse error')); }
+
+  const now = Date.now();
+  const recent = (mcpCalls.get(key) || []).filter((t) => now - t < 60000);
+  recent.push(now);
+  mcpCalls.set(key, recent);
+  if (mcpCalls.size > 500) for (const [k, v] of mcpCalls) if (!v.some((t) => now - t < 60000)) mcpCalls.delete(k);
+  const limited = recent.length > MCP_MAX_CALLS_PER_MIN;
+
+  const toolList = tools.map((t) => ({ ...t, annotations: { title: t.name.replace(/_/g, ' '), readOnlyHint: readOnlyTool(t.name), openWorldHint: false, ...(t.annotations || {}) } }));
+
+  async function one(msg) {
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg) || msg.jsonrpc !== '2.0' || typeof msg.method !== 'string') return rpcError(msg?.id, -32600, 'Invalid request');
+    const { id, method, params } = msg;
+    const note = id === undefined || id === null && method.startsWith('notifications/');
+    const ok = (result) => (note ? null : { jsonrpc: '2.0', id, result });
+    if (method.startsWith('notifications/')) return null;
+    if (limited && method === 'tools/call') return ok({ content: [{ type: 'text', text: 'Too many requests. Wait a minute and try again.' }], isError: true });
+    if (method === 'initialize') {
+      const asked = params?.protocolVersion;
+      return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.1.0' },
+        instructions: 'Kestrel is the athlete\'s running coach. Call get_coach_context first every time. Use get_profile before asking the athlete anything, and set_profile to save what they tell you. Plan changes are checked by fixed guardrails and may be refused with a reason; pass that reason on.' });
+    }
+    if (method === 'ping') return ok({});
+    if (method === 'tools/list') return ok({ tools: toolList });
+    if (method === 'prompts/list') return ok({ prompts: [] });
+    if (method === 'resources/list') return ok({ resources: [] });
+    if (method === 'resources/templates/list') return ok({ resourceTemplates: [] });
+    if (method === 'logging/setLevel') return ok({});
+    if (method === 'tools/call') {
+      const tool = tools.find((t) => t.name === params?.name);
+      if (!tool) return note ? null : rpcError(id, -32602, `Unknown tool: ${params?.name}`);
+      const args = params?.arguments ?? {};
+      const bad = checkArgs(tool.inputSchema, args);
+      if (bad) return ok({ content: [{ type: 'text', text: `Invalid arguments: ${bad}.` }], isError: true });
+      try {
+        const out = await call(tool.name, args);
+        return ok({ content: [{ type: 'text', text: JSON.stringify(out ?? { ok: true }) }] });
+      } catch (err) {
+        if (!isUserError(err)) console.error('kestrel mcp', tool.name, err?.stack || String(err));
+        return ok({ content: [{ type: 'text', text: isUserError(err) ? err.message || 'Tool failed' : 'Kestrel hit an error on its side. Try again in a moment.' }], isError: true });
+      }
+    }
+    return note ? null : rpcError(id, -32601, `Method not found: ${method}`);
+  }
+
+  if (Array.isArray(rpc)) {
+    if (!rpc.length) return reply(400, rpcError(null, -32600, 'Empty batch'));
+    if (rpc.length > 20) return reply(400, rpcError(null, -32600, 'Batch too large'));
+    const out = (await Promise.all(rpc.map(one))).filter(Boolean);
+    return out.length ? json(out) : new Response(null, { status: 202 });
+  }
+  const out = await one(rpc);
+  return out ? json(out, out.error?.code === -32600 ? 400 : 200) : new Response(null, { status: 202 });
 }
 
 // ------------------------------------------------------------------ router
@@ -715,12 +873,13 @@ async function route(request, env, url) {
   }
   const mcp = path.match(/^\/mcp\/coach\/([a-f0-9]{20,64})$/);
   if (mcp) {
-    if (method !== 'POST') return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
+    if (method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type, Mcp-Protocol-Version, Mcp-Session-Id' } });
+    if (method !== 'POST') return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST, OPTIONS', ...CORS } });
     const person = await personForToken(db, mcp[1]);
     // 404, not 401: a 401 makes connectors go looking for an OAuth sign-in service, which this link does not use.
     if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 404);
     return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS], (name, args) =>
-      (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args) : callCoachTool(db, person, name, args)));
+      (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args) : callCoachTool(db, person, name, args)), mcp[1]);
   }
 
   // ---- Kestrel Lab: public reads, downloads and the developer API
@@ -787,7 +946,17 @@ async function route(request, env, url) {
     if (method === 'PUT') { await updateMe(db, me, await readJson(request)); return json(await meView(db, await loadMe(db, viewer))); }
     if (method === 'DELETE') { await deleteMe(db, me); return json({ ok: true }); }
   }
+  // Sign-up by description (before the age check: it is part of sign-up).
+  if (path === '/api/me/parse' && method === 'POST') {
+    const out = await parseProfileText(env, db, me, (await readJson(request)).text, today);
+    return json({ fields: out });
+  }
   if (!me.age_ok) throw new Forbidden('Finish setting up your profile first.');
+
+  if (path === '/api/shoes') {
+    if (method === 'GET') return json({ shoes: await shoesView(db, me) });
+    if (method === 'PUT') return json({ shoes: await saveShoes(db, me, (await readJson(request)).shoes) });
+  }
 
   // Kestrel Lab, signed in
   if (path === '/api/lab/models' && method === 'POST') return json({ id: await uploadModel(db, me, request) });
@@ -947,7 +1116,7 @@ async function route(request, env, url) {
     }
     if (path === '/api/fitness') return json({ fitness: await getFitness(db, me.id, today), history: await fitnessHistory(db, me.id) });
     if (path === '/api/predict') { try { return json(await racePredictions(env, me.id, today)); } catch (e) { return json({ enabled: false, error: String(e?.message || e) }); } }
-    if (path === '/api/hawky') return json(await hawkyState(db, me.id));
+    if (path === '/api/kai') return json(await kaiState(db, me.id));
     if (path === '/api/workouts') return json(await workoutsForApp(db, me.id));
     if (path === '/api/models') return json({ models: await listModels(db, me.id, { task: str(q.get('task'), 20) }) });
     if (path === '/api/calendar-link') {
@@ -1065,32 +1234,8 @@ async function route(request, env, url) {
     await db.prepare('DELETE FROM posts WHERE id = ?').bind(str(b.postId, 100)).run();
     return json({ ok: true });
   }
-  if (path === '/api/schedule/week/apply' || path === '/api/schedule/week/clear') {
-    needTeam();
-    if (role !== 'owner') throw new Forbidden('Only the team owner can fill in practice weeks.');
-    const week = mondayOf(b.weekStart);
-    if (!week) throw new BadRequest('weekStart must be a Monday (YYYY-MM-DD).');
-    if (path.endsWith('/clear')) {
-      const rows = (await db.prepare('SELECT id FROM events WHERE team_id = ? AND auto = 1 AND date >= ? AND date <= ?').bind(teamId, week, addDays(week, 4)).all()).results;
-      for (const r of rows) await db.prepare('DELETE FROM events WHERE id = ?').bind(r.id).run();
-      return json({ removed: rows.map((r) => r.id) });
-    }
-    const time = str(b.time, 40) || '4:00 PM';
-    const have = new Set((await db.prepare('SELECT date FROM events WHERE team_id = ? AND auto = 1 AND date >= ? AND date <= ?').bind(teamId, week, addDays(week, 4)).all()).results.map((r) => r.date));
-    const created = [];
-    for (const t of WEEK_TEMPLATE) {
-      const date = addDays(week, t.offset);
-      if (have.has(date)) continue;
-      const id = 'e_' + crypto.randomUUID();
-      await db.prepare("INSERT INTO events (id, team_id, date, title, time, description, type, kind, auto, created_by, created_at) VALUES (?, ?, ?, ?, ?, '', 'practice', ?, 1, ?, ?)")
-        .bind(id, teamId, date, t.title, time, t.kind, me.id, Date.now()).run();
-      created.push({ id, date, title: t.title, time, desc: '', type: 'practice', kind: t.kind, auto: true, createdBy: me.id });
-    }
-    return json({ created });
-  }
-
   // Your own training (Hawks paths)
-  if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await hawkyState(db, me.id)); }
+  if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await kaiState(db, me.id)); }
   if (path === '/api/log/session-splits') {
     const reps = (Array.isArray(b.reps) ? b.reps : []).slice(0, 40)
       .map((r) => ({ m: Math.round(Number(r?.m)), s: Math.round(Number(r?.s) * 10) / 10, hr: r?.hr ? Math.round(Number(r.hr)) : null, rest: str(r?.rest, 12) }))
