@@ -10,7 +10,7 @@
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
-import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, PlanFormatError } from './train/plans.js';
+import { PLANS, plansOf, rankOf, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
 import { getLog, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
@@ -22,7 +22,7 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, PlanError } from './train/kai.js';
-import { aiEnabled, askCoach, coachChat, parseProfileText, AiError } from './train/gemini.js';
+import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
@@ -70,7 +70,7 @@ async function loadMe(db, auth) {
 
 async function meView(db, me) {
   const { results: teams } = await db.prepare(
-    `SELECT t.id, t.name, t.school, m.role, (SELECT COUNT(*) FROM team_members x WHERE x.team_id = t.id) AS members
+    `SELECT t.id, t.name, t.school, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role, (SELECT COUNT(*) FROM team_members x WHERE x.team_id = t.id) AS members
      FROM teams t JOIN team_members m ON m.team_id = t.id WHERE m.person_id = ? ORDER BY m.joined_at`
   ).bind(me.id).all();
   return {
@@ -208,9 +208,12 @@ async function deleteMe(db, me) {
 
 async function roleIn(db, teamId, personId) {
   if (!teamId) return null;
-  const row = await db.prepare('SELECT role FROM team_members WHERE team_id = ? AND person_id = ?').bind(teamId, personId).first();
-  return row?.role || null;
+  const row = await db.prepare('SELECT role, leader FROM team_members WHERE team_id = ? AND person_id = ?').bind(teamId, personId).first();
+  if (!row) return null;
+  return row.role === 'owner' ? 'owner' : row.leader ? 'captain' : 'member';
 }
+// The owner and captains run the team: calendar, roster details, posts, the training plan.
+const isLead = (role) => role === 'owner' || role === 'captain';
 async function requireMember(db, teamId, personId) {
   const role = await roleIn(db, teamId, personId);
   if (!role) throw new NotFound('Team not found.');
@@ -220,10 +223,41 @@ async function requireMember(db, teamId, personId) {
 async function teamView(db, teamId, role) {
   const team = await db.prepare('SELECT id, name, school, invite_code, created_at FROM teams WHERE id = ?').bind(teamId).first();
   const { results: members } = await db.prepare(
-    'SELECT p.id, p.name, p.color, m.role FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY m.role DESC, p.name'
+    "SELECT p.id, p.name, p.color, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY m.role DESC, m.leader DESC, p.name"
   ).bind(teamId).all();
   const plan = await db.prepare('SELECT updated_at FROM team_plans WHERE team_id = ?').bind(teamId).first();
   return { ...team, role, members, has_plan: !!plan };
+}
+
+// The roster: name, number, grade, events for the whole team; age only for that person and for leaders.
+async function teamRoster(db, teamId, me, role) {
+  const { results } = await db.prepare(
+    `SELECT p.id, p.name, p.color, p.class_year, p.sex, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role,
+            m.jersey, m.age, m.events, m.joined_at
+     FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY m.role DESC, m.leader DESC, p.name`
+  ).bind(teamId).all();
+  return results.map((r) => ({ ...r, age: isLead(role) || r.id === me.id ? r.age : null }));
+}
+
+async function saveRosterEntry(db, teamId, me, role, personId, b) {
+  if (personId !== me.id && !isLead(role)) throw new Forbidden('Only a captain or the team owner can edit someone else.');
+  const target = await roleIn(db, teamId, personId);
+  if (!target) throw new NotFound('Not on this team.');
+  const sets = [];
+  const vals = [];
+  if (b.jersey !== undefined) { sets.push('jersey = ?'); vals.push(str(b.jersey, 6)); }
+  if (b.events !== undefined) { sets.push('events = ?'); vals.push(str(b.events, 80)); }
+  if (b.age !== undefined) {
+    const n = b.age === '' || b.age === null ? null : Math.round(Number(b.age));
+    if (n !== null && !(n >= 8 && n <= 99)) throw new BadRequest('Age should be between 8 and 99, or blank.');
+    sets.push('age = ?'); vals.push(n);
+  }
+  if (b.leader !== undefined) {
+    if (role !== 'owner') throw new Forbidden('Only the team owner can name captains.');
+    if (target === 'owner') throw new BadRequest('The owner already leads the team.');
+    sets.push('leader = ?'); vals.push(b.leader ? 1 : 0);
+  }
+  if (sets.length) await db.prepare(`UPDATE team_members SET ${sets.join(', ')} WHERE team_id = ? AND person_id = ?`).bind(...vals, teamId, personId).run();
 }
 
 async function createTeam(db, me, b) {
@@ -315,7 +349,41 @@ async function eventIn(db, teamId, eventId) {
   if (!e) throw new NotFound('Event not found.');
   return e;
 }
-const canEdit = (e, me, role) => e.created_by === me.id || role === 'owner';
+const canEdit = (e, me, role) => e.created_by === me.id || isLead(role);
+
+// ---- plan builder helpers
+function previewSpec(spec) {
+  const { plans, spec: clean } = expandPlanSpec(spec);
+  return { spec: clean, levels: Object.entries(plans).map(([r, p]) => ({ level: Number(r), miles: p.weeks[0].miles, week: p.days.map((d) => ({ day: d.day, type: d.cells[0].type, miles: parseFloat(d.cells[0].miles) || 0, notes: d.cells[0].notes })) })) };
+}
+
+// Chat (server model) or the prompt for the browser to send to the person's own model. A plan in the reply is validated here.
+async function planChatRoute(env, db, me, b, scope, promptOnly, today) {
+  const history = Array.isArray(b.history) ? b.history : [];
+  const sc = { ...scope, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
+  if (promptOnly) return planChat(history, sc, today);
+  const out = await askPlan(env, db, me, history, sc, today);
+  return checkedPlanReply(out);
+}
+function checkedPlanReply(out) {
+  const reply = { answer: String(out?.answer || '').slice(0, 2000) };
+  // A half-finished plan next to a clarifying question is dropped quietly; a full attempt that fails the checks is reported.
+  const attempted = Array.isArray(out?.plan?.normal_week) && Array.isArray(out?.plan?.race_week) && Array.isArray(out?.plan?.taper_week);
+  if (out?.plan && attempted) {
+    try { reply.preview = previewSpec(out.plan); reply.plan = reply.preview.spec; }
+    catch (e) { if (!(e instanceof PlanFormatError)) throw e; reply.answer += `\n\n(I could not use that plan: ${e.message} Ask me to fix it.)`; }
+  }
+  return reply;
+}
+async function teamPlanScope(db, teamId) {
+  const team = await db.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
+  const row = await db.prepare('SELECT spec FROM team_plans WHERE team_id = ?').bind(teamId).first();
+  const { results } = await db.prepare('SELECT p.class_year, p.plan_rank FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ?').bind(teamId).all();
+  const grades = {};
+  for (const r of results) grades[r.class_year || 'Not set'] = (grades[r.class_year || 'Not set'] || 0) + 1;
+  const levels = results.map((r) => PLANS[r.plan_rank]?.weeks[0].miles).filter(Boolean).sort((a, b) => a - b);
+  return { team: true, name: team?.name, roster: { athletes: results.length, grades, weekly_mile_levels: levels }, current: row?.spec ? JSON.parse(row.spec) : null };
+}
 
 // Team mileage: totals and weekly bars for everyone; per-athlete rows only for those who chose to share.
 async function teamMileage(db, teamId) {
@@ -953,6 +1021,27 @@ async function route(request, env, url) {
   }
   if (!me.age_ok) throw new Forbidden('Finish setting up your profile first.');
 
+  // A training plan built with Kestrel AI for yourself (used when you have no team plan, or instead of it).
+  if (path === '/api/me/plan') {
+    const own = settingsOf(me).personal_plan || null;
+    if (method === 'GET') return json({ custom: !!own, spec: own?.spec || null, plans: own?.plans || null, team_plan: !!(await db.prepare('SELECT 1 FROM team_plans tp JOIN team_members tm ON tm.team_id = tp.team_id WHERE tm.person_id = ?').bind(me.id).first()) });
+    if (method === 'PUT') {
+      const x = expandPlanSpec((await readJson(request)).plan);
+      await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...settingsOf(me), personal_plan: { spec: x.spec, plans: x.plans, updated_at: Date.now() } }), me.id).run();
+      return json({ ok: true });
+    }
+    if (method === 'DELETE') {
+      const { personal_plan, ...rest } = settingsOf(me);
+      await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify(rest), me.id).run();
+      return json({ ok: true });
+    }
+  }
+  if ((path === '/api/me/plan/chat' || path === '/api/me/plan/prompt') && method === 'POST') {
+    const own = settingsOf(me).personal_plan?.spec || null;
+    return json(await planChatRoute(env, db, me, await readJson(request), { team: false, current: own }, path.endsWith('prompt'), today));
+  }
+  if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
+
   if (path === '/api/shoes') {
     if (method === 'GET') return json({ shoes: await shoesView(db, me) });
     if (method === 'PUT') return json({ shoes: await saveShoes(db, me, (await readJson(request)).shoes) });
@@ -1054,19 +1143,29 @@ async function route(request, env, url) {
       await removeMember(db, teamId, mm[1]);
       return json({ ok: true });
     }
-    if (sub === 'plan') {
-      if (method === 'GET') {
-        const row = await db.prepare('SELECT data, updated_at FROM team_plans WHERE team_id = ?').bind(teamId).first();
-        return json({ plans: row ? JSON.parse(row.data) : PLANS, custom: !!row, updated_at: row?.updated_at || null });
+    if (sub === 'roster' && method === 'GET') return json({ role, members: await teamRoster(db, teamId, me, role) });
+    if (mm && method === 'PUT') {
+      await saveRosterEntry(db, teamId, me, role, mm[1], await readJson(request));
+      return json({ members: await teamRoster(db, teamId, me, role) });
+    }
+    if (sub.startsWith('plan')) {
+      if (sub === 'plan' && method === 'GET') {
+        const row = await db.prepare('SELECT data, spec, updated_at FROM team_plans WHERE team_id = ?').bind(teamId).first();
+        return json({ plans: row ? JSON.parse(row.data) : PLANS, custom: !!row, spec: row?.spec ? JSON.parse(row.spec) : null, updated_at: row?.updated_at || null, can_edit: isLead(role) });
       }
-      if (!owner) throw new Forbidden('Only the team owner can change the team plan.');
-      if (method === 'PUT') {
-        const plans = validateTeamPlans((await readJson(request)).plans);
-        await db.prepare('INSERT INTO team_plans (team_id, data, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, updated_by = excluded.updated_by, updated_at = excluded.updated_at')
-          .bind(teamId, JSON.stringify(plans), me.id, Date.now()).run();
+      if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change the team plan.');
+      if (sub === 'plan/chat' || sub === 'plan/prompt') return json(await planChatRoute(env, db, me, await readJson(request), await teamPlanScope(db, teamId), sub.endsWith('prompt'), today));
+      if (sub === 'plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
+      if (sub === 'plan' && method === 'PUT') {
+        const b = await readJson(request);
+        let plans, spec = '';
+        if (b.plan) { const x = expandPlanSpec(b.plan); plans = x.plans; spec = JSON.stringify(x.spec); }
+        else plans = validateTeamPlans(b.plans);
+        await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = excluded.spec, updated_by = excluded.updated_by, updated_at = excluded.updated_at')
+          .bind(teamId, JSON.stringify(plans), spec, me.id, Date.now()).run();
         return json({ ok: true });
       }
-      if (method === 'DELETE') { await db.prepare('DELETE FROM team_plans WHERE team_id = ?').bind(teamId).run(); return json({ ok: true }); }
+      if (sub === 'plan' && method === 'DELETE') { await db.prepare('DELETE FROM team_plans WHERE team_id = ?').bind(teamId).run(); return json({ ok: true }); }
     }
   }
 
@@ -1195,7 +1294,7 @@ async function route(request, env, url) {
   if (path === '/api/events/update') {
     needTeam();
     const e = await eventIn(db, teamId, b.eventId);
-    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, or the team owner, can change it.');
+    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can change it.');
     const title = str(b.title, 200);
     if (!title) throw new BadRequest('Missing title.');
     const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
@@ -1207,7 +1306,7 @@ async function route(request, env, url) {
   if (path === '/api/events/delete') {
     needTeam();
     const e = await eventIn(db, teamId, b.eventId);
-    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, or the team owner, can delete it.');
+    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can delete it.');
     await db.prepare('DELETE FROM events WHERE id = ?').bind(e.id).run();
     return json({ ok: true });
   }
@@ -1230,7 +1329,7 @@ async function route(request, env, url) {
     needTeam();
     const p = await db.prepare('SELECT person_id FROM posts WHERE id = ? AND team_id = ?').bind(str(b.postId, 100), teamId).first();
     if (!p) throw new NotFound('Post not found.');
-    if (p.person_id !== me.id && role !== 'owner') throw new Forbidden('Only the author or the team owner can delete a post.');
+    if (p.person_id !== me.id && !isLead(role)) throw new Forbidden('Only the author, a captain or the team owner can delete a post.');
     await db.prepare('DELETE FROM posts WHERE id = ?').bind(str(b.postId, 100)).run();
     return json({ ok: true });
   }

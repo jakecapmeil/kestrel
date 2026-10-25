@@ -85,3 +85,85 @@ export function validateTeamPlans(raw) {
   }
   return out;
 }
+
+// ---- Plans written by a person or a team captain with Kestrel AI -----------------------------------------------
+// The AI does not write 54 cells. It writes one week shape (what each day is and what share of the week's miles it
+// gets) for a normal week, a race week and a taper, plus a workout menu. expandPlanSpec turns that into all nine
+// levels, scaled to each level's weekly miles, so every athlete lands on the level that fits their fitness.
+const SPEC_DAY = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: TYPES },
+    share: { type: 'number', description: 'Share of the weekly miles for this day, 0 to 1. Rest and cross-train days are 0. Shares in a week should add to about 1.' },
+    notes: { type: 'string', description: 'Short: what the day is (e.g. "Strides", "Tempo 20 min", "1.5 WU 1.5 CD")' },
+  },
+  required: ['type', 'share'],
+};
+const SPEC_WEEK = { type: 'array', description: 'Exactly 7 days, Monday first.', items: SPEC_DAY };
+export const PLAN_SPEC_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    summary: { type: 'string', description: 'Two sentences on the plan idea.' },
+    normal_week: SPEC_WEEK, race_week: SPEC_WEEK, taper_week: SPEC_WEEK,
+    race_week_factor: { type: 'number', description: 'Race week miles as a share of a normal week, 0.5 to 1.' },
+    taper_factor: { type: 'number', description: 'Taper week miles as a share of a normal week, 0.4 to 1.' },
+    core: { type: 'string' }, gym: { type: 'string' },
+    sessions: { type: 'array', description: 'Workout menus (up to 4): for example Tuesday workouts, Thursday workouts, long run.', items: { type: 'object', properties: { title: { type: 'string' }, desc: { type: 'string' }, items: { type: 'array', items: { type: 'string' } } }, required: ['title', 'items'] } },
+  },
+  required: ['name', 'normal_week', 'race_week', 'taper_week'],
+};
+
+const LEVEL_MILES = Object.fromEntries(Object.entries(PLANS).map(([r, p]) => [r, p.weeks[0].miles]));
+const halfMile = (x) => Math.round(x * 2) / 2;
+const clamp = (n, lo, hi, d) => (Number.isFinite(Number(n)) ? Math.min(hi, Math.max(lo, Number(n))) : d);
+
+function cleanWeek(week, label) {
+  if (!Array.isArray(week) || week.length !== 7) throw new PlanFormatError(`${label} must list 7 days, Monday first.`);
+  const days = week.map((d, i) => {
+    const type = TYPES.includes(d?.type) ? d.type : d?.type === 'Long Run' ? 'LR' : null;
+    if (!type) throw new PlanFormatError(`${label}, ${DAYS[i]}: day type must be one of ${TYPES.join(', ')}.`);
+    const rest = type === 'Off' || type === 'Cross-train';
+    return { type, share: rest ? 0 : Math.max(0, Number(d.share) || 0), notes: txt(d.notes, 100) };
+  });
+  const total = days.reduce((a, d) => a + d.share, 0);
+  if (!(total > 0)) throw new PlanFormatError(`${label} has no running days.`);
+  return days.map((d) => ({ ...d, share: d.share / total }));
+}
+
+// spec -> { plans (levels 1-9, validated), spec (cleaned) }
+export function expandPlanSpec(raw) {
+  if (!raw || typeof raw !== 'object') throw new PlanFormatError('The plan is empty.');
+  const normal = cleanWeek(raw.normal_week, 'Normal week');
+  const race = cleanWeek(raw.race_week, 'Race week');
+  const taper = cleanWeek(raw.taper_week, 'Taper week');
+  const factors = [1, clamp(raw.race_week_factor, 0.5, 1, 0.85), clamp(raw.taper_factor, 0.4, 1, 0.7)];
+  const shapes = [normal, race, taper];
+  const spec = {
+    name: txt(raw.name, 80) || 'Training plan', summary: txt(raw.summary, 400),
+    normal_week: normal.map(({ type, share, notes }) => ({ type, share: Math.round(share * 1000) / 1000, notes })),
+    race_week: race.map(({ type, share, notes }) => ({ type, share: Math.round(share * 1000) / 1000, notes })),
+    taper_week: taper.map(({ type, share, notes }) => ({ type, share: Math.round(share * 1000) / 1000, notes })),
+    race_week_factor: factors[1], taper_factor: factors[2],
+    core: txt(raw.core, 200), gym: txt(raw.gym, 200),
+    sessions: (Array.isArray(raw.sessions) ? raw.sessions : []).slice(0, 4).map((x) => ({ title: txt(x?.title, 60), desc: txt(x?.desc, 120), items: (Array.isArray(x?.items) ? x.items : []).slice(0, 8).map((i) => txt(i, 200)) })),
+  };
+  const plans = {};
+  for (const r of RANKS) {
+    const base = LEVEL_MILES[r];
+    plans[r] = {
+      weeks: [0, 1, 2].map((i) => ({ miles: Math.round(base * factors[i]), name: ['No race', 'Race week', 'Taper'][i] })),
+      days: DAYS.map((day, di) => ({
+        day,
+        cells: shapes.map((shape, wi) => {
+          const d = shape[di];
+          if (d.share === 0) return { type: d.type, miles: '0', shoes: '', notes: d.notes };
+          const mi = Math.max(1, halfMile(base * factors[wi] * d.share));
+          return { type: d.type, miles: String(mi), shoes: '', notes: d.notes };
+        }),
+      })),
+      ref: { shoes: '', core: spec.core, gym: spec.gym, sessions: spec.sessions },
+    };
+  }
+  return { plans: validateTeamPlans(plans), spec };
+}

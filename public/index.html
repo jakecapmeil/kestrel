@@ -1872,6 +1872,7 @@
 
     <div id="tpPlanView" class="split split-plan">
       <div class="stack-cards">
+        <div id="kPersonalPlan"></div>
         <section class="card today-card" id="todayCard" style="display:none;">
           <div class="section-head" style="margin-bottom:var(--sp-2);">
             <div>
@@ -2227,6 +2228,11 @@
         <div class="eyebrow">Team</div>
         <h2 class="page-title" id="teamTitle">Team mileage</h2>
       </div>
+      <div class="seg" id="teamViews" role="tablist" aria-label="Team view">
+        <button type="button" class="seg-btn active" role="tab" data-tmview="miles">Miles</button>
+        <button type="button" class="seg-btn" role="tab" data-tmview="roster">Roster</button>
+        <button type="button" class="seg-btn" role="tab" data-tmview="training">Training</button>
+      </div>
     </div>
     <div class="k-empty k-team-empty" id="teamEmpty" hidden>
       <img src="/kestrel.svg" alt="" width="96" height="96">
@@ -2253,25 +2259,15 @@
           </div>
         </div>
         <div class="leader" id="teamLeader"></div>
+        <div class="k-row" id="teamShareNudge" hidden>
+          <span class="hint">You are not on the board. Teammates only see team totals for you.</span>
+          <button type="button" class="k-btn small" id="teamShareBtn">Show my miles</button>
+        </div>
       </section>
       <div class="split-side">
       <section class="card">
         <div class="card-title">Team</div>
         <div id="teamStatusList"></div>
-      </section>
-      <section class="card" id="rosterCard">
-        <div class="section-head">
-          <div>
-            <div class="card-title">Roster &amp; messages</div>
-            <div class="hint" id="rosterHint">Reach everyone on the team.</div>
-          </div>
-        </div>
-        <div class="k-row" id="rosterActions">
-          <button type="button" class="k-btn small" id="rosterEmailBtn">Email everyone</button>
-          <button type="button" class="k-btn small" id="rosterTextBtn">Text everyone</button>
-          <button type="button" class="k-btn small" id="rosterWhatsAppBtn">WhatsApp</button>
-        </div>
-        <div id="rosterList"></div>
       </section>
       <section class="card" id="postCard">
         <div class="card-title">Posts</div>
@@ -2288,6 +2284,8 @@
       </section>
       </div>
     </div>
+    <div id="teamRosterView" class="you-stack" hidden></div>
+    <div id="teamTrainView" class="you-stack" hidden></div>
   </div>
 
   <div id="pageYou" style="display:none;">
@@ -2300,6 +2298,7 @@
         <button type="button" class="seg-btn active" role="tab" data-yview="profile">Profile</button>
         <button type="button" class="seg-btn" role="tab" data-yview="records">Records</button>
         <button type="button" class="seg-btn" role="tab" data-yview="body">Body</button>
+        <button type="button" class="seg-btn" role="tab" data-yview="integrations">Integrations</button>
         <button type="button" class="seg-btn" role="tab" data-yview="settings">Settings</button>
       </div>
     </div>
@@ -2400,7 +2399,7 @@
         <button type="button" class="ghost full-btn" id="bodyKaiBtn" style="margin-top:var(--sp-3);">Tell Kestrel AI how it feels</button>
       </div>
     </div>
-    <div id="youSettingsView" class="you-stack" style="display:none;">
+    <div id="youIntegrationsView" class="you-stack" style="display:none;">
       <section class="you-sec">
         <h3 class="you-h">Watch and data</h3>
         <p class="you-sub">Your runs flow in on their own once a watch is connected. Pick one way: Claude walks you through it, or do the steps yourself.</p>
@@ -2539,12 +2538,25 @@
         <h3 class="you-h">Kestrel AI and predictions</h3>
       <div class="card" id="kAiCard"><div class="card-title">Kestrel AI</div><div id="kAiBody"></div></div>
       <div class="card" id="kModelsCard"><div class="card-title">Race models</div><div id="kModelsBody"></div></div>
-      <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
       </section>
+    </div>
+    <div id="youSettingsView" class="you-stack" style="display:none;">
       <section class="you-sec">
         <h3 class="you-h">Account</h3>
-      <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
+        <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
       </section>
+      <section class="you-sec">
+        <h3 class="you-h">Privacy</h3>
+        <div class="card" id="kPrivacyCard"><div class="card-title">What others can see</div><div id="kPrivacyBody"></div></div>
+      </section>
+      <section class="you-sec">
+        <h3 class="you-h">Legal and safety</h3>
+        <div class="card"><div class="card-title">Before you train</div>
+          <p class="hint">Kestrel is a free tool, not a doctor or a certified coach. Plans, paces, predictions and AI replies are estimates and can be wrong. Running carries a risk of injury; talk to a doctor before changing your training and stop if something hurts.</p>
+          <div class="k-row"><a class="k-btn small" href="/legal#terms" target="_blank" rel="noopener">Terms of use</a><a class="k-btn small" href="/legal#privacy" target="_blank" rel="noopener">Privacy</a><a class="k-btn small" href="/legal#health" target="_blank" rel="noopener">Health and safety</a></div>
+        </div>
+      </section>
+    </div>
   </div>
 
 </div>
@@ -3474,7 +3486,7 @@ function renderPostItem(post){
       ${post.header ? `<div class="post-header" data-post-toggle="${post.id}">${escapeHtml(post.header)}</div>` : ''}
       <div class="post-text ${expanded ? '' : 'clamped'}" data-post-toggle="${post.id}">${escapeHtml(post.text)}</div>
     </div>
-    ${post.personId === activePersonId || (window.KESTREL && window.KESTREL.role === 'owner') ? `<button type="button" class="post-share-btn" data-post-delete="${post.id}" aria-label="Delete this post" title="Delete">✕</button>` : ''}
+    ${post.personId === activePersonId || (window.KESTREL && ['owner','captain'].includes(window.KESTREL.role)) ? `<button type="button" class="post-share-btn" data-post-delete="${post.id}" aria-label="Delete this post" title="Delete">✕</button>` : ''}
     <button type="button" class="post-share-btn" data-post-share="${post.id}" aria-label="Share this post" title="Share">${SHARE_ICON}</button>
   </div>`;
 }
@@ -3762,7 +3774,7 @@ function setScheduleView(v){
 
 function renderYou(){
   paintSeg('youViews', 'yview', youView);
-  ['profile','records','body','settings'].forEach(v=>{ $('you' + v[0].toUpperCase() + v.slice(1) + 'View').style.display = v === youView ? '' : 'none'; });
+  ['profile','records','body','integrations','settings'].forEach(v=>{ $('you' + v[0].toUpperCase() + v.slice(1) + 'View').style.display = v === youView ? '' : 'none'; });
   const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
   $('youTitle').textContent = p ? (p.first_name || p.name) : activePersonId === COACH_ID ? 'Coach' : 'Guest';
   if(youView === 'records') window.kRecords?.render();
@@ -3771,7 +3783,7 @@ function renderYou(){
 }
 
 function setYouView(v){
-  youView = ['profile','records','body','settings'].includes(v) ? v : 'profile';
+  youView = ['profile','records','body','integrations','settings'].includes(v) ? v : 'profile';
   renderYou();
 }
 
@@ -4947,6 +4959,7 @@ function wireUI(){
   $('libReset').addEventListener('click', ()=>{ ['libRace','libPhase','libLen','libLevel'].forEach(id=> $(id).value = ''); libType = ''; renderLibrary(); });
   $('fitRefresh').addEventListener('click', ()=> renderFitness(true));
   $('fitAddPrs').addEventListener('click', goToPrs);
+  $('teamViews').querySelectorAll('[data-tmview]').forEach(b=> b.addEventListener('click', ()=> setTeamView(b.dataset.tmview)));
   $('teamSort').querySelectorAll('[data-sort]').forEach(b=> b.addEventListener('click', ()=>{ teamSort = b.dataset.sort; renderTeam(); }));
   ['libRace','libPhase','libLen','libLevel'].forEach(id=> $(id).addEventListener('change', renderLibrary));
 
@@ -5032,7 +5045,7 @@ function wireUI(){
   document.addEventListener('click', e=>{ if(!$('syncWrap').contains(e.target)) $('syncMenu').classList.remove('show'); });
   $('syncNowItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); runSync(); });
   $('syncImportItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); runImport(); });
-  $('syncSetupItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); setPage('you'); setYouView('settings'); });
+  $('syncSetupItem').addEventListener('click', ()=>{ $('syncMenu').classList.remove('show'); setPage('you'); setYouView('integrations'); });
   $('tmCant').addEventListener('click', ()=> openKai("I can't do today's run as planned because ", false));
   $('tmAsk').addEventListener('click', ()=> openKai());
   $('tmReset').addEventListener('click', ()=>{ const t = kaiData?.today; if(t) resetPlanDay(t.date, t.source === 'auto'); });
@@ -5844,7 +5857,7 @@ async function renderFitness(refresh){
     $('fitHero').innerHTML = f ? statTile(f.mpw ?? '–', 'mi / week (4 wk)') : '';
     $('fitTable').innerHTML = `<div class="fit-empty"><div class="card-title" style="margin-bottom:6px;">No fitness data yet</div><div class="hint" style="margin-bottom:var(--sp-3);">Add your PRs (with dates) or connect your watch, and Kestrel works out what you can race now.</div><div class="cluster" style="justify-content:center;"><button type="button" id="fitEmptyPrs">Add PRs</button><button type="button" class="ghost" id="fitEmptyWatch">Set up watch</button></div></div>`;
     $('fitEmptyPrs').onclick = goToPrs;
-    $('fitEmptyWatch').onclick = ()=>{ setPage('you'); setYouView('settings'); };
+    $('fitEmptyWatch').onclick = ()=>{ setPage('you'); setYouView('integrations'); };
     ['fitTrend','fitZones','fitSources','predNote'].forEach(id=> $(id).innerHTML = '');
     return;
   }
@@ -5881,29 +5894,20 @@ async function renderPredictor(){
 
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
-function renderRoster(){
-  const owner = window.KESTREL && window.KESTREL.role === 'owner';
-  const emails = people.map(p => p.email).filter(Boolean);
-  const phones = people.map(p => p.phone).filter(Boolean);
-  $('rosterHint').textContent = people.length ? `${people.length} on the team · ${emails.length} email${emails.length === 1 ? '' : 's'} · ${phones.length} phone${phones.length === 1 ? '' : 's'} on file.` : 'No one on the roster yet.';
-  $('rosterEmailBtn').disabled = !emails.length;
-  $('rosterTextBtn').disabled = !phones.length;
-  $('rosterList').innerHTML = people.map(p=>`<div class="roster-line"><div style="flex:1;min-width:0;"><div class="roster-main"><span class="dot" style="background:${p.color}"></span><span class="roster-name">${escapeHtml(p.name)}</span>${personTagsHtml(p.id)}</div>${p.phone || p.email ? `<div class="hint">${escapeHtml(p.phone || '')}${p.phone && p.email ? ' · ' : ''}${escapeHtml(p.email || '')}</div>` : ''}</div></div>`).join('')
-    + (owner ? '<div class="k-row"><button type="button" class="k-btn small" id="rosterManageBtn">Manage roster &amp; calendar</button></div>' : '');
-  if($('rosterManageBtn')) $('rosterManageBtn').onclick = ()=> window.openTeamAdmin();
-  const note = ()=> prompt('Message to the team (optional)', '') ;
-  $('rosterEmailBtn').onclick = ()=>{ const m = note(); if(m === null) return; sendMailto(emails.join(','), 'Team message', m); };
-  $('rosterTextBtn').onclick = ()=>{ const m = note(); if(m === null) return; window.location.href = `sms:${phones.join(',')}?&body=${encodeURIComponent(m)}`; };
-  $('rosterWhatsAppBtn').onclick = ()=>{ const m = note(); if(m === null) return; window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(m)}`, '_blank'); };
-}
-
+let teamView = 'miles';
+function setTeamView(v){ teamView = ['miles','roster','training'].includes(v) ? v : 'miles'; renderTeam(); }
 async function renderTeam(){
   const hasTeam = !!(window.KESTREL && window.KESTREL.teamId);
   $('teamEmpty').hidden = hasTeam;
-  $('teamBody').hidden = !hasTeam;
+  $('teamViews').style.display = hasTeam ? '' : 'none';
+  $('teamBody').hidden = !hasTeam || teamView !== 'miles';
+  $('teamRosterView').hidden = !hasTeam || teamView !== 'roster';
+  $('teamTrainView').hidden = !hasTeam || teamView !== 'training';
+  paintSeg('teamViews', 'tmview', teamView);
   $('teamEmptyStart').onclick = ()=> $('kAddTeam') && $('kAddTeam').click();
   if(!hasTeam) return;
-  renderRoster();
+  if(teamView === 'roster'){ window.kestrelRenderRoster?.($('teamRosterView')); return; }
+  if(teamView === 'training'){ window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
   renderPosts();
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
@@ -5925,6 +5929,9 @@ async function renderTeam(){
       <span class="mi">${r[teamSort] || '–'}</span>
       <span class="sub">${r.days_this_week} ${r.days_this_week === 1 ? 'day' : 'days'} this week · ${r.avg4} avg · ${r.last_week} last week${r.class_year ? ' · ' + escapeHtml(r.class_year) : ''}</span>
     </div>`).join('');
+  const iShare = rows.some(r=> r.id === activePersonId);
+  $('teamShareNudge').hidden = iShare;
+  $('teamShareBtn').onclick = async ()=>{ const r = await window.kestrelSaveProfile?.({ share_miles: true }); if(r) renderTeam(); };
   if(!rows.length) $('teamLeader').innerHTML = '<div class=\"hint\">Nobody shares their weekly miles yet. Turn it on in You → Profile to appear here; the team totals above count everyone.</div>';
 }
 
@@ -6081,6 +6088,7 @@ async function renderTraining(){
   if(trainingView === 'fitness') return renderFitness();
   if(trainingView === 'kai') return renderKaiTab();
   const own = isRealPerson();
+  if(own && window.kestrelRenderPersonalPlan) window.kestrelRenderPersonalPlan($('kPersonalPlan'));
   $('todayCard').style.display = 'none';
   ['healthCard','levelCard'].forEach(id=> $(id).style.display = own ? $(id).style.display : 'none');
   renderWeekCard();
@@ -6204,7 +6212,7 @@ async function init(){
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
 window.hawksInit = init;
 window.hawksReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
-window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
+window.hawksSetPage = (p, sub)=>{ setPage(p); if(p === 'team' && sub) setTeamView(sub); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>

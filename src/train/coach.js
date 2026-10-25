@@ -108,10 +108,17 @@ export function planFor(person) {
 const PERSON_COLS = 'id, name, class_year, plan_rank, coach_rank, health_status, health_updated_at, training_status, coach_token';
 export async function withPlans(db, person) {
   if (!person) return person;
-  const row = await db.prepare(
-    'SELECT tp.data FROM team_plans tp JOIN team_members tm ON tm.team_id = tp.team_id WHERE tm.person_id = ? ORDER BY tm.joined_at LIMIT 1'
-  ).bind(person.id).first();
-  if (row) { try { person.plans = JSON.parse(row.data); } catch { /* fall back to the built-in plans */ } }
+  // A plan the person built themselves comes first, then their first team's plan, then Kestrel's built-in plans.
+  const mine = await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first();
+  let own = null;
+  try { own = JSON.parse(mine?.settings || '{}').personal_plan?.plans || null; } catch { /* ignore */ }
+  if (own) person.plans = own;
+  else {
+    const row = await db.prepare(
+      'SELECT tp.data FROM team_plans tp JOIN team_members tm ON tm.team_id = tp.team_id WHERE tm.person_id = ? ORDER BY tm.joined_at LIMIT 1'
+    ).bind(person.id).first();
+    if (row) { try { person.plans = JSON.parse(row.data); } catch { /* fall back to the built-in plans */ } }
+  }
   person.first_name = person.first_name || String(person.name || '').split(/\s+/)[0] || 'Athlete';
   return person;
 }

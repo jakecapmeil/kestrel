@@ -116,7 +116,7 @@ function renderLanding(mode = 'signin', message = '') {
     <form id="kEmailForm">
       <label class="k-label" for="kEm">Email</label><input class="k-input" id="kEm" name="email" type="email" autocomplete="email" required>
       <label class="k-label" for="kPw">Password</label><input class="k-input" id="kPw" name="password" type="password" minlength="8" autocomplete="${signup ? 'new-password' : 'current-password'}" required>
-      ${signup ? html`<p class="k-small">We'll email you a link to confirm your address before you can sign in.</p>` : ''}
+      ${signup ? html`<p class="k-small">We'll email you a link to confirm your address before you can sign in. By creating an account you agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>. You must be 13 or older.</p>` : ''}
       ${message ? html`<p class="k-small k-good">${message}</p>` : ''}
       <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
     </form>
@@ -124,7 +124,7 @@ function renderLanding(mode = 'signin', message = '') {
       <button class="k-link" type="button" id="kSwap">${signup ? 'Have an account? Sign in' : 'New here? Create an account'}</button>
       ${signup ? '' : html`<button class="k-link" type="button" id="kForgot">Forgot password?</button>`}
     </div>
-    <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
+    <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. <a href="/legal" target="_blank" rel="noopener">Terms, privacy and safety</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
   </div></div>${showcase()}`);
   $('kGoogle').onclick = (e) => attempt(async () => {
     const { error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
@@ -217,7 +217,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
       ${field('Target event (if you have one)', sel('goal_event', [['', 'None yet'], ...['800', '1600', '3200', '5K', '10K', 'Half marathon', 'Marathon'].map((x) => [x, x])], d.goal_event))}
       ${field('Goal time', time('goal_time', 'e.g. 18:30'))}
       ${field('Race date', html`<input class="k-input" name="goal_date" type="date" value="${d.goal_date ?? ''}">`)}
-      <label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel.</span></label>
+      <label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel. I agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>, and I understand Kestrel is not medical advice.</span></label>
       <p class="k-small">Teammates see your name, colour, availability and RSVPs. Your training log, health, body map and predictions are only yours.</p>`,
   ];
   const last = step === OB_STEPS.length - 1;
@@ -283,7 +283,7 @@ function renderTeamStart(back = false) {
     <h1 class="k-title">Your team</h1>
     <p class="k-lede">Kestrel works around a team calendar. Start one for your school, or join yours with the code a teammate sends you.</p>
     <div class="k-two">
-      <section class="k-panel"><h2>Start a team</h2><p class="k-small">You'll get an invite code to share. As the owner you manage the calendar and the team's training plan; you never see anyone's training.</p>
+      <section class="k-panel"><h2>Start a team</h2><p class="k-small">You'll get an invite code to share. As the owner you manage the calendar, name captains and, with them, build the team's training plan; you never see anyone's training.</p>
         <form id="kNewTeam">
           <label class="k-label" for="kTn">Team name</label><input class="k-input" id="kTn" name="name" placeholder="Varsity Cross Country" maxlength="80" required>
           <label class="k-label" for="kTs">School</label><input class="k-input" id="kTs" name="school" placeholder="Lincoln High School" maxlength="120">
@@ -391,6 +391,7 @@ window.kestrelRenderTeamCard = async (el) => {
   const team = await attempt(() => api(`/api/teams/${K.teamId}`));
   if (!team) return;
   const owner = team.role === 'owner';
+  const lead = owner || team.role === 'captain';
   const link = `${location.origin}/join/${team.invite_code}`;
   if ($('teamTitle')) $('teamTitle').textContent = team.name;
   el.innerHTML = html`
@@ -400,16 +401,16 @@ window.kestrelRenderTeamCard = async (el) => {
       ${owner ? html`<button class="k-link" type="button" id="kNewCode">New code</button>` : ''}</div>
     <p class="k-small">Anyone with the code can join, so share it only with your team.</p>
     <div class="k-members">${team.members.map((m) => html`<div class="k-member"><span class="dot" style="background:${m.color}"></span><span class="grow">${m.name || 'Unnamed'}${m.id === K.me.user.id ? ' (you)' : ''}</span>
-      ${m.role === 'owner' ? html`<span class="badge">owner</span>` : ''}
+      ${m.role === 'owner' ? html`<span class="badge">owner</span>` : m.role === 'captain' ? html`<span class="badge">captain</span>` : ''}
       ${owner && m.id !== K.me.user.id ? html`<button class="k-link danger" type="button" data-remove="${m.id}">Remove</button>` : ''}</div>`)}</div>
     <div class="k-row">
-      ${owner ? html`<button class="k-btn small" type="button" id="kAdmin">Manage calendar</button><button class="k-btn small" type="button" id="kPlanEdit">Team plan${team.has_plan ? ' (custom)' : ''}</button><button class="k-btn small" type="button" id="kRename">Rename</button>` : ''}
+      ${lead ? html`<button class="k-btn small" type="button" id="kAdmin">Manage calendar</button><button class="k-btn small" type="button" id="kPlanEdit">Training plan${team.has_plan ? ' (custom)' : ''}</button>` : ''}${owner ? html`<button class="k-btn small" type="button" id="kRename">Rename</button>` : ''}
       <button class="k-link danger" type="button" id="kLeave">Leave team</button>
     </div>`.s;
   $('kCopyInvite').onclick = async () => { try { await navigator.clipboard.writeText(link); toast('Invite link copied.'); } catch { prompt('Copy this invite link:', link); } };
   if ($('kNewCode')) $('kNewCode').onclick = (e) => attempt(async () => { if (!confirm('Make a new invite code? The old code and link stop working.')) return; await api(`/api/teams/${K.teamId}/code`, { method: 'POST' }); window.kestrelRenderTeamCard(el); }, e.currentTarget);
   if ($('kAdmin')) $('kAdmin').onclick = () => window.openTeamAdmin();
-  if ($('kPlanEdit')) $('kPlanEdit').onclick = () => openPlanEditor();
+  if ($('kPlanEdit')) $('kPlanEdit').onclick = () => window.hawksSetPage('team', 'training');
   if ($('kRename')) $('kRename').onclick = (e) => attempt(async () => {
     const name = prompt('Team name', team.name);
     if (!name) return;
@@ -432,27 +433,245 @@ window.kestrelRenderTeamCard = async (el) => {
   }, e.currentTarget);
 };
 
-// The team's training plan (owner): Kestrel's built-in levels as a starting point, edited as JSON.
-function openPlanEditor() {
-  const d = dialog();
-  attempt(async () => {
-    const r = await api(`/api/teams/${K.teamId}/plan`);
-    d.innerHTML = html`<h2>Team training plan</h2>
-      <p class="k-small">Six levels by weekly miles; each athlete's AI coach starts them on the level that fits and moves them up when they're ready. Each level has three weeks (no race, race week, taper), seven days with a type, miles, shoes and notes, and a menu of workouts. ${r.custom ? 'This team uses its own plan.' : "This team uses Kestrel's built-in plan."}</p>
-      <textarea class="k-input mono" id="kPlanJson" rows="18" spellcheck="false">${JSON.stringify(r.plans, null, 1)}</textarea>
-      <div class="k-row"><button class="k-btn primary" type="button" id="kPlanSave">Save team plan</button>${r.custom ? html`<button class="k-btn" type="button" id="kPlanReset">Use Kestrel's plan</button>` : ''}<button class="k-link" type="button" id="kPlanClose">Close</button></div>`.s;
-    d.showModal();
-    $('kPlanClose').onclick = () => d.close();
-    $('kPlanSave').onclick = (e) => attempt(async () => {
-      let plans;
-      try { plans = JSON.parse($('kPlanJson').value); } catch { throw new Error('That is not valid JSON.'); }
-      await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
-      d.close(); toast('Team plan saved. Everyone on the team trains from it now.');
-      await window.hawksReload();
-    }, e.currentTarget);
-    if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => { await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' }); d.close(); await window.hawksReload(); }, e.currentTarget);
+// ---------- Team tab: roster
+
+const isLead = () => K.role === 'owner' || K.role === 'captain';
+
+window.kestrelRenderRoster = async (el) => {
+  if (!el || !K.teamId) return;
+  const [r, mi] = await Promise.all([
+    attempt(() => api(`/api/teams/${K.teamId}/roster`)),
+    api('/api/team').catch(() => null),
+  ]);
+  if (!r) return;
+  const miles = new Map((mi?.athletes || []).map((a) => [a.id, a]));
+  const me = K.me.user.id;
+  const lead = r.role === 'owner' || r.role === 'captain';
+  const owner = r.role === 'owner';
+  el.innerHTML = html`<section class="card">
+      <div class="section-head"><div>
+        <div class="card-title">Roster</div>
+        <div class="hint">${r.members.length} on the team. Everyone sees name, number, grade and events. ${lead ? 'Age is shown only to you and the person.' : 'Your age is shown only to you, the owner and captains.'}</div>
+      </div></div>
+      <div class="k-table" role="table" aria-label="Team roster">
+        <div class="k-tr k-th" role="row"><span role="columnheader">#</span><span role="columnheader">Name</span><span role="columnheader">Grade</span><span role="columnheader">Age</span><span role="columnheader">Events</span><span role="columnheader">Week</span><span></span></div>
+        ${r.members.map((m) => html`<div class="k-tr" role="row">
+          <span class="k-num">${m.jersey || '–'}</span>
+          <span class="k-name"><span class="dot" style="background:${m.color}"></span><span>${m.name || 'Unnamed'}${m.id === me ? ' (you)' : ''}</span>${m.role === 'owner' ? html`<span class="badge">owner</span>` : m.role === 'captain' ? html`<span class="badge">captain</span>` : ''}</span>
+          <span>${m.class_year || '–'}</span>
+          <span>${m.age ?? '–'}</span>
+          <span class="k-ev">${m.events || '–'}</span>
+          <span class="num">${miles.has(m.id) ? miles.get(m.id).this_week : html`<small title="Not sharing miles">·</small>`}</span>
+          <span>${lead || m.id === me ? html`<button class="k-link" type="button" data-edit="${m.id}">Edit</button>` : ''}</span>
+        </div>`)}
+      </div>
+      ${r.members.length < 2 ? html`<p class="k-small">Invite teammates with the code on the Miles tab.</p>` : ''}
+    </section>`.s;
+  el.querySelectorAll('[data-edit]').forEach((b) => {
+    b.onclick = () => editRosterEntry(r.members.find((m) => m.id === b.dataset.edit), { lead, owner }, () => window.kestrelRenderRoster(el));
   });
+};
+
+function editRosterEntry(m, perms, done) {
+  const d = dialog();
+  const self = m.id === K.me.user.id;
+  d.innerHTML = html`<h2>${self ? 'Your roster details' : m.name}</h2>
+    <form id="kRosterForm">
+      <div><label class="k-label" for="kRJersey">Jersey number</label><input class="k-input" id="kRJersey" name="jersey" maxlength="6" value="${m.jersey}" inputmode="numeric"></div>
+      <div><label class="k-label" for="kRAge">Age</label><input class="k-input" id="kRAge" name="age" type="number" min="8" max="99" value="${m.age ?? ''}"><p class="k-small">Optional. Only you, the owner and captains see it.</p></div>
+      <div><label class="k-label" for="kREvents">Events</label><input class="k-input" id="kREvents" name="events" maxlength="80" value="${m.events}" placeholder="e.g. 800, 1600, 4x400"></div>
+      ${perms.owner && m.role !== 'owner' ? html`<label class="k-check"><input type="checkbox" name="leader" ${m.role === 'captain' ? 'checked' : ''}><span>Team captain. Captains can edit the roster, manage the calendar and build the team training plan.</span></label>` : ''}
+      <div class="k-row"><button class="k-btn primary" type="submit">Save</button><button class="k-link" type="button" id="kRClose">Cancel</button></div>
+    </form>`.s;
+  d.showModal();
+  $('kRClose').onclick = () => d.close();
+  $('kRosterForm').onsubmit = (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const body = { jersey: f.jersey.value.trim(), age: f.age.value, events: f.events.value.trim() };
+    if (f.leader) body.leader = f.leader.checked;
+    attempt(async () => {
+      await api(`/api/teams/${K.teamId}/members/${m.id}`, { method: 'PUT', body: JSON.stringify(body) });
+      d.close(); await refreshMe(); renderHeader(); done();
+    });
+  };
 }
+
+// ---------- Team tab: training plan (owner and captains build it with Kestrel AI)
+
+window.kestrelRenderTeamTraining = async (el) => {
+  if (!el || !K.teamId) return;
+  const r = await attempt(() => api(`/api/teams/${K.teamId}/plan`));
+  if (!r) return;
+  const lead = isLead();
+  el.innerHTML = html`<section class="card">
+      <div class="section-head"><div>
+        <div class="card-title">Team training plan</div>
+        <div class="hint">${r.custom ? (r.spec?.name || 'Custom plan') : 'No team plan yet.'}</div>
+      </div></div>
+      ${r.custom
+        ? html`<p class="k-small">${r.spec?.summary || 'Your captains built this plan.'}</p><p class="k-small">Every athlete trains from the level that fits their current mileage and fitness, and their own Kestrel AI coach adapts it day to day. Athletes who built a personal plan keep using theirs.</p>`
+        : html`<p class="k-small">Nothing is preloaded. ${lead ? 'Talk it through with Kestrel AI: tell it your season, how many days you run, workout days and race days, then refine it until it is right. It scales to every runner on the roster.' : 'Your captain or coach can build one. Until then you train from Kestrel’s built-in plans.'}</p>`}
+      ${lead ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-btn" type="button" id="kPlanJsonBtn">Edit as JSON</button><button class="k-link danger" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
+      ${r.custom && r.spec ? planTable(r.spec) : ''}
+      <p class="k-small">Plans are general guidance, not medical advice, and are not checked by Kestrel for any one runner.</p>
+    </section>`.s;
+  if ($('kPlanBuild')) $('kPlanBuild').onclick = () => openPlanBuilder({ team: true, current: r.spec, onSaved: () => window.kestrelRenderTeamTraining(el) });
+  if ($('kPlanJsonBtn')) $('kPlanJsonBtn').onclick = () => openPlanJson(r, () => window.kestrelRenderTeamTraining(el));
+  if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
+    if (!confirm('Remove the team plan? Everyone goes back to Kestrel’s built-in plans.')) return;
+    await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' });
+    await window.hawksReload();
+    window.kestrelRenderTeamTraining(el);
+  }, e.currentTarget);
+};
+
+const DAYS7 = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function planTable(spec) {
+  const week = (w) => html`<div class="k-planweek">${w.map((d, i) => html`<div class="k-planday ${d.type === 'Off' || d.type === 'Cross-train' ? 'rest' : ''}"><b>${DAYS7[i]}</b><span>${d.type}</span><small>${d.share ? Math.round(d.share * 100) + '%' : ''}</small>${d.notes ? html`<small>${d.notes}</small>` : ''}</div>`)}</div>`;
+  return html`<div class="k-plan">
+    <div class="k-small"><b>Normal week</b></div>${week(spec.normal_week)}
+    <div class="k-small"><b>Race week</b> (${Math.round(spec.race_week_factor * 100)}% of the miles)</div>${week(spec.race_week)}
+    <div class="k-small"><b>Taper</b> (${Math.round(spec.taper_factor * 100)}% of the miles)</div>${week(spec.taper_week)}
+    ${spec.sessions?.length ? html`<div class="k-small"><b>Workouts</b></div>${spec.sessions.map((x) => html`<details class="k-sess"><summary>${x.title}${x.desc ? ' · ' + x.desc : ''}</summary><ul>${x.items.map((i) => html`<li>${i}</li>`)}</ul></details>`)}` : ''}
+  </div>`;
+}
+
+// The old editor, for leaders who want to write every cell by hand.
+function openPlanJson(r, done) {
+  const d = dialog();
+  d.innerHTML = html`<h2>Edit plan as JSON</h2>
+    <p class="k-small">Nine levels by weekly miles. Each level has three weeks (no race, race week, taper), seven days with a type, miles, shoes and notes, and a menu of workouts. Saving this replaces what the AI built.</p>
+    <textarea class="k-input mono" id="kPlanJson" rows="18" spellcheck="false">${JSON.stringify(r.plans, null, 1)}</textarea>
+    <div class="k-row"><button class="k-btn primary" type="button" id="kPlanSave">Save</button><button class="k-link" type="button" id="kPlanClose">Close</button></div>`.s;
+  d.showModal();
+  $('kPlanClose').onclick = () => d.close();
+  $('kPlanSave').onclick = (e) => attempt(async () => {
+    let plans;
+    try { plans = JSON.parse($('kPlanJson').value); } catch { throw new Error('That is not valid JSON.'); }
+    await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
+    d.close(); toast('Team plan saved.');
+    await window.hawksReload(); done();
+  }, e.currentTarget);
+}
+
+// ---------- Plan builder: talk to Kestrel AI, see the plan, refine, save. For a team (captains) or for yourself.
+
+const PLAN_STARTS = [
+  'Cross country season, 5 days a week, workouts Tuesday and Thursday, meets on Saturday',
+  'Track season with two quality days and a long run on Sunday',
+  'Off-season base building, easy running only',
+];
+
+function openPlanBuilder({ team, current, onSaved }) {
+  const base = team ? `/api/teams/${K.teamId}/plan` : '/api/me/plan';
+  const st = { turns: [], plan: current || null, preview: null, busy: false };
+  const d = dialog();
+  d.classList.add('k-wide');
+  d.innerHTML = html`<h2>${team ? 'Build the team training plan' : 'Build your training plan'}</h2>
+    <p class="k-small">${team ? 'Describe the season and refine it with Kestrel AI. The plan scales to every runner on the roster, so each athlete lands on the level that fits their fitness.' : 'Describe your goals and your week. Kestrel AI drafts a plan, you refine it, and your coach adapts it to how you feel.'} Powered by ${AI.describe(K.ai)}. <a href="/lab#/providers" target="_blank" rel="noopener">Change</a></p>
+    <div class="k-builder">
+      <div class="k-chat" id="kPbChat" aria-live="polite"></div>
+      <div class="k-pbpreview" id="kPbPreview"></div>
+    </div>
+    <div class="k-chips" id="kPbChips"></div>
+    <form class="k-row" id="kPbForm"><input class="k-input grow" id="kPbInput" maxlength="1000" placeholder="${st.plan ? 'What should change?' : 'Describe the plan you want'}" autocomplete="off"><button class="k-btn primary" type="submit" id="kPbSend">Send</button></form>
+    <p class="k-small" id="kPbMsg" role="status"></p>
+    <div class="k-row"><button class="k-btn primary" type="button" id="kPbSave" disabled>${team ? 'Use this plan for the team' : 'Use this plan'}</button><button class="k-link" type="button" id="kPbClose">Close</button></div>
+    <p class="k-small">AI plans can be wrong. They are general guidance, not medical advice. Check the plan and listen to your body, your coach and your doctor.</p>`.s;
+  d.showModal();
+  d.addEventListener('close', () => d.classList.remove('k-wide'), { once: true });
+  const chat = $('kPbChat');
+  const paint = () => {
+    chat.innerHTML = (st.turns.length ? st.turns : [{ role: 'kai', text: st.plan ? 'Here is the current plan. Tell me what to change.' : 'What kind of plan do you want? Season, days a week, workout days, race days, anything to avoid.' }])
+      .map((t) => `<div class="k-bubble ${t.role}">${esc(t.text).replace(/\n/g, '<br>')}</div>`).join('') + (st.busy ? '<div class="k-bubble kai">Thinking…</div>' : '');
+    chat.scrollTop = chat.scrollHeight;
+    $('kPbChips').innerHTML = st.turns.length ? '' : PLAN_STARTS.map((x, i) => `<button type="button" class="k-chip" data-i="${i}">${esc(x)}</button>`).join('');
+    $('kPbChips').querySelectorAll('[data-i]').forEach((b) => { b.onclick = () => { $('kPbInput').value = PLAN_STARTS[b.dataset.i]; $('kPbInput').focus(); }; });
+    const pv = $('kPbPreview');
+    if (!st.preview && !st.plan) { pv.innerHTML = '<p class="k-small">Your plan will show here.</p>'; }
+    else if (st.preview) {
+      const lv = st.preview.levels;
+      const cur = Number(pv.dataset.level) || lv[Math.min(3, lv.length - 1)].level;
+      const L = lv.find((x) => x.level === cur) || lv[0];
+      pv.innerHTML = `<b>${esc(st.preview.spec.name)}</b><p class="k-small">${esc(st.preview.spec.summary)}</p>
+        <label class="k-label" for="kPbLevel">Level (weekly miles)</label>
+        <select class="k-input" id="kPbLevel">${lv.map((x) => `<option value="${x.level}" ${x.level === L.level ? 'selected' : ''}>${x.miles} miles a week</option>`).join('')}</select>
+        <div class="k-pbweek">${L.week.map((w) => `<div><b>${w.day.slice(0, 3)}</b><span>${esc(w.type)}</span><span>${w.miles ? w.miles + ' mi' : ''}</span><small>${esc(w.notes)}</small></div>`).join('')}</div>
+        <p class="k-small">Normal week shown. Race week and taper are built from it. ${team ? 'Each athlete is placed on the level that matches their fitness.' : 'You start on the level that matches your fitness and move up as you get fitter.'}</p>`;
+      $('kPbLevel').onchange = (e) => { pv.dataset.level = e.target.value; paint(); };
+    } else {
+      pv.innerHTML = planTable(st.plan).s;
+    }
+    $('kPbSave').disabled = !(st.preview || st.plan) || st.busy;
+  };
+  paint();
+  if (st.plan) attempt(async () => { st.preview = (await api(`${base}/preview`, { method: 'POST', body: JSON.stringify({ plan: st.plan }) })); paint(); });
+
+  $('kPbClose').onclick = () => d.close();
+  $('kPbForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const text = $('kPbInput').value.trim();
+    if (!text || st.busy) return;
+    $('kPbInput').value = '';
+    st.turns.push({ role: 'user', text });
+    st.busy = true; $('kPbMsg').textContent = ''; paint();
+    try {
+      const out = await planAsk(base, st.turns, st.plan);
+      st.turns.push({ role: 'kai', text: out.answer || 'Done.' });
+      if (out.plan) { st.plan = out.plan; st.preview = out.preview || st.preview; }
+    } catch (err) {
+      st.turns.pop(); $('kPbInput').value = text;
+      $('kPbMsg').textContent = err.message;
+    }
+    st.busy = false; paint();
+  };
+  $('kPbSave').onclick = (e) => attempt(async () => {
+    await api(base, { method: 'PUT', body: JSON.stringify({ plan: st.plan }) });
+    d.close();
+    toast(team ? 'Team plan saved. Everyone trains from it now.' : 'Plan saved. Your coach uses it from today.');
+    await window.hawksReload();
+    if (onSaved) onSaved();
+  }, e.currentTarget);
+}
+
+// -> { answer, plan?, preview? }. Free Kestrel AI answers on the server; any other model is called from the browser.
+async function planAsk(base, turns, current) {
+  const history = turns.map((t) => ({ role: t.role === 'user' ? 'user' : 'kai', text: t.text }));
+  if (K.ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current }) });
+  const chat = await api(`${base}/prompt`, { method: 'POST', body: JSON.stringify({ history, current }) });
+  const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the person reads; include "plan" only when you are giving or changing the plan.\n${JSON.stringify(chat.schema)}`;
+  const text = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const out = parseLoose(text) || { answer: text };
+  const res = { answer: typeof out.answer === 'string' && out.answer.trim() ? out.answer : String(text) };
+  if (out.plan) {
+    try { const preview = await api(`${base}/preview`, { method: 'POST', body: JSON.stringify({ plan: out.plan }) }); res.plan = preview.spec; res.preview = preview; }
+    catch (err) { res.answer += `\n\n(I could not use that plan: ${err.message} Ask me to fix it.)`; }
+  }
+  return res;
+}
+
+// Your own plan (Training > Plan): shown when there is no team plan, or to swap it for one of your own.
+window.kestrelRenderPersonalPlan = async (el) => {
+  if (!el) return;
+  const r = await api('/api/me/plan').catch(() => null);
+  if (!r) { el.innerHTML = ''; return; }
+  if (r.team_plan && !r.custom) { el.innerHTML = ''; return; }
+  el.innerHTML = html`<section class="card">
+      <div class="card-title">${r.custom ? 'Your own plan' : 'Make your own plan'}</div>
+      ${r.custom
+        ? html`<p class="k-small"><b>${r.spec?.name || 'Custom plan'}</b>. ${r.spec?.summary || ''} Your coach adapts it each day.</p>`
+        : html`<p class="k-small">You are on Kestrel’s built-in plan for your level. Want something that fits your season? Describe it to Kestrel AI and refine it together.</p>`}
+      <div class="k-row"><button class="k-btn primary" type="button" id="kMyPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-link danger" type="button" id="kMyPlanReset">${r.team_plan ? 'Go back to the team plan' : 'Go back to the built-in plan'}</button>` : ''}</div>
+    </section>`.s;
+  $('kMyPlanBuild').onclick = () => openPlanBuilder({ team: false, current: r.spec, onSaved: () => window.kestrelRenderPersonalPlan(el) });
+  if ($('kMyPlanReset')) $('kMyPlanReset').onclick = (e) => attempt(async () => {
+    if (!confirm('Remove your own plan?')) return;
+    await api('/api/me/plan', { method: 'DELETE' });
+    await window.hawksReload();
+    window.kestrelRenderPersonalPlan(el);
+  }, e.currentTarget);
+};
 
 function dialog() {
   let d = $('kDialog');
@@ -466,24 +685,37 @@ function dialog() {
 window.kestrelRenderSettings = async () => {
   const ai = $('kAiBody');
   if (ai) {
-    ai.innerHTML = html`<p class="k-small">Kestrel is the coach. It works out of the box on a free model. To use your own key, or a model on your own computer, set it up in Kestrel Lab.</p>
-      <div class="k-row spread"><span>Powered by <b>${AI.describe(K.ai)}</b></span><a class="k-btn small" href="/lab#/providers">Customise in Lab</a></div>`.s;
+    ai.innerHTML = html`<p class="k-small">Kestrel is the coach. It works out of the box on a free model. To use your own key, or a model on your own computer, set it up in Kestrel Lab. Your key stays in this browser.</p>
+      <div class="k-row spread"><span>Powered by <b>${AI.describe(K.ai)}</b></span><a class="k-btn small" href="/lab#/providers">Customise in Lab</a></div>
+      <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
   }
   const mb = $('kModelsBody');
   if (mb) {
     const labels = { race: 'Race times (800 m and up)', short: 'Sprints and steeple', marathon: 'Marathon' };
     const lists = await attempt(() => Promise.all(Object.keys(labels).map((t) => api(`/api/models?task=${t}`))));
-    if (!lists) return;
-    const nameOf = (t, i) => { const m = lists[i].models.find((x) => x.id === K.me.models[t]); return m ? `${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}` : 'Kestrel default'; };
-    mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Kestrel picks a good one for each. To compare models on your own results, switch, fork or publish one, open Kestrel Lab.</p>
-      ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small" style="margin:0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
-      <div class="k-row"><a class="k-btn small primary" href="/lab#/workbench">Test models on my PRs</a><a class="k-btn small" href="/lab#/models">Browse models</a></div>`.s;
+    if (lists) {
+      const nameOf = (t, i) => { const m = lists[i].models.find((x) => x.id === K.me.models[t]); return m ? `${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}` : 'Kestrel default'; };
+      mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Kestrel picks a good one for each. To compare models on your own results, switch, fork or publish one, open Kestrel Lab.</p>
+        ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small" style="margin:0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
+        <div class="k-row"><a class="k-btn small primary" href="/lab#/workbench">Test models on my PRs</a><a class="k-btn small" href="/lab#/models">Browse models</a></div>`.s;
+    }
+  }
+  const priv = $('kPrivacyBody');
+  if (priv) {
+    const shared = !!K.me.user.share_miles;
+    priv.innerHTML = html`<ul class="k-list">
+        <li>Teammates see your name, colour, availability, RSVPs, and roster details (number, grade, events).</li>
+        <li>Your training log, health, body map, predictions and GPS routes are only yours and your AI coach's.</li>
+        <li>Team owners and captains can edit the roster and plan, but cannot see your training or health.</li>
+      </ul>
+      <label class="k-check"><input type="checkbox" id="kShareMiles" ${shared ? 'checked' : ''}><span>Show my weekly miles on my teams' mileage boards</span></label>`.s;
+    $('kShareMiles').onchange = (e) => attempt(async () => { await window.kestrelSaveProfile({ share_miles: e.target.checked }); toast(e.target.checked ? 'Your miles are on the board.' : 'Your miles are hidden. Team totals still count them.'); });
   }
   const acct = $('kAccountBody');
   if (acct) {
     acct.innerHTML = html`<p class="k-small">Signed in as ${K.me.user.email}</p>
       <div class="k-row"><button class="k-btn small" type="button" id="kSignOut">Sign out</button><button class="k-link danger" type="button" id="kDelete">Delete my Kestrel data</button></div>
-      <p class="k-small">Kestrel is open source (MIT). <a href="${REPO_URL}" target="_blank" rel="noopener">Source code</a> · <a href="/lab">Kestrel Lab</a></p>`.s;
+      <p class="k-small">Kestrel is open source (MIT). <a href="${REPO_URL}" target="_blank" rel="noopener">Source code</a> · <a href="/lab">Kestrel Lab</a> · <a href="/legal" target="_blank" rel="noopener">Terms and privacy</a></p>`.s;
     $('kSignOut').onclick = () => K.sb.auth.signOut();
     $('kDelete').onclick = (e) => attempt(async () => {
       if (!confirm('Delete everything about you in Kestrel: your log, plan, PRs, models, and team memberships? This cannot be undone.')) return;
