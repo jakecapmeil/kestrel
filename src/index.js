@@ -61,7 +61,7 @@ const settingsOf = (row) => { try { return JSON.parse(row?.settings || '{}'); } 
 async function loadMe(db, auth) {
   let row = await db.prepare('SELECT * FROM people WHERE id = ?').bind(auth.id).first();
   if (!row) {
-    await db.prepare('INSERT OR IGNORE INTO people (id, email, name, color, created_at) VALUES (?, ?, ?, ?, ?)')
+    await db.prepare('INSERT OR IGNORE INTO people (id, email, name, color, created_at, share_miles) VALUES (?, ?, ?, ?, ?, 1)')
       .bind(auth.id, auth.email, str(auth.name, 60), COLORS[Math.floor(Math.random() * COLORS.length)], Date.now()).run();
     row = await db.prepare('SELECT * FROM people WHERE id = ?').bind(auth.id).first();
   }

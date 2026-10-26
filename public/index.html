@@ -1029,6 +1029,9 @@
     letter-spacing:var(--tr-subhead);color:var(--ink-soft);
   }
   #viewAllPostsBtn{margin-top:12px;width:100%;}
+  .post-scroll{max-height:min(60vh,520px);overflow-y:auto;overscroll-behavior:contain;}
+  .split-main{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0;}
+  .split-main > .card{margin-bottom:0;}
   .post-share-btn{
     flex-shrink:0;width:var(--tap-min);height:var(--tap-min);padding:0;margin:-4px -8px 0 0;
     display:flex;align-items:center;justify-content:center;
@@ -2270,6 +2273,7 @@
       <button type="button" class="k-btn primary" id="teamEmptyStart">Start or join a team</button>
     </div>
     <div class="split split-team" id="teamBody">
+      <div class="split-main">
       <section class="card">
         <div class="section-head">
           <div>
@@ -2293,13 +2297,19 @@
           <button type="button" class="k-btn small" id="teamShareBtn">Show my miles</button>
         </div>
       </section>
+      <section class="card" id="recentPostsCard">
+        <div class="card-title">Latest posts</div>
+        <div class="post-scroll" id="postList"></div>
+        <button class="ghost" id="viewAllPostsBtn">See all posts</button>
+      </section>
+      </div>
       <div class="split-side">
       <section class="card">
         <div class="card-title">Team</div>
         <div id="teamStatusList"></div>
       </section>
       <section class="card" id="postCard">
-        <div class="card-title">Posts</div>
+        <div class="card-title">New post</div>
         <div class="post-composer" id="postComposer">
           <input type="text" id="postHeaderInput" placeholder="Header (optional)" maxlength="80">
           <div class="post-composer-row">
@@ -2308,8 +2318,6 @@
           </div>
         </div>
         <div class="post-hint" id="postHint">Reload and pick your name to post.</div>
-        <div id="postList"></div>
-        <button class="ghost" id="viewAllPostsBtn">See all posts</button>
       </section>
       </div>
     </div>
