@@ -43,16 +43,16 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 | Part | What |
 |---|---|
 | `src/index.js` | Cloudflare Worker: the API and the rules above. |
-| `src/train/` | The training engine from [Kessler Calendar](https://github.com/jakecapmeil/hawks): plans, coach, log, fitness, workouts, watch sync, plan push, calculators. |
+| `src/train/` | The training engine from [Kestrel Calendar](https://github.com/jakecapmeil/hawks): plans, coach, log, fitness, workouts, watch sync, plan push, calculators. |
 | `docs/model-research.md` | Which models are on Kestrel, which to add next, and how purposes and courses work. |
 | `src/models.js` | Kestrel Lab's model engine (purposes, courses, one evaluator per model kind, plus upload validation) and the adapters the fitness engine calls. |
-| `public/index.html` | The app (the Kessler views). `public/kestrel.js` adds sign-in, teams, the AI choice and settings; `public/kestrel.css` is the design. |
+| `public/index.html` | The app (the Kestrel views). `public/kestrel.js` adds sign-in, teams, the AI choice and settings; `public/kestrel.css` is the design. |
 | `src/train/courses.js` | Courses and course PRs. 48 built-in courses (each checked against a published source, with GPS start bounds so a run is matched to its course); courses people add live in the `courses` table, are shared, and are chosen by hand on the run. |
 | `public/records.js` | You → Records (PRs that update themselves, the courses you follow), the course picker, and a run's route (flat, elevation, and 3D terrain through MapLibre with OpenStreetMap and AWS terrain tiles). |
 | `public/lab/` | Kestrel Lab. |
 | `migrations/` | Cloudflare D1 (SQLite) schema. |
 | `models/` | The built-in open-weight models and their cards. |
-| `scripts/` | `check-models.mjs` (the engine matches the original KesslerPredict code and rejects bad files) and `auth-stub.mjs` (a local stand-in for Supabase sign-in). |
+| `scripts/` | `check-models.mjs` (the engine matches the original KestrelPredict code and rejects bad files) and `auth-stub.mjs` (a local stand-in for Supabase sign-in). |
 
 ## Run your own
 
@@ -76,7 +76,7 @@ To develop locally without Supabase:
 
 ## Origin and credits
 
-Kestrel started as a calendar for the Hunter Kessler running team, so everyone could say whether they were coming to practice, and grew feature by feature into a training platform for any team. It is an entry in the 2026 Congressional App Challenge. The libraries, services and datasets it builds on are in [THIRD_PARTY.md](THIRD_PARTY.md).
+Kestrel started as a calendar for the Hunter Kestrel running team, so everyone could say whether they were coming to practice, and grew feature by feature into a training platform for any team. It is an entry in the 2026 Congressional App Challenge. The libraries, services and datasets it builds on are in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Licence
 
@@ -84,4 +84,4 @@ Kestrel started as a calendar for the Hunter Kessler running team, so everyone c
 - **Model weights:** see [models/README.md](models/README.md). Lite and Marathon are CC BY 4.0; Short's licence is unclear because of one of its training sources.
 - **Body map:** body-muscles (Apache-2.0, `public/vendor/body-muscles/`).
 
-Kestrel grew out of [Kessler Calendar](https://github.com/jakecapmeil/hawks), a team calendar and coaching app built for one high school cross-country team. The KesslerPredict research (datasets, experiments, training scripts) is in that repository, under [research/hawkspredict](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict).
+Kestrel grew out of [Kestrel Calendar](https://github.com/jakecapmeil/hawks), a team calendar and coaching app built for one high school cross-country team. The KestrelPredict research (datasets, experiments, training scripts) is in that repository, under [research/hawkspredict](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict).

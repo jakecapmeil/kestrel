@@ -2,7 +2,7 @@
    Three layers, in order:
    1. primitives: raw values. Only this file reads them.
    2. semantic: what a thing is for (surface, text, accent). Components read these and nothing else.
-   3. legacy: the old Kessler token names, pointed at the semantic layer, until each screen is ported (phase 2).
+   3. legacy: the old Kestrel token names, pointed at the semantic layer, until each screen is ported (phase 2).
    Dark mode swaps the semantic layer only. */
 
 :root{
@@ -70,7 +70,7 @@
   --hawk-eye:var(--red-400);
 }
 
-/* ---- 3. legacy names (Kessler app). Remove as screens move to the semantic layer. */
+/* ---- 3. legacy names (Kestrel app). Remove as screens move to the semantic layer. */
 :root{
   --ink:var(--text); --ink-soft:var(--text-2);
   --card:var(--surface); --field:var(--surface); --press:var(--surface-2);

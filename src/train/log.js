@@ -633,7 +633,7 @@ export function logTools(withPerson) {
     },
     {
       name: 'find_workouts',
-      description: `Search the Kessler workout library (${WORKOUTS.length} workouts built from the Kessler plans, past training logs and standard distance training). Filter by type (tempo, threshold, vo2, track, fartlek, hills, long, ...), race being trained for, season phase, level and session length. Use it whenever you suggest or swap a workout.`,
+      description: `Search the Kestrel workout library (${WORKOUTS.length} workouts built from the Kestrel plans, past training logs and standard distance training). Filter by type (tempo, threshold, vo2, track, fartlek, hills, long, ...), race being trained for, season phase, level and session length. Use it whenever you suggest or swap a workout.`,
       inputSchema: { type: 'object', properties: FIND_PROPS, additionalProperties: false },
     },
     {

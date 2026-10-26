@@ -1,7 +1,7 @@
-// Race predictor card: the same KesslerPredict-Lite numbers Fitness States use,
+// Race predictor card: the same KestrelPredict-Lite numbers Fitness States use,
 // with their 80% ranges, plus an experimental heart-rate adjustment, and the
 // next meet's predictions logged so real results can score them.
-// Behind env.KESSLER_PREDICT === '1'.
+// Behind env.KESTREL_PREDICT === '1'.
 import { getPrs } from './log.js';
 import { getFitness, fmtTime } from './fitness.js';
 import { heatCost, hillCost } from './conditions.js';
@@ -18,7 +18,7 @@ const ROWS = [
 // The heart-rate layer is exploratory: a quarter of the fitness change, never more than 3%.
 const HR_SHRINK = 0.25;
 const HR_CAP = 0.03;
-const MODEL_TAG = 'KesslerPredict-Lite v1.1 fitness-states';
+const MODEL_TAG = 'KestrelPredict-Lite v1.1 fitness-states';
 
 const addDays = (date, n) => new Date(Date.parse(date + 'T12:00:00Z') + n * DAY).toISOString().slice(0, 10);
 const vo2At = (v) => -4.6 + 0.182258 * v + 0.000104 * v * v;
@@ -53,8 +53,8 @@ function hrFitness(workouts, hrMax, asOf) {
 export async function racePredictions(env, personId, today) {
   const db = env.DB;
   const fitness = await getFitness(db, personId, today);
-  const model = { name: 'KesslerPredict-Lite', version: 'v1.1' };
-  if (!fitness?.model) return { enabled: true, model, predictions: [], reason: 'Add a race or PR (or two) and KesslerPredict can predict your other events.' };
+  const model = { name: 'KestrelPredict-Lite', version: 'v1.1' };
+  if (!fitness?.model) return { enabled: true, model, predictions: [], reason: 'Add a race or PR (or two) and KestrelPredict can predict your other events.' };
 
   // Exploratory heart-rate layer: fitness now vs. fitness when the newest result was set.
   let hr = null;
