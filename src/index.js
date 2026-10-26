@@ -1,7 +1,7 @@
 // Kestrel: open-source AI running coaching for school teams, plus Kestrel Lab for publishing running models.
 // Static files come from public/; /api/* and /mcp/* are handled here.
 //
-// The app and its training engine (src/train/) come from Kessler Calendar. The API keeps Kessler' paths and
+// The app and its training engine (src/train/) come from Kestrel Calendar. The API keeps Kestrel' paths and
 // request shapes so the same views work, with three rules on top:
 //   - who you are comes only from the Supabase sign-in (authUser), never from a personId in the request;
 //   - the team comes from the X-Kestrel-Team header and is used only after a membership check;
@@ -319,7 +319,7 @@ async function removeMember(db, teamId, personId) {
   else await db.prepare('DELETE FROM teams WHERE id = ?').bind(teamId).run();
 }
 
-// The team calendar in the shape the Kessler views read (/api/state). Members are name and colour only;
+// The team calendar in the shape the Kestrel views read (/api/state). Members are name and colour only;
 // availability and RSVPs are the team's; body marks and personal fields are the caller's own.
 async function teamState(db, me, teamId) {
   const empty = { people: [], overrides: {}, comments: {}, events: {}, rsvps: {}, body: {}, posts: [], locations: [], travelEstimates: [] };
@@ -1316,7 +1316,7 @@ async function route(request, env, url) {
   if (method !== 'POST') throw new NotFound('No such API route.');
   const b = await readJson(request);
 
-  // Your own profile and status (Kessler paths; any personId in the body is ignored)
+  // Your own profile and status (Kestrel paths; any personId in the body is ignored)
   if (path === '/api/people') { await updateMe(db, me, { name: b.name, color: b.color }); return json({ ok: true }); }
   if (path === '/api/people/personal') { await updateMe(db, me, { class_year: b.classYear }); return json({ ok: true }); }
   if (path === '/api/people/delete') { await deleteMe(db, me); return json({ ok: true }); }
@@ -1354,7 +1354,7 @@ async function route(request, env, url) {
     return json({ status: next });
   }
 
-  // Team calendar (Kessler paths, scoped to the X-Kestrel-Team team)
+  // Team calendar (Kestrel paths, scoped to the X-Kestrel-Team team)
   if (path === '/api/comment') {
     needTeam();
     const date = str(b.date, 10);
@@ -1484,7 +1484,7 @@ async function route(request, env, url) {
     await db.prepare('DELETE FROM posts WHERE id = ?').bind(str(b.postId, 100)).run();
     return json({ ok: true });
   }
-  // Your own training (Kessler paths)
+  // Your own training (Kestrel paths)
   if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await kaiState(db, me.id)); }
   if (path === '/api/log/session-splits') {
     const reps = (Array.isArray(b.reps) ? b.reps : []).slice(0, 40)

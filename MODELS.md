@@ -61,7 +61,7 @@ Tanda (2011): pace (s/km) = `a + b e^(-c K) + d P` from K = mean weekly km and P
 
 ### `lite-trees` (task `race`)
 
-The KesslerPredict-Lite format. Kestrel computes the 21 Lite features from the athlete's results and the target (see `liteFeatures` in `src/models.js`). Your trees predict the log-seconds correction to the weighted-Riegel baseline. This is the format to use for a fine-tuned Lite.
+The KestrelPredict-Lite format. Kestrel computes the 21 Lite features from the athlete's results and the target (see `liteFeatures` in `src/models.js`). Your trees predict the log-seconds correction to the weighted-Riegel baseline. This is the format to use for a fine-tuned Lite.
 
 - `feats`: exactly the built-in list, in order: `log_d, surf, male, n_results, p400, p800, p1500, p3000, p5000, p6000, p8000, p21097, base, base_near, base_best, n_buckets, k_ind, base_slope, span, best_samesurf, n_samesurf`.
 - `init`: a number added to the sum of the leaves.
@@ -77,7 +77,7 @@ LightGBM and XGBoost trees convert to this layout directly. [`lite_train.py`](ht
 
 ### `short-pairs` (task `short`)
 
-The KesslerPredict-Short format: one line per ordered event pair, `ln t_target = a + b ln t_source + c male`.
+The KestrelPredict-Short format: one line per ordered event pair, `ln t_target = a + b ln t_source + c male`.
 
 - `infl`: range inflation factor, above 0, at most 5.
 - `events`: `{ key: metres }`, up to 40 events. Steeplechase keys start with `S` (`S2000`, `S3000`). `1609` is the mile.
@@ -86,12 +86,12 @@ The KesslerPredict-Short format: one line per ordered event pair, `ln t_target =
 
 ### `marathon-trees` (task `marathon`)
 
-The KesslerPredict-Marathon format. The tree rules are the same as `lite-trees`, with these 15 features in this order: `wk_mean, wk_max, wk_last6, longest, long_n, long16_n, runs_wk, weeks_active, pace_med, pace_p10, pace_long, best_riegel, n_eff, best_recent, vol_trend`. Trees predict log seconds directly; there's no baseline. `interval` keys are `g0` (no steady effort found), then `g1`, `g2` and `g3` for under 40, 40-70 and 70+ km a week.
+The KestrelPredict-Marathon format. The tree rules are the same as `lite-trees`, with these 15 features in this order: `wk_mean, wk_max, wk_last6, longest, long_n, long16_n, runs_wk, weeks_active, pace_med, pace_p10, pace_long, best_riegel, n_eff, best_recent, vol_trend`. Trees predict log seconds directly; there's no baseline. `interval` keys are `g0` (no steady effort found), then `g1`, `g2` and `g3` for under 40, 40-70 and 70+ km a week.
 
 ## Fine-tuning a built-in model
 
 1. Download it from the Model hub (or take it from `models/`).
-2. Retrain on your results with the [KesslerPredict training scripts](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts), keeping the same features.
+2. Retrain on your results with the [KestrelPredict training scripts](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts), keeping the same features.
 3. Write the trees out in the layout above, give the model a new `name` or `version`, fill in `trained_on` and `license`, and upload it.
 4. Click **Use this model**. Your race times now come from your model, and the chip under each time says which model made it.
 

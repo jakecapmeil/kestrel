@@ -46,7 +46,7 @@ CATEGORY — pick one per activity:
 - shakeout: short (2-3 mi) easy run the day before or the morning of a race
 - crosstrain: bike, swim, elliptical, walk, hike, lift — anything that isn't a run
 
-DIFFICULTY (effort, 1-10) is judged against the runner's own Fitness States paces (KesslerPredict-Lite), then checked with heart rate. Pace is turned into a share of the runner's race VO2max (Daniels): under 62% = 1-2, easy 62-70% = 3, 70-76% = 4, steady 76-82% = 5, marathon-to-tempo 82-86% = 6, threshold 86-90% = 7, 10K pace 90-94% = 8, 5K pace 94-99% = 9, faster = 10. Heart rate as a share of max HR (highest seen in their logged runs, 200 until known): under 65% = 2, 65-72% = 3, 72-78% = 4, 78-83% = 5, 83-87% = 6, 87-90% = 7, 90-93% = 8, 93-96% = 9, over 96% = 10. The two are averaged (for rep workouts pace counts 65%, since the heart rate lags short reps). Workouts are judged on their work reps only, not the warm-up or cool-down; reps of 500 m or less top out at 9. Hills, heat and Van Cortlandt are credited back to a flat course first, so a slow hilly tempo still grades as a tempo. With no pace fitness it falls back on heart rate alone (plus up to +3 for heat and hills), and with neither on the category. Plan matching uses the pace/HR effort without the weather credit, so an easy day run easy in the heat still counts as easy.
+DIFFICULTY (effort, 1-10) is judged against the runner's own Fitness States paces (KestrelPredict-Lite), then checked with heart rate. Pace is turned into a share of the runner's race VO2max (Daniels): under 62% = 1-2, easy 62-70% = 3, 70-76% = 4, steady 76-82% = 5, marathon-to-tempo 82-86% = 6, threshold 86-90% = 7, 10K pace 90-94% = 8, 5K pace 94-99% = 9, faster = 10. Heart rate as a share of max HR (highest seen in their logged runs, 200 until known): under 65% = 2, 65-72% = 3, 72-78% = 4, 78-83% = 5, 83-87% = 6, 87-90% = 7, 90-93% = 8, 93-96% = 9, over 96% = 10. The two are averaged (for rep workouts pace counts 65%, since the heart rate lags short reps). Workouts are judged on their work reps only, not the warm-up or cool-down; reps of 500 m or less top out at 9. Hills, heat and Van Cortlandt are credited back to a flat course first, so a slow hilly tempo still grades as a tempo. With no pace fitness it falls back on heart rate alone (plus up to +3 for heat and hills), and with neither on the category. Plan matching uses the pace/HR effort without the weather credit, so an easy day run easy in the heat still counts as easy.
 
 LOAD = moving minutes x intensity (difficulty 1-3 = 1, 4-5 = 1.5, 6 = 2, 7 = 2.5, 8 = 3, 9-10 = 4). A 45-minute easy run is about 45-70; a hard workout is about 120-200.
 
@@ -480,7 +480,7 @@ export async function logWorkouts(db, person, list) {
   return { logged: results, max_hr_used: maxHr, this_week: await weekSummary(db, person, todayInTz()) };
 }
 
-// Runs logged before Kessler read the weather: look it up, then rescore
+// Runs logged before Kestrel read the weather: look it up, then rescore
 // difficulty and load. Newest first, a batch per call (one or two weather
 // requests). Runs the weather service has nothing for are marked 2 so they
 // aren't asked for again.

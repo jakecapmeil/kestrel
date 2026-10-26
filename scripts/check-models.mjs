@@ -1,4 +1,4 @@
-// Kestrel's model engine must give the same numbers as the original KesslerPredict code on the built-in files,
+// Kestrel's model engine must give the same numbers as the original KestrelPredict code on the built-in files,
 // and every built-in file must pass upload validation. reference-cases.json holds fixed inputs and what the
 // original code (src/pacemodel.js, src/shortmodel.js, src/marathon.js in github.com/jakecapmeil/hawks) predicted for them.
 //   npm run check
@@ -21,9 +21,9 @@ const same = (label, got, want) => {
   }
 };
 
-REF.race.forEach((c, i) => same(`race ${i}`, predictEvent(byId['kesslerpredict-lite'], c.prs, EVENT.get(c.event), c.sex), c.want));
-REF.short.forEach((c, i) => same(`short ${i}`, predictEvent(byId['kesslerpredict-short'], c.prs, EVENT.get(c.event), c.sex), c.want));
-REF.marathon.forEach((c, i) => same(`marathon ${i}`, marathonPredict(byId['kesslerpredict-marathon'].weights, c.days, c.today), c.want));
+REF.race.forEach((c, i) => same(`race ${i}`, predictEvent(byId['kestrelpredict-lite'], c.prs, EVENT.get(c.event), c.sex), c.want));
+REF.short.forEach((c, i) => same(`short ${i}`, predictEvent(byId['kestrelpredict-short'], c.prs, EVENT.get(c.event), c.sex), c.want));
+REF.marathon.forEach((c, i) => same(`marathon ${i}`, marathonPredict(byId['kestrelpredict-marathon'].weights, c.days, c.today), c.want));
 
 // VDOT: Daniels' published table row for VDOT 50 (5K 19:57, 10K 41:21, half 1:31:35, marathon 3:10:49).
 // The table rounds the VDOT, so allow 0.15%.
@@ -93,7 +93,7 @@ const bad = [
   { kestrel: 1, name: 'x', kind: 'riegel', task: 'marathon', weights: { exponent: 1.06, sd: 0.04 } },
   { kestrel: 1, name: 'x', kind: 'riegel', task: 'race', weights: { exponent: 3, sd: 0.04 } },
   // a tree whose child points backwards would loop forever
-  { ...byId['kesslerpredict-lite'], weights: { ...byId['kesslerpredict-lite'].weights, trees: [{ f: [0, -1], t: [1, 0], l: [0, 0], r: [1, 0], v: [0, 0], mgl: [0, 0] }] } },
+  { ...byId['kestrelpredict-lite'], weights: { ...byId['kestrelpredict-lite'].weights, trees: [{ f: [0, -1], t: [1, 0], l: [0, 0], r: [1, 0], v: [0, 0], mgl: [0, 0] }] } },
   { kestrel: 1, name: 'x', kind: 'vdot', task: 'marathon', weights: { sd: 0.04 } },
   { kestrel: 1, name: 'x', kind: 'vdot', task: 'race', weights: { sd: 0 } },
   { ...byId['tanda-2011'], weights: { ...byId['tanda-2011'].weights, range_sec: [13000, 10000] } },

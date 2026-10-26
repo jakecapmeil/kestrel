@@ -24,7 +24,7 @@ Cloudflare Workers, D1 and Workers AI (hosting, database, open-weight backup AI)
 - NRCD v2.1.0 collegiate results (Zenodo 22077479, CC BY 4.0)
 - Ontario high-school championship finals (Mendeley Data 7rxh2z7vrc, CC BY 4.0)
 - BMClab long-distance running dataset (Figshare 16620238, CC BY 4.0)
-- World Athletics all-time lists via a Kaggle copy that states no licence (used only for KesslerPredict-Short; see [models/README.md](models/README.md))
+- World Athletics all-time lists via a Kaggle copy that states no licence (used only for KestrelPredict-Short; see [models/README.md](models/README.md))
 - Riegel (1981), Daniels and Gilbert (1979), Tanda (2011): published formulas
 
 Full model cards: [models/README.md](models/README.md).

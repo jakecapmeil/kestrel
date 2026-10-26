@@ -12,9 +12,9 @@ const L = { cfg: null, sb: null, token: null, me: null, task: '', q: '' };
 // Purposes (the jobs a model can have in the app) come from /api/config; these are the short names.
 const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', course: 'Courses' };
 const KIND_LABEL = {
-  'lite-trees': 'Boosted trees (KesslerPredict-Lite format)',
-  'short-pairs': 'Event-pair lines (KesslerPredict-Short format)',
-  'marathon-trees': 'Boosted trees over training (KesslerPredict-Marathon format)',
+  'lite-trees': 'Boosted trees (KestrelPredict-Lite format)',
+  'short-pairs': 'Event-pair lines (KestrelPredict-Short format)',
+  'marathon-trees': 'Boosted trees over training (KestrelPredict-Marathon format)',
   riegel: 'Riegel formula',
   vdot: 'Daniels VDOT (oxygen-cost curves)',
   tanda: 'Tanda marathon formula (weekly distance and pace)',
@@ -98,7 +98,7 @@ function md(text) {
 }
 
 function builtinReadme(m) {
-  return `${m.description}\n\n**Trained on:** ${m.trained_on}\n\n**Licence:** ${m.license}\n\nThe full model card (accuracy, limits, licence notes) is in [models/README.md](${SOURCE}/models/README.md). Training scripts and experiments: [KesslerPredict research](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict).`;
+  return `${m.description}\n\n**Trained on:** ${m.trained_on}\n\n**Licence:** ${m.license}\n\nThe full model card (accuracy, limits, licence notes) is in [models/README.md](${SOURCE}/models/README.md). Training scripts and experiments: [KestrelPredict research](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict).`;
 }
 
 // ---------- directory / models
@@ -159,7 +159,7 @@ async function viewLab() {
       <h2>Model kinds</h2>
       <dl class="lab-kv">
         <dt>Riegel</dt><dd>Exponent-based race time predictor from your nearest PR. Race and short events.</dd>
-        <dt>Lite-trees</dt><dd>Gradient-boosted trees over 21 KesslerPredict-Lite features. The one to fine-tune for race predictions.</dd>
+        <dt>Lite-trees</dt><dd>Gradient-boosted trees over 21 KestrelPredict-Lite features. The one to fine-tune for race predictions.</dd>
         <dt>Short-pairs</dt><dd>Log-log lines between event pairs, for sprints and steeplechase (100-1000 m).</dd>
         <dt>Marathon-trees</dt><dd>Trees over 15 training features from your last 16 weeks.</dd>
         <dt>VDOT</dt><dd>Daniels' oxygen-cost curves: one result sets a fitness number, which sets every other distance.</dd>
@@ -489,14 +489,14 @@ A model is one JSON file:
 
 **Kinds**, each with its own evaluator in Kestrel:
 - \`riegel\`: an exponent and a log-SD (race or short).
-- \`lite-trees\`: gradient-boosted trees over KesslerPredict-Lite's 21 features (race). Use this to fine-tune Lite.
+- \`lite-trees\`: gradient-boosted trees over KestrelPredict-Lite's 21 features (race). Use this to fine-tune Lite.
 - \`short-pairs\`: one log-log line per event pair (short).
 - \`marathon-trees\`: trees over 15 training features (marathon).
 
 The full rules (feature lists, tree layout, interval keys) are in [MODELS.md](${SOURCE}/MODELS.md).
 
 ## Fine-tuning
-1. Download a model from its page. 2. Retrain on your results with the [KesslerPredict scripts](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts), keeping the same features. 3. Publish it with "Fine-tuned from" set, a model card, and your data's licence.
+1. Download a model from its page. 2. Retrain on your results with the [KestrelPredict scripts](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/scripts), keeping the same features. 3. Publish it with "Fine-tuned from" set, a model card, and your data's licence.
 
 ## The API
 \`GET /api/v1/models?task=race&q=lite\` lists public models (no key).
@@ -504,7 +504,7 @@ The full rules (feature lists, tree layout, interval keys) are in [MODELS.md](${
 \`POST /api/v1/predict\` with \`Authorization: Bearer kst_...\`:
 
 \`\`\`
-{ "model": "kestrel/kesslerpredict-lite", "event": "5000",
+{ "model": "kestrel/kestrelpredict-lite", "event": "5000",
   "prs": [{ "event": "1600", "time": "5:05.3" }], "sex": "f" }
 \`\`\`
 
