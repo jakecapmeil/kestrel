@@ -509,6 +509,20 @@ async function coachContext(db, person) {
     "SELECT date, library_id, splits, summary, difficulty FROM training_days WHERE person_id = ? AND (library_id != '' OR splits != '') ORDER BY date"
   ).bind(person.id).all()).results;
   context.all_workout_sessions = sessions.map((d) => ({ date: d.date, workout: d.library_id || null, splits: d.splits || null, summary: (d.summary || '').slice(0, 200), difficulty: d.difficulty }));
+  // What Fitness States shows: every race estimate with its likely range and confidence, so the coach can quote them.
+  const fit = await getFitness(db, person.id, todayInTz());
+  if (fit?.vo2r) {
+    context.fitness_projections = {
+      race_estimates: [...fit.estimates, ...(fit.course_estimates || [])].map((e) => ({
+        event: e.label, time: e.time, pace_per_mile: e.pace_mi, likely_range: e.range || null, confidence: e.confidence, current_pr: e.pr?.time || null,
+      })),
+      race_vo2max: fit.vo2r, vo2max_estimate: fit.vo2max, confidence: fit.confidence, profile: fit.profile,
+      based_on: (fit.sources || []).map((s) => `${s.label}${s.date ? ` (${s.date})` : ''}`),
+      pace_zones_per_mile: Object.fromEntries((fit.zones || []).map((z) => [z.label, z.per_mile])),
+      fitness_fatigue_form: fit.fitness_score ? { fitness: fit.fitness_score.fitness, fatigue: fit.fitness_score.fatigue, form: fit.fitness_score.form, change_4wk: fit.fitness_score.change_4wk } : null,
+      weekly_miles_last_4_weeks: fit.mpw, weekly_miles_prior_4_weeks: fit.mpw_prev,
+    };
+  }
   const state = await kaiState(db, person.id);
   context.plan = { today: state.today, tomorrow: state.tomorrow, week: state.week, level: state.level, changes: state.changes };
   context.health = state.health;
