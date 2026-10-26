@@ -2150,7 +2150,7 @@
           <div class="section-head">
             <div>
               <div class="card-title">Race fitness</div>
-              <div class="hint" id="fitHint">What you could race right now, from your races and PRs (KesslerPredict). The small line under each time is its 80% range.</div>
+              <div class="hint" id="fitHint">What you could race right now, from your races and PRs (KestrelPredict). The small line under each time is its 80% range.</div>
             </div>
             <span style="display:flex;gap:var(--sp-2);align-items:center;"><span id="fitBadge"></span><button type="button" class="ghost" id="fitEdit" aria-pressed="false">Edit</button></span>
           </div>
@@ -2228,12 +2228,12 @@
             <div class="stack" style="margin-top:var(--sp-3);">
               <p><b>Every run is searched for races.</b> Any run that covered a race distance (1600 to 10K) at race effort counts, whatever it was labelled, and if it beats a PR on file Kestrel updates the PR. The fastest stretches inside your runs (from your watch, through intervals.icu) count too.</p>
               <p><b>Course and weather are taken out.</b> Every race and hard run is credited back to a flat course on a cool day. Van Cortlandt runs about 5.5% slow (about a minute on an 18-minute 5K), other cross-country courses about 2.5% plus their hills, and heat by temperature plus dew point (about 1% at 120, 3% at 140, 6% at 160). Heart rate on steady runs is read the same way. Your PRs stay the real times, and a cross-country race counts toward your XC PR, never your track one.</p>
-              <p><b>KesslerPredict reads your results.</b> Your races and PRs from the last two years (a 5K you typed in only counts when nothing newer exists) go into KesslerPredict-Lite, a small model trained on collegiate and Ontario high-school race results. It predicts a time for every event from 400 to the half marathon, with an 80% range, and learns your own speed-vs-endurance shape from the distances you have run. Your race VO2max (the oxygen use your times are worth) is read off its 1600, 3200 and 5K times and sets your training zones.</p>
+              <p><b>KestrelPredict reads your results.</b> Your races and PRs from the last two years (a 5K you typed in only counts when nothing newer exists) go into KestrelPredict-Lite, a small model trained on collegiate and Ontario high-school race results. It predicts a time for every event from 400 to the half marathon, with an 80% range, and learns your own speed-vs-endurance shape from the distances you have run. Your race VO2max (the oxygen use your times are worth) is read off its 1600, 3200 and 5K times and sets your training zones.</p>
               <p><b>It uses your best results.</b> It looks at your fastest result at each distance from the last two years, so someone coming back from a layoff or injury will read faster than they are today; add a recent race or edit the PR date when that is you.</p>
               <p><b>Garmin's VO2max is matched to your races.</b> Garmin estimates VO2max from heart rate vs speed, which usually reads higher than race results. Kestrel finds your personal ratio from races run near a Garmin reading, so the number can track your fitness between races.</p>
               <p><b>Runs without a race.</b> If you have no race or PR at all, Kestrel falls back to a training estimate from rep sessions and heart rate on steady runs, and says so.</p>
-              <p><b>More events, your choice.</b> Tap Edit on Race fitness to show 100m, 200m, 600m, 1000m or the steeplechases. KesslerPredict-Short estimates them from your other times (and any PR you enter at those distances), using the relationships between events in World Athletics, collegiate and Ontario high-school results. Every row shows how sure it is: the dot and the ± are the width of its 80% range. Sprints and steeples are the least certain: the model learned them mostly from elite athletes, with a check on real high-school sprinters.</p>
-              <p><b>Marathon, from your training.</b> Tap Edit and turn on Marathon. KesslerPredict-Marathon reads your last 16 weeks of watch runs (weekly miles, long runs, pace, your best 5 to 15 mile effort) and needs at least 15 running days. It was trained on 14,000 real marathon days with their training logs; on runners it had never seen it was off by about 6% on average, and its range is about ±10%, so treat it as a ballpark. It does not use your PRs, and it does not know the course, weather or taper.</p>
+              <p><b>More events, your choice.</b> Tap Edit on Race fitness to show 100m, 200m, 600m, 1000m or the steeplechases. KestrelPredict-Short estimates them from your other times (and any PR you enter at those distances), using the relationships between events in World Athletics, collegiate and Ontario high-school results. Every row shows how sure it is: the dot and the ± are the width of its 80% range. Sprints and steeples are the least certain: the model learned them mostly from elite athletes, with a check on real high-school sprinters.</p>
+              <p><b>Marathon, from your training.</b> Tap Edit and turn on Marathon. KestrelPredict-Marathon reads your last 16 weeks of watch runs (weekly miles, long runs, pace, your best 5 to 15 mile effort) and needs at least 15 running days. It was trained on 14,000 real marathon days with their training logs; on runners it had never seen it was off by about 6% on average, and its range is about ±10%, so treat it as a ballpark. It does not use your PRs, and it does not know the course, weather or taper.</p>
               <p><b>Mileage matters for long races.</b> 10K and half marathon estimates slow down when your last 4 weeks are low on miles.</p>
               <p><b>VO2max</b> is your watch's (Garmin or COROS) when it sends one. <b>Kestrel VO2max</b> is what your race times are worth, and it sets your training paces. With no watch number, the headline is Kestrel' heart-rate estimate from steady runs (using your resting heart rate when known). Watches tend to read high for some runners; none of these is a lab test.</p>
               <p><b>Fitness score</b> is your training load (minutes x effort) averaged over 42 days; fatigue is the same over 7 days, and form is fitness minus fatigue. It goes up with steady training and doesn't depend on racing.</p>
@@ -4412,7 +4412,7 @@ SETUP. Do these one at a time, in plain friendly language, and wait for me after
 
 3. LINK MY WATCH THERE. Have me go to intervals.icu Settings > Connections and connect Garmin (or COROS) and log in there. Then have me use the option on that connection to import my old activities, so my whole history comes across, not just new runs. Warn me not to connect Strava there instead: Strava doesn't let intervals.icu share runs, so Kestrel would get nothing.
 
-4. CONNECT TO KESSLER. Have me open intervals.icu Settings. My athlete id is under my name (it looks like i12345). My API key is under Developer Settings. Ask me to paste both here, then call connect_watch with them. If it fails, read me the error and help me fix it (usually a copy-paste problem or the wrong id).
+4. CONNECT TO KESTREL. Have me open intervals.icu Settings. My athlete id is under my name (it looks like i12345). My API key is under Developer Settings. Ask me to paste both here, then call connect_watch with them. If it fails, read me the error and help me fix it (usually a copy-paste problem or the wrong id).
 
 5. IMPORT HISTORY. Call sync_watch with full_history: true and keep calling it until done is true. Tell me roughly how far back my runs go. If it says activities came from Strava, explain step 3 again.
 
@@ -5900,7 +5900,7 @@ async function renderFitness(refresh){
     + `<div class="hint" style="margin-top:var(--sp-2);">Profile: ${f.profile === 'speed' ? 'speed-leaning (your short races are relatively stronger)' : f.profile === 'endurance' ? 'endurance-leaning (your long races are relatively stronger)' : 'balanced'}.${f.cs ? ` Critical speed ${f.cs.per_mile}/mi (${f.cs.source === 'intervals.icu' ? 'fitted by intervals.icu to all your runs' : 'from your races'}).` : ''}</div>`;
 }
 
-// KesslerPredict notes shown inside the Race fitness card (flagged on the server; empty when off).
+// KestrelPredict notes shown inside the Race fitness card (flagged on the server; empty when off).
 async function renderPredictor(){
   const note = $('predNote'); if(!note) return;
   let d = null;
@@ -6237,9 +6237,9 @@ async function init(){
 }
 
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
-window.kesslerInit = init;
-window.kesslerReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
-window.kesslerSetPage = (p, sub)=>{ setPage(p); if(p === 'team' && sub) setTeamView(sub); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
+window.kestrelInit = init;
+window.kestrelReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
+window.kestrelSetPage = (p, sub)=>{ setPage(p); if(p === 'team' && sub) setTeamView(sub); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>

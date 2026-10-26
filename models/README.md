@@ -1,10 +1,10 @@
 # Kestrel model cards
 
-The built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). They were trained in the [Kessler repository](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict), where the training scripts and full results are (`RESULTS.md`, `DATASETS.md`).
+The built-in models, as open weights. Each `.json` file here is the complete model: download it, read it, retrain it, upload a new version through the Model hub. The file format is in [../MODELS.md](../MODELS.md). They were trained in the [Kestrel repository](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict), where the training scripts and full results are (`RESULTS.md`, `DATASETS.md`).
 
 All errors below are mean absolute error in percent of race time, on data the model never saw.
 
-## KesslerPredict-Lite v1.1 (`kesslerpredict-lite.json`)
+## KestrelPredict-Lite v1.1 (`kestrelpredict-lite.json`)
 
 - **Task:** race time for 800 m and up (track, cross country, road), from any earlier results.
 - **How:** a weighted-Riegel baseline from the athlete's results, plus 150 gradient-boosted trees (6,450 parameters) that correct it from distance, time and surface only (never dates, so undated PRs work). 80% ranges come from held-out residuals, by how many distance buckets the athlete has and the target distance.
@@ -13,7 +13,7 @@ All errors below are mean absolute error in percent of race time, on data the mo
 - **Limits:** trained mostly on college runners and championship finalists. It hasn't been scored on a fresh set of real high-school races yet. That scoring starts with the 2026 season. Without a sex given, it averages the male and female predictions and keeps the wider range.
 - **Weights licence:** CC BY 4.0. Credit NRCD (Zenodo 22077479) and the Ontario championship dataset (Mendeley 7rxh2z7vrc).
 
-## KesslerPredict-Short v1.1 (`kesslerpredict-short.json`)
+## KestrelPredict-Short v1.1 (`kestrelpredict-short.json`)
 
 - **Task:** 400 m, 600 m, 1000 m and steeplechase. 100 m and 200 m need a sprint PR to predict from.
 - **How:** for every pair of events, a line `ln t_target = a + b ln t_source + c male` with its residual SD. Up to three nearest known events are combined by inverse variance, and the range is inflated by a cross-validated factor.
@@ -21,7 +21,7 @@ All errors below are mean absolute error in percent of race time, on data the mo
 - **How good:** cross-validated error from 0.95% (600 m) to 3.6% (400 m) per event, below Riegel's on every event (Riegel: 2.4-10.8%). Per-event numbers are in [RESULTS.md](https://github.com/jakecapmeil/hawks/tree/main/research/hawkspredict/RESULTS.md) (exp13).
 - **Weights licence: unclear.** The World Athletics list copy it was fitted on (Kaggle `mexwell/world-athletics-database`) states no licence. Published here for transparency and research; check before reusing commercially. A refit on a CC0 copy of the lists (Kaggle `jeannicolasduval/world-athletics-all-time-rankings`) is planned.
 
-## KesslerPredict-Marathon v1 (`kesslerpredict-marathon.json`)
+## KestrelPredict-Marathon v1 (`kestrelpredict-marathon.json`)
 
 - **Task:** marathon time from the last 16 weeks of logged running (needs 15 running days with distance and time).
 - **How:** 15 training features (weekly volume, long runs, pace distribution, best Riegel-equivalent effort, volume trend) into 150 boosted trees. The range comes from held-out residuals by weekly volume.

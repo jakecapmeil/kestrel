@@ -96,7 +96,7 @@ const LEGACY = { 'VC 2.5 mi': courseKey('vc', Math.round(2.5 * MILE)) };
 // "XC 5K" was a PR of its own, always raced at Van Cortlandt unless it named another meet. Those become the 5K at
 // Van Cortlandt; one that names some other meet has no course to move to, so it stays where it is (it still counts
 // toward fitness, it just is not listed).
-const isVcXc5k = (v) => !v?.meet || VC_RE.test(v.meet) || /^Found by (Kestrel|Hawks|Kessler)(: Van Cortlandt)?$/i.test(v.meet);
+const isVcXc5k = (v) => !v?.meet || VC_RE.test(v.meet) || /^Found by (Kestrel|Hawks)(: Van Cortlandt)?$/i.test(v.meet);
 
 // A PR blob with legacy keys renamed. A key already in the new form wins.
 export function normalizePrs(prs) {
