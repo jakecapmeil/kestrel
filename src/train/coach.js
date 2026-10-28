@@ -127,18 +127,37 @@ export async function loadPerson(db, personId) {
   return await withPlans(db, await db.prepare(`SELECT ${PERSON_COLS} FROM people WHERE id = ?`).bind(personId).first());
 }
 
-// Meets on any of the athlete's teams (race week when one is within the next 6 days, same as the Training tab).
+// The kinds of week a plan has, in the order of its three columns (plan.weeks / day.cells).
+export const WEEK_KINDS = ['normal', 'race', 'taper'];
+
+// Meets on any of the athlete's teams, plus the weeks a captain has set by hand. The result is the list of meet
+// dates; `.weekKinds` (Monday -> 0 normal, 1 race, 2 taper) carries the captain's choices for plannedFor.
 export async function meetDates(db, personId, from, to) {
-  const rows = await db.prepare(
-    `SELECT DISTINCT e.date FROM events e JOIN team_members tm ON tm.team_id = e.team_id AND tm.person_id = ?
-     WHERE e.type = 'meet' AND e.date >= ? AND e.date <= ?`
-  ).bind(personId, from, to).all();
-  return rows.results.map((x) => x.date);
+  const first = weekStartOf(from);
+  const [rows, set] = await Promise.all([
+    db.prepare(
+      `SELECT DISTINCT e.date FROM events e JOIN team_members tm ON tm.team_id = e.team_id AND tm.person_id = ?
+       WHERE e.type = 'meet' AND e.date >= ? AND e.date <= ?`
+    ).bind(personId, first, to).all(),
+    db.prepare('SELECT week_of, kind FROM week_types WHERE person_id = ? AND week_of >= ? AND week_of <= ?').bind(personId, first, to).all(),
+  ]);
+  const meets = rows.results.map((x) => x.date);
+  meets.weekKinds = new Map(set.results.map((x) => [x.week_of, WEEK_KINDS.indexOf(x.kind)]).filter(([, i]) => i >= 0));
+  return meets;
+}
+
+// Which of the plan's three weeks a Monday-to-Sunday week is: the captain's choice, else race week when a meet is
+// on the calendar that week, else a normal week. The whole week shares one answer.
+export function weekKindOf(meets, dateKey) {
+  const start = weekStartOf(dateKey);
+  const set = meets.weekKinds?.get(start);
+  if (set !== undefined) return set;
+  return meets.some((m) => m >= start && m <= addDays(start, 6)) ? 1 : 0;
 }
 
 export function plannedFor(plan, dateKey, meets) {
   if (!plan) return null;
-  const week = meets.some((m) => m >= dateKey && m <= addDays(dateKey, 6)) ? 1 : 0;
+  const week = weekKindOf(meets, dateKey);
   const dayName = DAY_NAMES[new Date(dateKey + 'T12:00:00Z').getUTCDay()];
   const day = plan.days.find((d) => d.day === dayName);
   const cell = day?.cells[week];

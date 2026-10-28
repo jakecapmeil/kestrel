@@ -2262,6 +2262,7 @@
       </div>
       <div class="seg" id="teamViews" role="tablist" aria-label="Team view">
         <button type="button" class="seg-btn active" role="tab" data-tmview="miles">Miles</button>
+        <button type="button" class="seg-btn" role="tab" data-tmview="activities">Activities</button>
         <button type="button" class="seg-btn" role="tab" data-tmview="roster">Roster</button>
         <button type="button" class="seg-btn" role="tab" data-tmview="training">Plan</button>
       </div>
@@ -2321,6 +2322,7 @@
       </section>
       </div>
     </div>
+    <div id="teamActivitiesView" class="you-stack" hidden></div>
     <div id="teamRosterView" class="you-stack" hidden></div>
     <div id="teamTrainView" class="you-stack" hidden></div>
   </div>
@@ -2355,7 +2357,8 @@
             <select id="personalSex"><option value="">Prefer not to say</option><option value="f">Female</option><option value="m">Male</option></select>
           </label>
           <label class="check-row"><input type="checkbox" id="personalShare"> Show my weekly miles on my teams' mileage boards</label>
-          <div class="hint">Teammates see your name, colour, availability and RSVPs. Your training, health and body map are only yours (and your AI coach's).</div>
+          <label class="check-row"><input type="checkbox" id="personalShareActs"> Show my recent activities to my teammates, like Strava</label>
+          <div class="hint">Teammates see your name, colour, availability and RSVPs, plus your miles and activities unless you turn those off. Your health, body map and coach notes are only yours (and your AI coach's).</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <button id="savePersonalBtn">Save</button>
             <span class="hint" id="personalSaveHint" style="display:none;">Saved.</span>
@@ -4044,6 +4047,7 @@ function renderPersonal(){
   $('personalClassYear').value = me.class_year || '';
   $('personalSex').value = me.sex || '';
   $('personalShare').checked = !!me.share_miles;
+  $('personalShareActs').checked = !!me.share_activities;
   $('personalSaveHint').style.display = 'none';
   if(window.kestrelRenderSettings) window.kestrelRenderSettings();
 
@@ -4683,7 +4687,7 @@ async function savePersonal(){
   if(!isRealPerson()) return;
   const fields = {
     name: $('personalFirstName').value.trim(), color: $('personalColor').value, class_year: $('personalClassYear').value,
-    sex: $('personalSex').value, share_miles: $('personalShare').checked,
+    sex: $('personalSex').value, share_miles: $('personalShare').checked, share_activities: $('personalShareActs').checked,
   };
   if(!fields.name){ $('personalFirstName').focus(); return; }
   const me = await window.kestrelSaveProfile(fields);
@@ -5913,17 +5917,19 @@ async function renderPredictor(){
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
 let teamView = 'miles';
-function setTeamView(v){ teamView = ['miles','roster','training'].includes(v) ? v : 'miles'; renderTeam(); }
+function setTeamView(v){ teamView = ['miles','activities','roster','training'].includes(v) ? v : 'miles'; renderTeam(); }
 async function renderTeam(){
   const hasTeam = !!(window.KESTREL && window.KESTREL.teamId);
   $('teamEmpty').hidden = hasTeam;
   $('teamViews').style.display = hasTeam ? '' : 'none';
   $('teamBody').hidden = !hasTeam || teamView !== 'miles';
+  $('teamActivitiesView').hidden = !hasTeam || teamView !== 'activities';
   $('teamRosterView').hidden = !hasTeam || teamView !== 'roster';
   $('teamTrainView').hidden = !hasTeam || teamView !== 'training';
   paintSeg('teamViews', 'tmview', teamView);
   $('teamEmptyStart').onclick = ()=> $('kAddTeam') && $('kAddTeam').click();
   if(!hasTeam) return;
+  if(teamView === 'activities'){ window.kestrelRenderActivities?.($('teamActivitiesView')); return; }
   if(teamView === 'roster'){ window.kestrelRenderRoster?.($('teamRosterView')); return; }
   if(teamView === 'training'){ window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
   renderPosts();

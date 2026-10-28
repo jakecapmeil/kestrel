@@ -224,3 +224,18 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-lname small{color:var(--text-2);}
 .k-lvl .k-input{width:100%;}
 .k-rec{grid-column:1 / -1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+/* Team activities: a feed of teammates' runs */
+.k-acts{display:flex;flex-direction:column;margin-top:var(--s-3);}
+.k-act{padding:14px 0;border-top:1px solid var(--line);}
+.k-act:first-child{border-top:0;}
+.k-act header{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;}
+.k-act header .k-small{margin:0;margin-left:auto;}
+.k-act-title{font-weight:700;font-size:17px;margin:6px 0 4px;overflow-wrap:anywhere;}
+.k-act-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.k-act-meta .k-small{margin:0;}
+.k-act-stats{display:flex;gap:20px;flex-wrap:wrap;margin-top:10px;}
+.k-act-stats span{display:flex;flex-direction:column;font-variant-numeric:tabular-nums;}
+.k-act-stats b{font-size:18px;}
+.k-act-stats small{color:var(--text-2);font-size:12px;}
+#kActsMore{margin-top:var(--s-3);}

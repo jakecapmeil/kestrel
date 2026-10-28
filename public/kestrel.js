@@ -218,7 +218,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
       ${field('Goal time', time('goal_time', 'e.g. 18:30'))}
       ${field('Race date', html`<input class="k-input" name="goal_date" type="date" value="${d.goal_date ?? ''}">`)}
       <label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel. I agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>, and I understand Kestrel is not medical advice.</span></label>
-      <p class="k-small">Teammates see your name, colour, availability and RSVPs. Your training log, health, body map and predictions are only yours.</p>`,
+      <p class="k-small">Teammates see your name, colour, availability and RSVPs, plus your miles and recent activities unless you turn those off in You → Profile. Your health, body map and predictions are only yours.</p>`,
   ];
   const last = step === OB_STEPS.length - 1;
   gate(html`<div class="k-auth narrow"><div class="k-steps" aria-label="Step ${step + 1} of ${OB_STEPS.length}">${OB_STEPS.map((n, i) => html`<i class="${i < step ? 'done' : i === step ? 'on' : ''}"></i>`)}</div>
@@ -443,6 +443,59 @@ window.kestrelRenderTeamCard = async (el) => {
   }, e.currentTarget);
 };
 
+// ---------- Team tab: activities (a feed of teammates' recent runs, newest first, back through their history)
+
+const ACT_LABEL = { easy: 'Easy run', recovery: 'Recovery run', long: 'Long run', workout: 'Workout', race: 'Race', shakeout: 'Shakeout', crosstrain: 'Cross-training', intervals: 'Intervals', tempo: 'Tempo', threshold: 'Threshold' };
+const actDay = (d) => {
+  const day = new Date(d + 'T12:00:00');
+  const diff = Math.round((new Date().setHours(12, 0, 0, 0) - day) / 86400000);
+  return diff === 0 ? 'Today' : diff === 1 ? 'Yesterday' : day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: diff > 300 ? 'numeric' : undefined });
+};
+const actTime = (m) => (m == null ? '' : m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m} min`);
+
+function activityCard(a) {
+  const kind = a.label || ACT_LABEL[a.category] || 'Run';
+  const stats = [
+    a.miles ? [String(a.miles), 'mi'] : null, a.minutes ? [actTime(a.minutes), 'time'] : null, a.pace ? [a.pace, '/mi'] : null,
+    a.avg_hr ? [String(a.avg_hr), 'bpm'] : null, a.elev_ft && !a.track ? [String(a.elev_ft), 'ft up'] : null,
+  ].filter(Boolean);
+  const mine = a.person.id === K.me.user.id;
+  return html`<article class="k-act">
+    <header><span class="dot" style="background:${a.person.color}"></span><b>${a.person.name || 'Unnamed'}${mine ? ' (you)' : ''}</b><span class="k-small">${actDay(a.date)}${a.start ? ' · ' + a.start : ''}</span></header>
+    <div class="k-act-title">${a.title || kind}</div>
+    <div class="k-act-meta"><span class="badge ${a.category === 'workout' || a.category === 'race' ? 'tone-race' : ''}">${kind}</span>${a.manual ? html` <span class="k-small">Logged by hand</span>` : ''}${a.parts > 1 ? html` <span class="k-small">${a.parts} activities in one session</span>` : ''}${a.private ? html` <span class="k-small">Only you can see this. Turn on activity sharing in You → Profile.</span>` : ''}</div>
+    <div class="k-act-stats">${stats.map(([v, l]) => html`<span><b>${v}</b><small>${l}</small></span>`)}</div>
+  </article>`;
+}
+
+window.kestrelRenderActivities = async (el) => {
+  if (!el || !K.teamId) return;
+  const teamId = K.teamId;
+  el.innerHTML = html`<section class="card">
+      <div class="section-head"><div>
+        <div class="card-title">Activities</div>
+        <div class="hint">Recent runs from teammates who share them, newest first, going back through their training. Turn yours off in You → Profile.</div>
+      </div></div>
+      <div class="k-acts" id="kActs"><p class="k-small">Loading…</p></div>
+      <div class="k-row"><button class="k-btn" type="button" id="kActsMore" hidden>Load older activities</button></div>
+    </section>`.s;
+  const list = $('kActs'), more = $('kActsMore');
+  let next = null, first = true;
+  const load = async () => {
+    const out = await attempt(() => api('/api/team/activities' + (next ? '?before=' + encodeURIComponent(next) : '')), more);
+    if (K.teamId !== teamId || !list.isConnected) return;
+    if (!out) { if (first) list.innerHTML = html`<p class="k-small">Couldn’t load activities. Check your connection.</p>`.s; return; }
+    if (first) list.innerHTML = '';
+    if (first && !out.activities.length) list.innerHTML = html`<p class="k-small">No activities yet. They appear when teammates connect a watch or log their runs.</p>`.s;
+    list.insertAdjacentHTML('beforeend', out.activities.map((a) => activityCard(a).s).join(''));
+    first = false;
+    next = out.next;
+    more.hidden = !next;
+  };
+  more.onclick = load;
+  await load();
+};
+
 // ---------- Team tab: roster
 
 const isLead = () => K.role === 'owner' || K.role === 'captain';
@@ -528,7 +581,7 @@ window.kestrelRenderTeamTraining = async (el) => {
       ${r.custom ? html`<div id="kPlanGrid"></div>` : ''}
       <p class="k-small">Plans are general guidance, not medical advice, and are not checked by Kestrel for any one runner.</p>
     </section>
-    ${lv ? html`<section class="card" id="kLevels"></section>` : ''}`.s;
+    ${lv ? html`<section class="card" id="kLevels"></section><section class="card" id="kWeekTypes"></section>` : ''}`.s;
   if ($('kPlanBuild')) $('kPlanBuild').onclick = () => openPlanBuilder({ team: true, current: r.spec || (r.plans && specFromPlans(r.plans)), replacesEdits: r.custom, onSaved: again });
   if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
     if (!confirm('Remove the team plan? Everyone on the team goes back to having no plan until they build their own.')) return;
@@ -542,8 +595,47 @@ window.kestrelRenderTeamTraining = async (el) => {
     toast('Plan saved.');
     again();
   });
-  if (lv) renderLevels($('kLevels'), lv, again);
+  if (lv) {
+    renderLevels($('kLevels'), lv, again);
+    const wk = await attempt(() => api(`/api/teams/${K.teamId}/plan/weeks`));
+    if (wk && $('kWeekTypes')) renderWeekTypes($('kWeekTypes'), wk);
+  }
 };
+
+// What kind of week each athlete is on: normal, race week or taper. Automatic means race week when a meet is on the
+// calendar that week; a captain's choice replaces that for one athlete or the whole team, this week or up to three ahead.
+const WEEK_LABEL = { normal: 'Normal', race: 'Race week', taper: 'Taper' };
+let weekPick = 0;
+function renderWeekTypes(el, wk) {
+  const i = Math.min(weekPick, wk.weeks.length - 1);
+  const label = (w, n) => `${n === 0 ? 'This week' : n === 1 ? 'Next week' : 'In ' + n + ' weeks'} · ${new Date(w + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  const eligible = wk.athletes.filter((a) => !a.locked);
+  const opts = (cur, auto) => html`<option value="auto" ${cur === 'auto' ? 'selected' : ''}>Automatic (${WEEK_LABEL[auto]})</option>${['normal', 'race', 'taper'].map((k) => html`<option value="${k}" ${cur === k ? 'selected' : ''}>${WEEK_LABEL[k]}</option>`)}`;
+  el.innerHTML = html`<div class="section-head"><div>
+      <div class="card-title">Week type</div>
+      <div class="hint">Choose what each athlete is doing that week. Their days follow the plan's normal, race-week or taper column. Automatic means race week when a meet is on the calendar.</div>
+    </div></div>
+    <div class="seg seg-sm" role="tablist" aria-label="Week">${wk.weeks.map((w, n) => html`<button type="button" class="seg-btn ${n === i ? 'active' : ''}" role="tab" data-wk="${n}">${label(w, n)}</button>`)}</div>
+    ${eligible.length ? html`<div class="k-lvl"><span class="k-lname"><b>Everyone</b><small>${eligible.length} on the team plan</small></span>
+      <select class="k-input" id="kWeekAll" aria-label="Set everyone's week type"><option value="">Set everyone to…</option><option value="auto">Automatic</option>${['normal', 'race', 'taper'].map((k) => html`<option value="${k}">${WEEK_LABEL[k]}</option>`)}</select></div>` : ''}
+    <div class="k-lvls">${wk.athletes.map((a) => { const c = a.weeks[i]; return html`<div class="k-lvl">
+      <span class="k-lname"><b>${a.name || 'Unnamed'}</b>${a.class_year ? html`<small>${a.class_year}</small>` : ''}</span>
+      ${a.locked
+        ? html`<span class="k-small" style="margin:0">${a.locked}</span>`
+        : html`<select class="k-input" data-who="${a.id}" aria-label="Week type for ${a.name}">${opts(c.set ? c.kind : 'auto', c.auto)}</select>`}
+    </div>`; })}</div>
+    ${wk.athletes.length ? '' : html`<p class="k-small">No one has joined the team yet.</p>`}`.s;
+  const save = (body, ctl) => attempt(async () => {
+    const out = await api(`/api/teams/${K.teamId}/plan/weeks`, { method: 'PUT', body: JSON.stringify({ week_of: wk.weeks[i], ...body }) });
+    toast('Week type saved.');
+    await window.kestrelReload?.();
+    renderWeekTypes(el, out);
+  }, ctl);
+  el.querySelectorAll('[data-wk]').forEach((b) => { b.onclick = () => { weekPick = Number(b.dataset.wk); renderWeekTypes(el, wk); }; });
+  el.querySelectorAll('select[data-who]').forEach((sel) => { sel.onchange = () => save({ person_id: sel.dataset.who, kind: sel.value }, sel); });
+  if ($('kWeekAll')) $('kWeekAll').onchange = (e) => { if (e.target.value) save({ person_ids: 'all', kind: e.target.value }, e.target); };
+}
+
 
 // Who is on which level. Kestrel AI recommends a move up when an athlete has earned it; the captain decides.
 function renderLevels(el, lv, again) {
@@ -1042,10 +1134,12 @@ window.kestrelRenderSettings = async () => {
     const shared = !!K.me.user.share_miles;
     priv.innerHTML = html`<ul class="k-list">
         <li>Teammates see your name, colour, availability, RSVPs, and roster details (number, grade, events).</li>
-        <li>Your training log, health, body map, predictions and GPS routes are only yours and your AI coach's.</li>
+        <li>Teammates who share can see each other's recent activities (distance, time, pace, heart rate). Your health, body map, predictions, GPS routes and coach notes are only yours and your AI coach's.</li>
         <li>Team owners and captains can edit the roster and plan, but cannot see your training or health.</li>
       </ul>
-      <label class="k-check"><input type="checkbox" id="kShareMiles" ${shared ? 'checked' : ''}><span>Show my weekly miles on my teams' mileage boards</span></label>`.s;
+      <label class="k-check"><input type="checkbox" id="kShareMiles" ${shared ? 'checked' : ''}><span>Show my weekly miles on my teams' mileage boards</span></label>
+      <label class="k-check"><input type="checkbox" id="kShareActs" ${K.me.user.share_activities ? 'checked' : ''}><span>Show my recent activities to my teammates, like Strava</span></label>`.s;
+    $('kShareActs').onchange = (e) => attempt(async () => { await window.kestrelSaveProfile({ share_activities: e.target.checked }); toast(e.target.checked ? 'Teammates can see your activities.' : 'Your activities are hidden from teammates.'); });
     $('kShareMiles').onchange = (e) => attempt(async () => { await window.kestrelSaveProfile({ share_miles: e.target.checked }); toast(e.target.checked ? 'Your miles are on the board.' : 'Your miles are hidden. Team totals still count them.'); });
   }
   const acct = $('kAccountBody');

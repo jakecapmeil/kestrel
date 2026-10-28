@@ -11,9 +11,9 @@ import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
-import { getLog, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
+import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { todayInTz, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
+import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
@@ -61,7 +61,7 @@ const settingsOf = (row) => { try { return JSON.parse(row?.settings || '{}'); } 
 async function loadMe(db, auth) {
   let row = await db.prepare('SELECT * FROM people WHERE id = ?').bind(auth.id).first();
   if (!row) {
-    await db.prepare('INSERT OR IGNORE INTO people (id, email, name, color, created_at, share_miles) VALUES (?, ?, ?, ?, ?, 1)')
+    await db.prepare('INSERT OR IGNORE INTO people (id, email, name, color, created_at, share_miles, share_activities) VALUES (?, ?, ?, ?, ?, 1, 1)')
       .bind(auth.id, auth.email, str(auth.name, 60), COLORS[Math.floor(Math.random() * COLORS.length)], Date.now()).run();
     row = await db.prepare('SELECT * FROM people WHERE id = ?').bind(auth.id).first();
   }
@@ -76,7 +76,7 @@ async function meView(db, me) {
   return {
     user: {
       id: me.id, email: me.email, name: me.name, color: me.color, sex: me.sex, class_year: me.class_year,
-      age_ok: !!me.age_ok, share_miles: !!me.share_miles, plan_rank: me.plan_rank,
+      age_ok: !!me.age_ok, share_miles: !!me.share_miles, share_activities: !!me.share_activities, plan_rank: me.plan_rank,
     },
     profile: settingsOf(me).profile || {},
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
@@ -123,6 +123,7 @@ async function updateMe(db, me, b) {
   if (b.class_year !== undefined) set('class_year', ['', 'Middle school', 'Freshman', 'Sophomore', 'Junior', 'Senior', 'College', 'Adult'].includes(b.class_year) ? b.class_year : '');
   if (b.age_ok !== undefined) set('age_ok', b.age_ok ? 1 : 0);
   if (b.share_miles !== undefined) set('share_miles', b.share_miles ? 1 : 0);
+  if (b.share_activities !== undefined) set('share_activities', b.share_activities ? 1 : 0);
   // Weekly miles now -> the plan level to start on (only before any level has been set).
   if (b.weekly_miles !== undefined && me.plan_rank == null) {
     const r = rankForMiles(Number(b.weekly_miles));
@@ -248,6 +249,52 @@ async function teamLevels(db, teamId, today) {
     return { id: person.id, name: person.name, class_year: person.class_year, level: rank, miles: milesOfRank(person, rank), locked: mine ? null : person.plan_source === 'own' ? 'Uses their own plan' : 'Follows another team’s plan', recommend: rec };
   }));
   return rows.filter(Boolean);
+}
+
+// What kind of week each athlete is on, for the captain's Plan tab: this week and the next three. `auto` is what
+// Kestrel would pick by itself (race week when a meet is on that week's calendar); `set` is the captain's choice, if any.
+async function teamWeeks(db, teamId, today) {
+  const weeks = Array.from({ length: 4 }, (_, i) => addDays(weekStartOf(today), i * 7));
+  const { results } = await db.prepare('SELECT m.person_id FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY p.name').bind(teamId).all();
+  const athletes = await Promise.all(results.map(async ({ person_id }) => {
+    const person = await loadPerson(db, person_id);
+    if (!person) return null;
+    const meets = await meetDates(db, person_id, weeks[0], addDays(weeks[3], 6));
+    const auto = [...meets]; // a copy without the captain's choices: what Kestrel would pick on its own
+    const mine = person.plan_source === 'team' && person.plan_team_id === teamId;
+    return {
+      id: person.id, name: person.name, class_year: person.class_year,
+      locked: mine ? null : person.plan_source === 'own' ? 'Uses their own plan' : 'Follows another team’s plan',
+      weeks: weeks.map((w) => ({ week_of: w, kind: WEEK_KINDS[weekKindOf(meets, w)], auto: WEEK_KINDS[weekKindOf(auto, w)], set: meets.weekKinds.has(w) })),
+    };
+  }));
+  return { weeks, athletes: athletes.filter(Boolean) };
+}
+
+// A captain sets (or clears, kind 'auto') the kind of week for some athletes on the team's plan.
+async function setTeamWeek(db, teamId, me, today, b) {
+  const week = str(b.week_of, 10);
+  if (!isDate(week) || weekStartOf(week) !== week) throw new BadRequest('Pick a week (it starts on a Monday).');
+  if (week < weekStartOf(today) || week > addDays(weekStartOf(today), 7 * 12)) throw new BadRequest('Pick this week or one up to 12 weeks ahead.');
+  const kind = str(b.kind, 10);
+  if (kind !== 'auto' && !WEEK_KINDS.includes(kind)) throw new BadRequest('Week type should be auto, normal, race or taper.');
+  const { results } = await db.prepare('SELECT person_id FROM team_members WHERE team_id = ?').bind(teamId).all();
+  const onTeam = new Set(results.map((r) => r.person_id));
+  const ids = b.person_ids === 'all' ? [...onTeam] : (Array.isArray(b.person_ids) ? b.person_ids : [b.person_id]).map((x) => str(x, 80));
+  if (!ids.length || ids.some((id) => !onTeam.has(id))) throw new NotFound('Not on this team.');
+  const stmts = [];
+  const skipped = [];
+  for (const id of ids) {
+    const person = await loadPerson(db, id);
+    if (!person || person.plan_source !== 'team' || person.plan_team_id !== teamId) { skipped.push(id); continue; }
+    stmts.push(kind === 'auto'
+      ? db.prepare('DELETE FROM week_types WHERE person_id = ? AND week_of = ?').bind(id, week)
+      : db.prepare('INSERT INTO week_types (person_id, week_of, kind, set_by, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(person_id, week_of) DO UPDATE SET kind = excluded.kind, set_by = excluded.set_by, created_at = excluded.created_at')
+        .bind(id, week, kind, me.id, Date.now()));
+  }
+  if (!stmts.length && ids.length) throw new BadRequest(ids.length === 1 ? 'That athlete does not train from this team’s plan.' : 'None of those athletes train from this team’s plan.');
+  if (stmts.length) await db.batch(stmts);
+  return skipped;
 }
 
 // The roster: name, number, grade, events for the whole team; age only for that person and for leaders.
@@ -495,6 +542,62 @@ async function teamMileage(db, teamId) {
   weeks.forEach((w) => { w.miles = round(w.miles); });
   return { today, week_of: weekStart, weeks, athletes, members: people.results.length, logged, this_week: weeks[7].miles, last_week: weeks[6].miles };
 }
+
+// Team activities, newest first, like a Strava feed: one card per athlete per day's session, going back as far as
+// the team's history goes (`before` is the cursor from the last page). Teammates appear only if they share
+// activities; you always see your own. Only summary numbers leave here: no map, no splits, no coach notes.
+const FEED_PAGE = 20;
+async function teamActivities(db, teamId, me, before) {
+  const cut = /^\d{4}-\d{2}-\d{2}\|[\w-]+$/.test(before || '') ? before.split('|') : null;
+  const { results: days } = await db.prepare(
+    `SELECT x.date, x.person_id FROM (
+       SELECT w.date, w.person_id FROM workouts w
+       UNION
+       SELECT d.date, d.person_id FROM training_days d WHERE d.manual_miles > 0
+     ) x
+     JOIN team_members m ON m.person_id = x.person_id AND m.team_id = ?1
+     JOIN people p ON p.id = x.person_id
+     WHERE (p.share_activities = 1 OR p.id = ?2) AND (?3 IS NULL OR x.date < ?3 OR (x.date = ?3 AND x.person_id > ?4))
+     ORDER BY x.date DESC, x.person_id ASC LIMIT ?5`
+  ).bind(teamId, me.id, cut ? cut[0] : null, cut ? cut[1] : '', FEED_PAGE + 1).all();
+  const more = days.length > FEED_PAGE;
+  const page = days.slice(0, FEED_PAGE);
+  if (!page.length) return { activities: [], next: null };
+  const ids = [...new Set(page.map((d) => d.person_id))];
+  const dates = [...new Set(page.map((d) => d.date))];
+  const qs = (n) => Array(n).fill('?').join(',');
+  const [people, runs, manual] = await Promise.all([
+    db.prepare(`SELECT id, name, color, share_activities FROM people WHERE id IN (${qs(ids.length)})`).bind(...ids).all(),
+    db.prepare(`SELECT * FROM workouts WHERE person_id IN (${qs(ids.length)}) AND date IN (${qs(dates.length)})`).bind(...ids, ...dates).all(),
+    db.prepare(`SELECT person_id, date, manual_miles, minutes, types FROM training_days WHERE person_id IN (${qs(ids.length)}) AND date IN (${qs(dates.length)}) AND manual_miles > 0`).bind(...ids, ...dates).all(),
+  ]);
+  const who = new Map(people.results.map((p) => [p.id, p]));
+  const activities = [];
+  for (const d of page) {
+    const p = who.get(d.person_id);
+    const rs = runs.results.filter((w) => w.person_id === d.person_id && w.date === d.date);
+    const head = { person: { id: p.id, name: p.name, color: p.color }, date: d.date, private: !p.share_activities };
+    if (rs.length) {
+      sessionsOf(rs).forEach((s) => activities.push({
+        ...head, key: `${d.person_id}|${s.key}`, category: s.category, label: s.tag_label || '', title: s.title,
+        start: s.start, miles: s.miles, minutes: s.minutes, pace: s.pace, avg_hr: s.avg_hr, elev_ft: s.elev_ft, track: s.track, parts: s.activities.length,
+      }));
+    } else {
+      const m = manual.results.find((x) => x.person_id === d.person_id && x.date === d.date);
+      let types = [];
+      try { types = JSON.parse(m?.types || '[]'); } catch { /* ignore */ }
+      const miles = Math.round((m?.manual_miles || 0) * 100) / 100;
+      activities.push({
+        ...head, key: `${d.person_id}|${d.date}#manual`, category: types.find((t) => t !== 'strides') || 'easy', label: '', title: '', start: '', miles,
+        minutes: m?.minutes ? Math.round(m.minutes) : null, pace: m?.minutes && miles > 0.2 ? clockPace(m.minutes * 60 / miles) : null,
+        avg_hr: null, elev_ft: null, track: false, parts: 0, manual: true,
+      });
+    }
+  }
+  const last = page[page.length - 1];
+  return { activities, next: more ? `${last.date}|${last.person_id}` : null };
+}
+const clockPace = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
 
 // ------------------------------------------------------------------ coaching
 
@@ -1239,6 +1342,11 @@ async function route(request, env, url) {
         const plans = row ? JSON.parse(row.data) : {};
         return json({ levels: Object.keys(plans).map((r) => ({ level: Number(r), miles: plans[r].weeks[0].miles })), athletes: row ? await teamLevels(db, teamId, today) : [] });
       }
+      if (sub === 'plan/weeks' && method === 'GET') return json(await teamWeeks(db, teamId, today));
+      if (sub === 'plan/weeks' && method === 'PUT') {
+        const skipped = await setTeamWeek(db, teamId, me, today, await readJson(request));
+        return json({ ...(await teamWeeks(db, teamId, today)), skipped });
+      }
       const lm = sub.match(/^plan\/levels\/(.+)$/);
       if (lm && method === 'PUT') {
         const target = await roleIn(db, teamId, lm[1]);
@@ -1276,6 +1384,7 @@ async function route(request, env, url) {
   if (method === 'GET') {
     if (path === '/api/state') return json(await teamState(db, me, role ? teamId : null));
     if (path === '/api/team') { needTeam(); return json(await teamMileage(db, teamId)); }
+    if (path === '/api/team/activities') { needTeam(); return json(await teamActivities(db, teamId, me, str(q.get('before'), 80))); }
     if (path === '/api/cohort') { const rep = await cohortReport(db, me.id, str(q.get('goal'), 12)); return json(rep, rep.error ? 400 : 200); }
     if (path === '/api/plan/export') {
       const fitness = await getFitness(db, me.id, today);
