@@ -558,6 +558,18 @@ async function syncBestEfforts(env, person, key) {
   return rows.length;
 }
 
+// Once per person: the history is judged against today's paces, so repeating it hourly would only drift.
+const RECHECK = 'pace_check_v1';
+async function recheckOnce(db, person) {
+  const row = await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first();
+  let settings = {};
+  try { settings = JSON.parse(row?.settings || '{}'); } catch { /* start fresh */ }
+  if (settings[RECHECK]) return 0;
+  const n = (await recheckCategories(db, person)).length;
+  await db.prepare("UPDATE people SET settings = json_set(COALESCE(NULLIF(settings, ''), '{}'), '$." + RECHECK + "', 1) WHERE id = ?").bind(person.id).run();
+  return n;
+}
+
 // `backfill` also looks up the weather for older runs (one or two requests):
 // on for syncs from the page, off for the cron, which does it once at the end.
 export async function syncPerson(env, personId, { days, backfill = false } = {}) {
@@ -572,8 +584,8 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
     res.wellness_days = await syncWellness(env, person, key, today);
     res.best_efforts = await syncBestEfforts(env, person, key);
     if (backfill) res.weather = await backfillConditions(db, person.id);
-    // Older runs get the same pace check new ones do (a no-op once they're all right).
-    res.relabeled = (await recheckCategories(db, person)).length;
+    // Runs logged before the pace check get it once (new runs get it in logWorkouts). Never fails the sync.
+    try { res.relabeled = await recheckOnce(db, person); } catch (err) { console.error('recheck', person.id, String(err)); }
     const note = [res.ai_note, stravaNote(res)].filter(Boolean).join(' ');
     await db.prepare('UPDATE people SET icu_synced_at = ?, icu_status = ? WHERE id = ?').bind(Date.now(), note ? `ok (${note})` : 'ok', person.id).run();
     // Always: the PR search and fitness re-run on everything, not just new runs.

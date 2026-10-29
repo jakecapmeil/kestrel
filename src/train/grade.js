@@ -115,6 +115,9 @@ export function checkedCategory(w, ctx, { meetDay = false } = {}) {
   if (cat !== 'workout' || s.workout || WORKOUT_WORDS.test(w.name || '')) return { category: cat };
   // Pace unknown (no fitness yet, no laps to compare): heart rate decides.
   if (!s.known && !(hrE != null && hrE <= 4)) return { category: cat };
+  // Without laps, warm-up and cool-down pull the average down, so only a run at recovery pace (or easy pace at an
+  // easy heart rate) is relabeled.
+  if (repsOf(w.laps).length < 2 && !(s.run_zone === 'recovery' || (s.run_zone === 'easy' && hrE != null && hrE <= 4))) return { category: cat };
   // Recovery is a short run at recovery pace (or heart rate); a longer one at that pace is an easy run.
   const easyCat = mi >= 8 ? 'long' : mi <= 4.5 && (s.run_zone === 'recovery' || (hrE ?? 9) <= 3) ? 'recovery' : 'easy';
   return { category: easyCat, why: `${s.run_zone || 'easy'} pace with no fast laps` };
