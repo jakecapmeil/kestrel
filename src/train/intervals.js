@@ -9,11 +9,11 @@
 // it's set up, refines the category and writes one report per session.
 // Scoring is the same logWorkouts path Kai in Claude uses. Old history is
 // imported in chunks with rules only, so it never spends the AI quota.
-import { logWorkouts, todayInTz, COACH_RUBRIC, bodyStatus, backfillConditions } from './coach.js';
+import { logWorkouts, todayInTz, COACH_RUBRIC, bodyStatus, backfillConditions, recheckCategories } from './coach.js';
 import { saveDay, sessionsOf } from './log.js';
 import { reportSessions, AiError } from './gemini.js';
 import { recomputeFitness } from './fitness.js';
-import { gradeRun } from './grade.js';
+import { gradeRun, paceStructure } from './grade.js';
 import { VC_RE } from './conditions.js';
 import { courseAt } from './courses.js';
 import { vo2rFor, withPlans } from './coach.js';
@@ -147,29 +147,37 @@ function splitsFrom(intervals) {
   return { work, laps, trackM };
 }
 
-// The pre-built, no-AI classifier: HR share of max, structure and distance.
-function ruleCategory(a, work, maxHr, longest, vo2r, laps = []) {
+// The pre-built, no-AI classifier: pace against the runner's own paces first (grade.js), then HR and distance.
+// Lap count says nothing on its own: watches lap every mile, so an easy run arrives as "5 x 1 mi".
+// (A hard continuous run on a meet day becomes a race when it is logged, in logWorkouts.)
+function runOf(a, laps) {
+  return {
+    distance_mi: (a.distance || 0) / 1609.344, moving_sec: a.moving_time, avg_hr: a.average_heartrate, laps,
+    elev_gain_ft: a.total_elevation_gain != null ? a.total_elevation_gain * 3.281 : null, name: a.name || '',
+  };
+}
+
+function ruleCategory(a, maxHr, longest, vo2r, laps = []) {
   if (!RUN_TYPES.has(a.type)) return 'crosstrain';
   const miles = (a.distance || 0) / 1609.344;
   const hrPct = a.average_heartrate ? a.average_heartrate / maxHr : null;
   if (/race|meet|xc|5k|champ|invitational/i.test(a.name || '') && (hrPct ?? 0) > 0.86) return 'race';
-  if (work.length >= 3) return 'workout';
-  // Pace against the runner's own training paces, checked by heart rate (grade.js).
-  const g = gradeRun({
-    distance_mi: miles, moving_sec: a.moving_time, avg_hr: a.average_heartrate, laps,
-    elev_gain_ft: a.total_elevation_gain != null ? a.total_elevation_gain * 3.281 : null, name: a.name || '', category: 'easy',
-  }, { vo2r, maxHr });
-  if (g.hr_effort >= 6 && miles >= 2 && (g.pace_effort == null || g.pace_effort >= 6)) return 'workout';
+  const s = paceStructure(runOf(a, laps), { vo2r });
+  if (s.workout) return 'workout';
+  const g = gradeRun({ ...runOf(a, laps), category: 'easy' }, { vo2r, maxHr });
+  // Heart rate only decides when there is no pace to judge by.
+  if (!s.known && g.hr_effort >= 6 && miles >= 2) return 'workout';
   if (miles >= 7 && miles >= longest * 0.9) return 'long';
   if (miles <= 3.2 && g.hr_effort <= 3) return 'recovery';
   return 'easy';
 }
 
-function dayTypes(category, work) {
+// fast: the workout's fast laps ([{ m, s }]), from paceStructure.
+function dayTypes(category, fast) {
   const t = { easy: ['easy'], recovery: ['recovery'], long: ['long'], race: ['race'], shakeout: ['shakeout'], crosstrain: ['crosstrain'] }[category];
   if (t) return t;
-  if (!work.length) return ['tempo'];
-  const avg = work.reduce((s, i) => s + i.distance, 0) / work.length;
+  if (fast.length < 2) return ['tempo'];
+  const avg = fast.reduce((s, l) => s + l.m, 0) / fast.length;
   return avg <= 450 ? ['track'] : avg >= 1400 ? ['threshold'] : ['intervals'];
 }
 
@@ -337,8 +345,9 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     const wk = date.slice(0, 8) + String(Math.floor(Number(date.slice(8)) / 7));
     const miles = a.distance / 1609.344;
     const track = RUN_TYPES.has(a.type) && looksLikeTrack({ name: a.name || '', type: a.type, elevFtPerMile: ((a.total_elevation_gain || 0) * 3.281) / Math.max(miles, 0.1), laps });
-    runs.push({ a, gps: gpsStart ? (courseAt(...gpsStart) === 'vc' ? 1 : 0) : null, gpsCourse: gpsStart ? courseAt(...gpsStart) : null, work, laps, track, trackM, splits: laps.length ? splitsText(laps, track) : '', date, start: timeOf(a), category: ruleCategory(a, work, maxHr, weekLongest.get(wk) || 0, vo2r, laps) });
+    runs.push({ a, gps: gpsStart ? (courseAt(...gpsStart) === 'vc' ? 1 : 0) : null, gpsCourse: gpsStart ? courseAt(...gpsStart) : null, work, laps, track, trackM, splits: laps.length ? splitsText(laps, track) : '', date, start: timeOf(a), pace: paceStructure(runOf(a, laps), { vo2r }), category: ruleCategory(a, maxHr, weekLongest.get(wk) || 0, vo2r, laps) });
   }
+  runs.forEach((r) => { r.fast = r.pace.work || []; });
   runs.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
 
   // Kai: one report per session (warm-up + workout + cool-down together)
@@ -374,7 +383,11 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
               elev_ft: r.a.total_elevation_gain != null ? Math.round(r.a.total_elevation_gain * 3.281) : null,
               miles: Math.round(r.a.distance / 16.09344) / 100, minutes: Math.round(r.a.moving_time / 60),
               pace: fmtPace(r.a.moving_time / (r.a.distance / 1609.344)), avg_hr: r.a.average_heartrate || null, max_hr: r.a.max_heartrate || null,
-              laps: r.splits || null, on_track: r.track || undefined, gps_at_van_cortlandt: r.gps == null ? undefined : !!r.gps, athlete_note: (r.a.description || '').slice(0, 300) || null,
+              laps: r.splits || null,
+              // Kestrel's pace check against the runner's own paces: the zone of the whole run and of its fast laps.
+              pace_zone: r.pace.run_zone || undefined, fast_laps: r.pace.known ? r.pace.fast_laps : undefined,
+              fast_lap_zone: r.pace.rep_zone || undefined, workout_by_pace: r.pace.known ? r.pace.workout : undefined,
+              on_track: r.track || undefined, gps_at_van_cortlandt: r.gps == null ? undefined : !!r.gps, athlete_note: (r.a.description || '').slice(0, 300) || null,
             };
           }),
         });
@@ -411,8 +424,11 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     summary: reportById.get(String(r.a.id)) || '',
   }));
   let imported = 0;
+  const finalCat = new Map(); // after logWorkouts' pace check
   for (let i = 0; i < rows.length; i += 60) {
-    imported += (await logWorkouts(db, person, rows.slice(i, i + 60))).logged.length;
+    const { logged } = await logWorkouts(db, person, rows.slice(i, i + 60));
+    imported += logged.length;
+    logged.forEach((x) => finalCat.set(String(x.strava_id).replace(/^intervals:/, ''), x.category));
   }
 
   // The GPS verdict on each run's course (the course column holds Kai's guess).
@@ -427,7 +443,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
     if (!r.splits) continue;
     const existing = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(person.id, r.date).first();
     if (existing?.splits) continue;
-    await saveDay(db, person.id, r.date, { splits: r.splits, types: dayTypes(catById.get(String(r.a.id)) || r.category, r.work), ...(r.track ? { surface: 'track' } : {}) });
+    await saveDay(db, person.id, r.date, { splits: r.splits, types: dayTypes(finalCat.get(String(r.a.id)) || r.category, r.fast), ...(r.track ? { surface: 'track' } : {}) });
   }
   for (const d of ai?.days || []) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(d?.date || '') && d.line) await saveDay(db, person.id, d.date, { day_line: d.line });
@@ -556,6 +572,8 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
     res.wellness_days = await syncWellness(env, person, key, today);
     res.best_efforts = await syncBestEfforts(env, person, key);
     if (backfill) res.weather = await backfillConditions(db, person.id);
+    // Older runs get the same pace check new ones do (a no-op once they're all right).
+    res.relabeled = (await recheckCategories(db, person)).length;
     const note = [res.ai_note, stravaNote(res)].filter(Boolean).join(' ');
     await db.prepare('UPDATE people SET icu_synced_at = ?, icu_status = ? WHERE id = ?').bind(Date.now(), note ? `ok (${note})` : 'ok', person.id).run();
     // Always: the PR search and fitness re-run on everything, not just new runs.

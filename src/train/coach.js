@@ -9,7 +9,7 @@ import { getFitness } from './fitness.js';
 import { trackMiles } from './workouts.js';
 import { BODY_PARTS } from './body.js';
 import { weatherFor } from './conditions.js';
-import { gradeRun } from './grade.js';
+import { gradeRun, checkedCategory } from './grade.js';
 
 // Health, training status and the body map, as Kai reads them.
 export async function bodyStatus(db, personId) {
@@ -41,7 +41,8 @@ CATEGORY — pick one per activity:
 - easy: steady conversational run, avg HR under ~80% of max HR
 - recovery: very easy and short (usually under 4 mi), avg HR under ~72% of max
 - long: the longest run of the week, usually Sunday, 8+ mi, mostly easy effort
-- workout: intervals, tempo, hills, fartlek or progression — look for laps or pace that swing between fast and slow, or avg HR 82%+ for a steady tempo. Warm-up and cool-down inside the same activity still count as the workout.
+- workout: intervals, tempo, hills, fartlek or progression — laps that swing between FAST (marathon-to-tempo pace or quicker, from their Fitness States paces) and slow, at least ~800 m of fast running in all, or a steady run at tempo pace. Warm-up and cool-down inside the same activity still count as the workout.
+- PACE DECIDES: a run at recovery or easy pace is NOT a workout, however many laps it has. Watches split every mile or km by themselves, so "5 x 1 mi" at an even easy pace is an easy run. Strides (laps under ~250 m) don't make a workout either. Kestrel checks the pace and relabels a "workout" with no fast running as easy, recovery or long.
 - race: a meet or time trial (name says race/meet/XC/5k, or it falls on a meet day at near-max HR)
 - shakeout: short (2-3 mi) easy run the day before or the morning of a race
 - crosstrain: bike, swim, elliptical, walk, hike, lift — anything that isn't a run
@@ -457,6 +458,8 @@ export async function logWorkouts(db, person, list) {
   const now = Date.now();
   const results = [];
   const stmts = clean.map((w) => {
+    // Whoever labeled the run (rules, Kestrel AI, Claude), its pace has the last word on "workout".
+    w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date) }).category;
     const planned = plannedFor(plan, w.date, meets);
     const g = gradeOfRun(w, gctx);
     const effort = g.effort;
@@ -497,6 +500,44 @@ export async function logWorkouts(db, person, list) {
   });
   await db.batch(stmts);
   return { logged: results, max_hr_used: maxHr, this_week: await weekSummary(db, person, todayInTz()) };
+}
+
+// Runs labeled before the pace check (every lapped run used to come out a "workout"): run the check again on
+// everything the runner hasn't tagged, rescore what changes, and clear the "intervals"/"threshold" day types the
+// sync wrote for those days when no hard run is left on them. Safe to repeat; returns the runs it relabeled.
+const AUTO_HARD_TYPES = new Set(['["intervals"]', '["threshold"]', '["track"]', '["tempo"]']);
+export async function recheckCategories(db, person) {
+  const rows = (await db.prepare(
+    `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, laps, elev_gain_ft,
+       temp_f, dew_point_f, surface, course FROM workouts
+     WHERE person_id = ? AND category IN ('workout', 'easy', 'long') AND COALESCE(tag, '') = ''`
+  ).bind(person.id).all()).results;
+  if (!rows.length) return [];
+  const gctx = { maxHr: await maxHrFor(db, person.id), vo2r: await vo2rFor(db, person.id) };
+  const dates = rows.map((w) => w.date).sort();
+  const meets = await meetDates(db, person.id, dates[0], addDays(dates[dates.length - 1], 6));
+  const plan = planFor(person);
+  const changed = [];
+  const stmts = [];
+  for (const row of rows) {
+    const { category } = checkedCategory(row, gctx, { meetDay: meets.includes(row.date) });
+    if (category === row.category) continue;
+    const w = { ...row, category };
+    const g = gradeOfRun(w, gctx);
+    const plan_score = planScoreOf(w, g.hr_effort, plannedFor(plan, w.date, meets));
+    changed.push({ strava_id: w.strava_id, date: w.date, from: row.category, to: category });
+    stmts.push(db.prepare('UPDATE workouts SET category = ?, effort = ?, hr_effort = ?, load = ?, plan_score = ?, rating = ?, updated_at = ? WHERE person_id = ? AND strava_id = ?')
+      .bind(category, g.effort, g.hr_effort, loadOf(w, g.effort), plan_score, gradeOf(plan_score), Date.now(), person.id, w.strava_id));
+  }
+  for (let i = 0; i < stmts.length; i += 50) await db.batch(stmts.slice(i, i + 50));
+  const days = [...new Set(changed.filter((c) => c.from === 'workout').map((c) => c.date))];
+  for (const date of days) {
+    const hard = await db.prepare("SELECT 1 FROM workouts WHERE person_id = ? AND date = ? AND category IN ('workout', 'race') LIMIT 1").bind(person.id, date).first();
+    if (hard) continue;
+    const day = await db.prepare('SELECT types FROM training_days WHERE person_id = ? AND date = ?').bind(person.id, date).first();
+    if (day && AUTO_HARD_TYPES.has(day.types)) await db.prepare("UPDATE training_days SET types = '[]' WHERE person_id = ? AND date = ?").bind(person.id, date).run();
+  }
+  return changed;
 }
 
 // Runs logged before Kestrel read the weather: look it up, then rescore

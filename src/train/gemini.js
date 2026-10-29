@@ -1,4 +1,5 @@
-// Kestrel AI's free default (Gemini free tier, with an open-weight model on Workers AI as backup). Two jobs:
+// Kestrel AI's free default: Gemini's free tier first, then any free OpenAI-compatible provider with a key set
+// (Groq, Cerebras, OpenRouter), then an open-weight model on Workers AI as the last resort. Two jobs:
 //   - reportSessions: label runs synced from the watch and write a short report per session.
 //   - askCoach: the coach chat. Its prompt and answer schema (coachChat) are also handed to the browser
 //     when the athlete powers Kestrel AI with their own key or a local model, so every model can make the
@@ -31,8 +32,17 @@ export function modelChain(env) {
 }
 const AI_DAILY_CAP = 40;
 
+// Free tiers with an OpenAI-compatible API. Each one is used only when its key is a Worker secret
+// (wrangler secret put GROQ_API_KEY, ...); <NAME>_MODEL overrides the model when a provider renames one.
+const OPENAI_COMPAT = [
+  { name: 'groq', key: 'GROQ_API_KEY', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile' },
+  { name: 'cerebras', key: 'CEREBRAS_API_KEY', base: 'https://api.cerebras.ai/v1', model: 'llama-3.3-70b' },
+  { name: 'openrouter', key: 'OPENROUTER_API_KEY', base: 'https://openrouter.ai/api/v1', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+];
+const compatProviders = (env) => OPENAI_COMPAT.filter((p) => env[p.key]);
+
 export function aiEnabled(env) {
-  return !!(env.GEMINI_API_KEY || env.AI);
+  return !!(env.GEMINI_API_KEY || env.AI || compatProviders(env).length);
 }
 
 async function spend(db, personId, today) {
@@ -61,6 +71,16 @@ async function generate(env, { system, prompt, schema, maxTokens = 1024 }) {
     }
     return res.value;
   }
+  for (const p of compatProviders(env)) {
+    if ((cooling.get(p.name) || 0) > now) continue;
+    const res = await callCompat(env, p, { system, prompt, schema, maxTokens });
+    if (res.retry) {
+      busy = busy || res.busy;
+      cooling.set(p.name, Date.now() + res.cooldown);
+      continue;
+    }
+    return res.value;
+  }
   // Last resort: an open-weight model on Cloudflare Workers AI (the AI binding).
   if (env.AI) {
     const out = await callWorkersAi(env, { system, prompt, schema, maxTokens });
@@ -80,6 +100,42 @@ function parseLoose(text) {
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
   if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch { /* give up */ } }
   return undefined;
+}
+
+// Same contract as callModel. JSON mode here doesn't enforce the schema, so it is spelled out in the prompt and the
+// answer is checked for the required keys; a provider that answers badly is skipped, not fatal.
+async function callCompat(env, p, { system, prompt, schema, maxTokens }) {
+  const model = env[`${p.name.toUpperCase()}_MODEL`] || p.model;
+  let res;
+  try {
+    res = await fetch(`${p.base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env[p.key]}` },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: schema ? `${system}\n\nReply with ONLY a JSON object matching this JSON Schema:\n${JSON.stringify(schema)}` : system },
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: maxTokens + 512,
+        temperature: 0.4,
+        ...(schema ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    });
+  } catch (err) {
+    console.error('ai fetch', p.name, String(err));
+    return { retry: true, cooldown: COOLDOWN_MS };
+  }
+  if (res.status === 429) return { retry: true, busy: true, cooldown: COOLDOWN_MS };
+  if (!res.ok) {
+    console.error('ai error', p.name, model, res.status, (await res.text()).slice(0, 300));
+    return { retry: true, busy: res.status >= 500, cooldown: res.status >= 500 ? COOLDOWN_MS : DAILY_COOLDOWN_MS };
+  }
+  const text = (await res.json())?.choices?.[0]?.message?.content;
+  if (!schema) return typeof text === 'string' && text.trim() ? { value: text.trim() } : { retry: true, cooldown: COOLDOWN_MS };
+  const obj = parseLoose(text);
+  if (!obj || typeof obj !== 'object' || (schema.required || []).some((k) => obj[k] === undefined)) return { retry: true, cooldown: COOLDOWN_MS };
+  return { value: obj };
 }
 
 async function callWorkersAi(env, { system, prompt, schema, maxTokens }) {
@@ -204,7 +260,8 @@ export async function reportSessions(env, db, person, sessions, { rubric, maxHr,
 Activities are already grouped into sessions (warm-up, workout and cool-down saved separately are ONE session). For each session return:
 - main_id: the main activity (the workout, race or longest run)
 - Race rule: a meet in the calendar that day, or one continuous near-max effort with no rep breaks (a time trial), is "race", not "workout". "workout" means structured reps, tempo or fartlek. Do not call a steady all-out effort a workout.
-- activities: every activity id with one category (warm-ups/cool-downs around a workout are "easy"). rule_category is a math-based guess; change it only when laps, HR or the name clearly say otherwise.
+- activities: every activity id with one category (warm-ups/cool-downs around a workout are "easy"). rule_category is Kestrel's guess from pace, HR and distance.
+- PACE RULE: pace_zone is the whole run's pace against this runner's own paces (recovery, easy, steady, tempo, threshold, interval); fast_laps counts laps at tempo pace or quicker and fast_lap_zone is their pace; workout_by_pace is Kestrel's verdict. A run at recovery or easy pace with no fast laps is NOT a workout, however many laps it has: watches lap every mile or km by themselves, so even "1 mi" laps are an easy run. Strides don't make a workout. Only call it "workout" when workout_by_pace is true or the name clearly says reps, hills or a fartlek. Never describe even auto-laps as "mile repeats" or reps in the report or the day line.
 - course for every activity: "vc" when it was run at Van Cortlandt Park in New York (hilly, gravel and grass, the 2.5 mi high school course and the 5K), "xc" for another cross-country course, otherwise "flat". Clues: the name or the athlete's note naming the park (Van Cortlandt, VC, Vannie, the Tortoise and Hare), a calendar event that day at Van Cortlandt for a race or workout (see calendar), a race-effort run of 2.5 mi or 5K with real climbing (elev_ft well over 20 per mile) in the Bronx. A track, road or a flat easy run is "flat". When unsure, "flat". gps_at_van_cortlandt, when present, is the watch's GPS start position checked against the park: true means it WAS at Van Cortlandt, false means it was NOT (never answer "vc" for false, whatever the name says).
 - report: 2-4 sentences on the whole session: what it was, the reps or pace vs what it should have been, and one thing to focus on.
 Then for each date, one "line": a single plain sentence summing up the day (e.g. "Solid 6x800 averaging 2:46 with an easy double in the evening.").

@@ -65,7 +65,11 @@ npm install
 npx wrangler d1 create kestrel_db        # put the id in wrangler.jsonc
 npm run migrate:remote
 openssl rand -hex 32 | npx wrangler secret put KESTREL_SECRET   # encrypts watch keys
-npx wrangler secret put GEMINI_API_KEY   # optional: the free default AI
+npx wrangler secret put GEMINI_API_KEY   # optional: the free default AI (aistudio.google.com)
+# optional free fallbacks, tried in this order when Gemini is busy, before Workers AI:
+npx wrangler secret put GROQ_API_KEY       # console.groq.com
+npx wrangler secret put CEREBRAS_API_KEY   # cloud.cerebras.ai
+npx wrangler secret put OPENROUTER_API_KEY # openrouter.ai (its ":free" models)
 npm run deploy
 ```
 
