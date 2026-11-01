@@ -143,7 +143,7 @@ async function loadInputs(db, personId, today) {
   const [person, workouts, days, maxRow, events, efforts, well, model] = await Promise.all([
     db.prepare('SELECT id, prs, five_k_time, five_k_set_at, sex, settings FROM people WHERE id = ?').bind(personId).first(),
     db.prepare(
-      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, course_id, gps_vc, gps_course, load, temp_f, dew_point_f
+      `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, max_hr, elev_gain_ft, laps, surface, course, course_id, gps_vc, gps_course, load, temp_f, dew_point_f, effort, hr_effort
        FROM workouts WHERE person_id = ? AND date >= ? ORDER BY date`
     ).bind(personId, since).all(),
     db.prepare(
@@ -227,12 +227,15 @@ function rawReps(w, dayRow) {
 // Race distances a whole run can count as, by GPS distance (3%).
 // 2.5 mi before 4000 m: it's the high school course at Van Cortlandt.
 const RACE_METERS = [1600, MILE, 3200, 2 * MILE, 2.5 * MILE, 4000, 5000, 3 * MILE, 6000, 8000, 10000];
-// `extra`: distances raced on the course the run was on (a 6K course, say).
-function raceDistance(m, extra = []) {
+// `extra`: distances raced on the course the run was on (a 6K course, say). `loose`: the run is labelled a race, so a
+// GPS reading further off (XC watches often read 5-7% long) still snaps to the nearest distance.
+function raceDistance(m, extra = [], loose = false) {
   for (const d of RACE_METERS) if (Math.abs(m - d) / d <= 0.03) return d;
   // A course's own distances get more slack: a GPS watch reads a measured cross-country 5K anywhere from 4.8 to 5.2 km.
   for (const d of extra) if (Math.abs(m - d) / d <= 0.045) return d;
-  return null;
+  if (!loose) return null;
+  const near = (list, tol) => list.map((d) => ({ d, off: Math.abs(m - d) / d })).filter((x) => x.off <= tol).sort((a, b) => a.off - b.off)[0]?.d ?? null;
+  return near(extra, 0.08) ?? near(RACE_METERS, 0.06);
 }
 // PR events a race distance updates, and the time scaled to that event.
 const PR_FOR = { 1600: '1600', [MILE]: '1600', 3200: '3200', [2 * MILE]: '3200', 5000: '5K' };
@@ -298,16 +301,19 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   for (const w of workouts) {
     if (!w.distance_mi || !w.moving_sec || w.category === 'crosstrain') continue;
     const cid = courseIdOf(w, events);
-    const m = raceDistance((w.raw_distance_mi ?? w.distance_mi) * MILE, cid ? [...(courses.get(cid)?.distances || []), ...tracked.filter((t) => t.course === cid).map((t) => t.m)] : []);
+    // A run labelled a race (by the runner, a race tag or Kai) is one: its label is trusted over heart rate and GPS.
+    const labelled = w.category === 'race';
+    const m = raceDistance((w.raw_distance_mi ?? w.distance_mi) * MILE, cid ? [...(courses.get(cid)?.distances || []), ...tracked.filter((t) => t.course === cid).map((t) => t.m)] : [], labelled);
     if (!m) continue;
     const hrPct = hrMax && w.avg_hr ? w.avg_hr / hrMax : null;
-    const raceDay = w.category === 'race' || meets.has(w.date);
-    // Race effort: a meet or race label, 86%+ of max HR, or a run the pace and heart rate grade says was hard (7+/10). The grade
-    // catches a PR by someone with no max HR on file, or whose watch HR sat low in the cold.
+    const raceDay = labelled || meets.has(w.date);
+    // Race effort: a race label, a meet day at 80%+ of max HR, 86%+ of max HR, or a run the pace and heart rate grade says was
+    // hard (7+/10). Max HR is the highest the watch ever saw, so one strap spike would hide every race behind it: the label
+    // alone is enough. The grade catches a PR by someone with no max HR on file, or whose watch HR sat low in the cold.
     const hard = Math.max(w.effort || 0, w.hr_effort || 0) >= 7;
-    if (!(hard || (hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay))) continue;
-    // Nobody stops mid-race: a long pause means a workout with rests.
-    if (w.elapsed_sec && w.moving_sec && w.elapsed_sec > w.moving_sec * 1.3) continue;
+    if (!(labelled || hard || (hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay))) continue;
+    // Nobody stops mid-race: a long pause means a workout with rests, unless it is labelled a race (a watch left running at the finish).
+    if (!labelled && w.elapsed_sec && w.moving_sec && w.elapsed_sec > w.moving_sec * 1.3) continue;
     // Races are timed gun to finish: elapsed time, unless the watch was left running.
     const t = w.elapsed_sec && w.elapsed_sec <= w.moving_sec * 1.05 ? w.elapsed_sec : w.moving_sec;
     // Credited back to a flat course in good weather.
@@ -318,7 +324,8 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     sources.push({ kind: 'race', max: true, m, s: adj, age: ageDays(w.date, today), date: w.date, quality: raceDay ? 1 : 0.9, label });
     // PRs are the raw time. A race on a course is a PR for that course, never a track one.
     const cname = cid ? courses.get(cid)?.name || '' : '';
-    if (cid && m >= 2000 && w.surface !== 'track') prCandidates.push({ event: courseKey(cid, m), sec: t, date: w.date, name: cname, run: w.strava_id });
+    const picked = !!w.course_id && w.course_id !== 'none';
+    if (cid && m >= 2000 && (picked || w.surface !== 'track')) prCandidates.push({ event: courseKey(cid, m), sec: t, date: w.date, name: cname, run: w.strava_id });
     if (!cond.course && PR_FOR[m]) prCandidates.push({ event: PR_FOR[m], sec: t * (m === MILE ? 1600 / MILE : m === 2 * MILE ? 3200 / (2 * MILE) : 1), date: w.date, name: w.name || '', run: w.strava_id });
   }
 
@@ -330,7 +337,8 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // pace curve is the best unbroken stretch). Raw time, filled only where
     // nobody has typed a PR of their own (see prsToUpdate). A 1600 and above
     // from an interval session is stitched from reps, so it doesn't count.
-    const stitched = e.meters >= 1500 && (!e.category || e.category === 'workout' || e.laps); // unknown run: can't rule out reps
+    // A race's laps are the watch's auto-laps, not reps: its best stretch is real (a race run with its warm-up in one file).
+    const stitched = e.meters >= 1500 && e.category !== 'race' && (!e.category || e.category === 'workout' || e.laps); // unknown run: can't rule out reps
     const prEvent = { 400: '400', 800: '800', 1600: '1600', 1609: '1600', 3200: '3200', 5000: '5K' }[e.meters];
     if (prEvent && !stitched) {
       const pc = conditionsOf(e, events, { courseFactor: RM.courseFactor });

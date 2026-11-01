@@ -76,6 +76,29 @@
     $('recCourseList').querySelectorAll('[data-unfollow]').forEach(b=> b.addEventListener('click', ()=> unfollow(b.dataset.unfollow)));
   }
 
+  // What kind of runner the PRs say you are. Bars run from the PR furthest under its prediction to the one furthest over.
+  function drawRunner(r){
+    const box = $('recRunner');
+    if(!r || !r.ready){ box.innerHTML = `<div class="hint">${esc(r?.note || 'Add a few PRs to see what kind of runner you are.')}</div>`; return; }
+    const top = Math.max(2, ...r.events.map(e=> Math.abs(e.edge_pct)));
+    const bar = (e)=> {
+      const w = Math.min(50, Math.abs(e.edge_pct) / top * 50);
+      return `<span class="rt-bar" aria-hidden="true"><span class="rt-fill ${e.edge_pct >= 0 ? 'up' : 'down'}" style="${e.edge_pct >= 0 ? 'left:50%' : `left:${50 - w}%`};width:${w}%"></span></span>`;
+    };
+    box.innerHTML = `
+      <div class="rt-title">${esc(r.title)}</div>
+      ${r.why.map(t=> `<p class="rt-why">${esc(t)}</p>`).join('')}
+      ${r.longer ? `<p class="rt-why rt-longer">${esc(r.longer.text)}</p>` : ''}
+      <div class="rt-sub">Your PRs, strongest first</div>
+      <div class="rt-list">${r.events.map(e=> `<div class="rt-row${r.strongest.some(s=> s.event === e.event) && e.edge_pct > 0 ? ' best' : ''}">
+        <span class="rt-ev">${esc(e.label)}${e.course ? `<small>${esc(e.course)}</small>` : ''}</span>
+        <span class="rt-time">${esc(e.time)}<small>predicted ${esc(e.predicted)}</small></span>
+        ${bar(e)}
+        <span class="rt-pct">${e.edge_pct >= 0 ? '+' : '−'}${esc(Math.abs(e.edge_pct).toFixed(1))}%</span>
+      </div>`).join('')}</div>
+      <div class="hint">${esc(r.basis)} + means faster than your other PRs predict.</div>`;
+  }
+
   async function render(){
     const p = typeof isRealPerson === 'function' && isRealPerson() ? people.find(x=>x.id === activePersonId) : null;
     $('recHint').style.display = p ? 'none' : '';
@@ -87,6 +110,7 @@
       S.tracked = rec.tracked; S.courses = rec.courses;
       adopt(rec.prs);
       drawRecords();
+      drawRunner(rec.runner);
     }catch(e){
       $('recStatus').textContent = 'Couldn’t load your records. Check your connection.';
     }
@@ -119,6 +143,7 @@
     const est = res.fitness?.estimates?.find(x=> x.event === '5K');
     drawRecords();
     $('recStatus').textContent = est ? `Saved. Fitness updated: 5K now ${est.time}.` : 'Saved.';
+    getJson('/api/records').then(rec=> drawRunner(rec.runner)).catch(()=>{});
   }
 
   async function unfollow(key){

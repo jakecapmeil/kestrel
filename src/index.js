@@ -16,6 +16,7 @@ import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
+import { runnerAssessment } from './train/runnertype.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
 import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
 import { cohortReport } from './train/cohorts.js';
@@ -955,7 +956,7 @@ const WATCH_TOOLS = [
       injuries: { type: 'string' }, goal: { type: 'string', enum: PROFILE_GOALS }, goal_event: { type: 'string' }, goal_time: { type: 'string', description: 'm:ss or h:mm:ss' }, goal_date: { type: 'string', description: 'YYYY-MM-DD' },
     }, additionalProperties: false },
   },
-  { name: 'get_fitness', description: "Fitness States: race estimates, VO2max estimate, weekly mileage, pace zones and what they're based on.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'get_fitness', description: "Fitness States: race estimates, VO2max estimate, weekly mileage, pace zones and what they're based on, plus runner_type: the athlete's strongest PRs and what kind of runner they are (sprinter, middle distance, distance, long distance), each PR compared with what their other PRs predict.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 
 class McpToolError extends Error {}
@@ -973,7 +974,11 @@ async function callWatchTool(env, person, name, args) {
       await updateMe(env.DB, me, { name: nm, sex, weekly_miles, profile: { ...(settingsOf(me).profile || {}), ...known } });
       return { saved: true, profile: settingsOf(await loadMe(env.DB, person)).profile };
     }
-    if (name === 'get_fitness') return compactFitness(await recomputeFitness(env.DB, person.id, todayInTz()));
+    if (name === 'get_fitness') {
+      const fitness = await recomputeFitness(env.DB, person.id, todayInTz());
+      const r = await runnerAssessment(env.DB, person.id, fitness);
+      return { ...compactFitness(fitness), runner_type: r.ready ? { title: r.title, why: r.why, strongest: r.strongest.map((x) => ({ event: x.label, time: x.time, beats_prediction_by_pct: x.edge_pct })), longer: r.longer?.text || null, basis: r.basis } : { note: r.note } };
+    }
     if (name === 'get_plan_status') return await kaiState(env.DB, person.id);
     const full = await loadPerson(env.DB, person.id);
     if (name === 'change_level') return await changeLevel(env.DB, full, args.direction, args.reason, todayInTz(), await healthSummary(env.DB, full, todayInTz()));
@@ -1412,10 +1417,10 @@ async function route(request, env, url) {
     }
     // Records: fitness is recomputed first when it is stale, so any PR a new run set is already in the list.
     if (path === '/api/records') {
-      await getFitness(db, me.id, today);
+      const fitness = await getFitness(db, me.id, today);
       const prs = await getPrs(db, me.id);
       const courses = await coursesById(db, [...Object.keys(prs).map((k) => parseCourseKey(k)?.id).filter(Boolean), ...trackedOf(settingsOf(me), prs).map((t) => t.course)]);
-      return json({ prs, tracked: trackedOf(settingsOf(me), prs), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])) });
+      return json({ prs, tracked: trackedOf(settingsOf(me), prs), courses: Object.fromEntries([...courses].map(([id, c]) => [id, { id, name: c.name, place: c.place }])), runner: await runnerAssessment(db, me.id, fitness) });
     }
     if (path === '/api/runs/track') {
       const r = await getTrack(env, me.id, str(q.get('id'), 80));

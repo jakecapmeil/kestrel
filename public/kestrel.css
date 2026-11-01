@@ -239,3 +239,22 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-act-stats b{font-size:18px;}
 .k-act-stats small{color:var(--text-2);font-size:12px;}
 #kActsMore{margin-top:var(--s-3);}
+
+/* Records: runner type */
+.rt-title{font-size:1.15rem;font-weight:700;margin:2px 0 6px}
+.rt-why{margin:0 0 6px;color:var(--text-2)}
+.rt-longer{color:var(--text)}
+.rt-sub{font-weight:600;margin:12px 0 4px}
+.rt-list{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.rt-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(60px,1.4fr) 52px;gap:10px;align-items:center;padding:6px 8px;border-radius:var(--r-row)}
+.rt-row.best{background:var(--positive-subtle)}
+.rt-ev,.rt-time{display:flex;flex-direction:column;min-width:0}
+.rt-ev small,.rt-time small{color:var(--text-2);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt-time{font-variant-numeric:tabular-nums}
+.rt-bar{position:relative;height:8px;background:var(--surface-2);border-radius:4px}
+.rt-bar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--text-2);opacity:.5}
+.rt-fill{position:absolute;top:0;bottom:0;border-radius:4px}
+.rt-fill.up{background:var(--positive)}
+.rt-fill.down{background:var(--text-2);opacity:.45}
+.rt-pct{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}
+@media (max-width:480px){.rt-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 48px}.rt-bar{display:none}}

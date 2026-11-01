@@ -53,11 +53,11 @@ const eventText = (e) => [e.title, e.location, e.description, e.loc_name].filter
 // labelled "Van Cortlandt Park - Track & Field", so the track and flat runs
 // are ruled out first.
 export function courseOf(w, events = []) {
-  if (w.surface === 'track') return '';
   // 'none' is the runner saying it was not on a course.
   if (w.course_id === 'none') return '';
-  // A course the runner picked is final: Van Cortlandt is 'vc', any other is a cross-country course.
+  // A course the runner picked is final, even over a watch that guessed track: Van Cortlandt is 'vc', any other is cross-country.
   if (w.course_id) return w.course_id === 'vc' ? 'vc' : 'xc';
+  if (w.surface === 'track') return '';
   // Where the watch's GPS says the run started, when that is a course Kestrel has bounds for.
   if (w.gps_course) return w.gps_course === 'vc' ? 'vc' : 'xc';
   // A run named after the park is there. Otherwise Kai's read of it (from
