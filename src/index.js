@@ -16,6 +16,7 @@ import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
+import { snapshotDue, calibrationFor } from './train/calibration.js';
 import { runnerAssessment } from './train/runnertype.js';
 import { pushPlan, planWorkouts } from './train/planpush.js';
 import { heatCalc, taperCalc, CalcError } from './train/calculators.js';
@@ -956,6 +957,7 @@ const WATCH_TOOLS = [
       injuries: { type: 'string' }, goal: { type: 'string', enum: PROFILE_GOALS }, goal_event: { type: 'string' }, goal_time: { type: 'string', description: 'm:ss or h:mm:ss' }, goal_date: { type: 'string', description: 'YYYY-MM-DD' },
     }, additionalProperties: false },
   },
+  { name: 'get_fitness_accuracy', description: "How Kestrel's race estimates compare with this athlete's actual PRs: each PR against the estimate made the day before the race (negative error = raced faster than estimated), whether it fell inside the 80% range, and per-event averages. Also the recent daily estimate history.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'get_fitness', description: "Fitness States: race estimates, VO2max estimate, weekly mileage, pace zones and what they're based on, plus runner_type: the athlete's strongest PRs and what kind of runner they are (sprinter, middle distance, distance, long distance), each PR compared with what their other PRs predict.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 
@@ -974,6 +976,7 @@ async function callWatchTool(env, person, name, args) {
       await updateMe(env.DB, me, { name: nm, sex, weekly_miles, profile: { ...(settingsOf(me).profile || {}), ...known } });
       return { saved: true, profile: settingsOf(await loadMe(env.DB, person)).profile };
     }
+    if (name === 'get_fitness_accuracy') return await calibrationFor(env.DB, person.id, 90);
     if (name === 'get_fitness') {
       const fitness = await recomputeFitness(env.DB, person.id, todayInTz());
       const r = await runnerAssessment(env.DB, person.id, fitness);
@@ -1426,6 +1429,7 @@ async function route(request, env, url) {
       const r = await getTrack(env, me.id, str(q.get('id'), 80));
       return json(r, r.error === 'not_found' ? 404 : 200);
     }
+    if (path === '/api/fitness/calibration') return json(await calibrationFor(db, me.id, Math.min(Number(q.get('days')) || 120, 365)));
     if (path === '/api/fitness') return json({ fitness: await getFitness(db, me.id, today), history: await fitnessHistory(db, me.id) });
     if (path === '/api/predict') { try { return json(await racePredictions(env, me.id, today)); } catch (e) { return json({ enabled: false, error: String(e?.message || e) }); } }
     if (path === '/api/kai') return json(await kaiState(db, me.id));
@@ -1700,7 +1704,11 @@ function weightsSummary(m) {
 
 export default {
   async scheduled(event, env, ctx) {
-    if (event.cron === SYNC_CRON) ctx.waitUntil(syncDue(env).catch((err) => console.error('intervals sync failed', err)));
+    if (event.cron === SYNC_CRON) {
+      ctx.waitUntil(syncDue(env).catch((err) => console.error('intervals sync failed', err)));
+      // A daily Fitness State snapshot for athletes who have not opened the app (see calibration.js).
+      ctx.waitUntil(snapshotDue(env, todayInTz(), recomputeFitness).catch((err) => console.error('fitness snapshot failed', err)));
+    }
   },
 
   async fetch(request, env) {

@@ -27,6 +27,7 @@ import { conditionsOf, courseIdOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_
 import { normalizePrs, parseCourseKey, courseKey, courseLabel, trackedOf, coursesById } from './courses.js';
 // Race models come from Kestrel Lab: whichever the athlete picked for each task (KestrelPredict by default).
 import { modelSet, pickedModels, SHORT_METERS } from '../models.js';
+import { snapshotOf, recordPrChecks, dropPrCheck } from './calibration.js';
 const Z80 = 1.2816;
 
 const DAY = 86400000;
@@ -824,7 +825,7 @@ export async function dropAutoPrsFrom(db, personId, run) {
   const row = await db.prepare('SELECT prs FROM people WHERE id = ?').bind(personId).first();
   const prs = normalizePrs(parsePrs(row?.prs));
   let changed = false;
-  for (const [k, v] of Object.entries(prs)) if (v?.auto && v.run === run) { delete prs[k]; changed = true; }
+  for (const [k, v] of Object.entries(prs)) if (v?.auto && v.run === run) { await dropPrCheck(db, personId, k, v.date); delete prs[k]; changed = true; }
   if (changed) await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(prs), personId).run();
 }
 
@@ -834,6 +835,7 @@ export async function recomputeFitness(db, personId, today) {
   const misfiled = misfiledPrs(inputs.person.prs, inputs.workouts, inputs.events);
   if (misfiled.length) {
     const prs = normalizePrs(parsePrs(inputs.person.prs));
+    await Promise.all(misfiled.map((k) => dropPrCheck(db, personId, k, prs[k]?.date)));
     misfiled.forEach((k) => delete prs[k]);
     await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(prs), personId).run();
     inputs.person.prs = JSON.stringify(prs);
@@ -862,10 +864,12 @@ export async function recomputeFitness(db, personId, today) {
        ON CONFLICT(person_id) DO UPDATE SET computed_at = excluded.computed_at, data = excluded.data`
     ).bind(personId, Date.now(), JSON.stringify(data)),
     ...(data.vo2r ? [db.prepare(
-      `INSERT INTO fitness_history (person_id, date, vdot, five_k_sec, mpw) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(person_id, date) DO UPDATE SET vdot = excluded.vdot, five_k_sec = excluded.five_k_sec, mpw = excluded.mpw`
-    ).bind(personId, today, data.vo2r, Math.round(fiveK.sec), data.mpw)] : []),
+      `INSERT INTO fitness_history (person_id, date, vdot, five_k_sec, mpw, estimates) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(person_id, date) DO UPDATE SET vdot = excluded.vdot, five_k_sec = excluded.five_k_sec, mpw = excluded.mpw, estimates = excluded.estimates`
+    ).bind(personId, today, data.vo2r, Math.round(fiveK.sec), data.mpw, snapshotOf(data))] : []),
   ]);
+  // Score every PR against the estimate made before its race. Never lets a bookkeeping failure break the recompute.
+  await recordPrChecks(db, personId, normalizePrs(parsePrs(inputs.person.prs)), today).catch((err) => console.error('pr check failed', err?.message || err));
   return data;
 }
 
