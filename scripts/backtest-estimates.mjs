@@ -96,6 +96,9 @@ for (const p of people) {
     const today = F.computeFitness(inputsAsOf(p, day, prs), day);
     const found = prsToUpdate(prs, (today.pr_candidates || []).filter((c) => c.date === day));
     for (const [k, v] of Object.entries(found)) if (!newPrs.some((n) => n.event === k)) {
+      // A split inside today's race that beat the race's own time: the PR that was raced is the race's time.
+      const raced = v.fill && (today.pr_candidates || []).find((c) => c.date === day && c.event === k && !c.fill && mine.find((x) => x.strava_id === c.run)?.category === 'race');
+      if (raced) { const have = F.parseTime(prs[k]?.time); if (!have || raced.sec < have - 0.5) newPrs.push({ event: k, sec: raced.sec, source: 'race', name: '' }); continue; }
       const w = mine.find((x) => x.strava_id === v.run);
       newPrs.push({ event: k, sec: v.sec, source: v.fill ? 'split' : w?.category === 'race' ? 'race' : 'hard-run', name: w?.name || v.name });
     }
@@ -108,7 +111,10 @@ for (const p of people) {
       }
     }
     // Races mode: the day's PR improvements join the PR state only after the day is scored.
-    const apply = () => { if (opt.mode === 'races') for (const [k, v] of Object.entries(found)) if (!(F.parseTime(prs[k]?.time) <= v.sec + 0.5)) prs[k] = { time: v.time, date: day }; };
+    const better = (k, sec) => { const have = F.parseTime(prs[k]?.time); return !have || sec < have - 0.5; };
+    // Found PRs keep auto, as in the app: a later split may replace them, never a typed one.
+    const setPr = (k, sec, auto) => { prs[k] = { time: F.fmtTime(sec, { tenths: sec < 180 }), date: day, ...(auto ? { auto: true } : {}) }; };
+    const apply = () => { if (opt.mode === 'races') for (const [k, v] of Object.entries(found)) if (better(k, v.sec)) setPr(k, v.sec, true); };
     if (!newPrs.length) { apply(); continue; }
     const prev = addDays(day, -1);
     const prsBefore = JSON.parse(JSON.stringify(prs));
@@ -125,8 +131,8 @@ for (const p of people) {
         in_range: pred?.lo != null ? n.sec >= pred.lo && n.sec <= pred.hi : null,
         basis: data.basis, inputs: (data.lite_inputs || []).length, lite_inputs: data.lite_inputs, prs_before: prsBefore,
       });
-      if (opt.mode !== 'races') prs[n.event] = { time: F.fmtTime(n.sec, { tenths: n.sec < 180 }), date: day };
-      else if (n.source === 'typed' && !(F.parseTime(prs[n.event]?.time) <= n.sec)) prs[n.event] = { time: F.fmtTime(n.sec, { tenths: n.sec < 180 }), date: day };
+      if (opt.mode !== 'races') setPr(n.event, n.sec, n.source !== 'typed');
+      else if (n.source === 'typed' && better(n.event, n.sec)) setPr(n.event, n.sec, false);
     }
     apply();
   }
