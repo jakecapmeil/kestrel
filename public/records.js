@@ -99,6 +99,30 @@
       <div class="hint">${esc(r.basis)} + means faster than your other PRs predict.</div>`;
   }
 
+  // Each PR against the estimate made before the race. Error is race vs. estimate: negative = raced faster than estimated.
+  const fmtSec = (sec)=> { const t = Math.round(sec * (sec < 180 ? 10 : 1)) / (sec < 180 ? 10 : 1), m = Math.floor(t / 60), s = t - m * 60; return m ? `${m}:${(sec < 180 ? s.toFixed(1) : String(s)).padStart(sec < 180 ? 4 : 2, '0')}` : t.toFixed(1); };
+  function drawAccuracy(d){
+    const box = $('recAccuracy');
+    const rows = (d?.checks || []).filter(c=> c.error_pct != null);
+    if(!rows.length){ box.innerHTML = '<div class="hint">Kestrel saves its estimate for you every day. Once you set a PR, it shows up here next to the estimate from before the race.</div>'; return; }
+    const label = (k)=> { const c = parseKey(k); return c ? `${distLabel(c.m)} at ${courseName(c.id)}` : (NAME[k] || k); };
+    const o = d.summary.overall;
+    const lean = Math.abs(o.mean_error_pct) < 0.5 ? 'about right' : o.mean_error_pct < 0 ? `${Math.abs(o.mean_error_pct).toFixed(1)}% too slow` : `${o.mean_error_pct.toFixed(1)}% too fast`;
+    const top = Math.max(2, ...rows.map(c=> Math.abs(c.error_pct)));
+    box.innerHTML = `
+      <p class="rt-why">${esc(`Across ${o.n} PR${o.n > 1 ? 's' : ''}, Kestrel's estimates ran ${lean} for you on average, and ${o.in_range_pct == null ? 'none' : o.in_range_pct + '%'} landed inside its 80% range.`)}</p>
+      <div class="rt-list">${rows.map(c=> {
+        const w = Math.min(50, Math.abs(c.error_pct) / top * 50);
+        const faster = c.error_pct < 0;
+        return `<div class="rt-row${faster ? ' best' : ''}">
+          <span class="rt-ev">${esc(label(c.event))}<small>${esc(prDate(c.pr_date))}</small></span>
+          <span class="rt-time">${esc(fmtSec(c.pr_sec))}<small>estimated ${esc(fmtSec(c.pred_sec))}</small></span>
+          <span class="rt-bar" aria-hidden="true"><span class="rt-fill ${faster ? 'up' : 'down'}" style="${faster ? `left:${50 - w}%` : 'left:50%'};width:${w}%"></span></span>
+          <span class="rt-pct">${faster ? '−' : '+'}${esc(Math.abs(c.error_pct).toFixed(1))}%</span>
+        </div>`; }).join('')}</div>
+      <div class="hint">− means you raced faster than estimated. Only races after Kestrel began saving estimates are scored.</div>`;
+  }
+
   async function render(){
     const p = typeof isRealPerson === 'function' && isRealPerson() ? people.find(x=>x.id === activePersonId) : null;
     $('recHint').style.display = p ? 'none' : '';
@@ -111,6 +135,7 @@
       adopt(rec.prs);
       drawRecords();
       drawRunner(rec.runner);
+      getJson('/api/fitness/calibration?days=1').then(drawAccuracy).catch(()=>{ $('recAccuracy').innerHTML = ''; });
     }catch(e){
       $('recStatus').textContent = 'Couldn’t load your records. Check your connection.';
     }
@@ -144,6 +169,7 @@
     drawRecords();
     $('recStatus').textContent = est ? `Saved. Fitness updated: 5K now ${est.time}.` : 'Saved.';
     getJson('/api/records').then(rec=> drawRunner(rec.runner)).catch(()=>{});
+    getJson('/api/fitness/calibration?days=1').then(drawAccuracy).catch(()=>{});
   }
 
   async function unfollow(key){
