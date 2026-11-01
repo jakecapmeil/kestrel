@@ -314,6 +314,9 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // A run still called a workout had reps or a tempo in it: hard, but not a race.
     const hard = w.category !== 'workout' && Math.max(w.effort || 0, w.hr_effort || 0) >= 7;
     if (!(labelled || hard || (hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay))) continue;
+    // Heart rate alone can't make an unlabelled run a race when the grade (pace against this runner's fitness, plus heart rate)
+    // calls it easy: a new watch has seen a low max HR, so warm-ups and easy runs on a meet day clear the HR bar.
+    if (!labelled && (w.effort != null || w.hr_effort != null) && Math.max(w.effort || 0, w.hr_effort || 0) <= 5) continue;
     // Nobody stops mid-race: a long pause means a workout with rests, unless it is labelled a race (a watch left running at the finish).
     if (!labelled && w.elapsed_sec && w.moving_sec && w.elapsed_sec > w.moving_sec * 1.3) continue;
     // Races are timed gun to finish: elapsed time, unless the watch was left running.
