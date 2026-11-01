@@ -310,7 +310,8 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     // Race effort: a race label, a meet day at 80%+ of max HR, 86%+ of max HR, or a run the pace and heart rate grade says was
     // hard (7+/10). Max HR is the highest the watch ever saw, so one strap spike would hide every race behind it: the label
     // alone is enough. The grade catches a PR by someone with no max HR on file, or whose watch HR sat low in the cold.
-    const hard = Math.max(w.effort || 0, w.hr_effort || 0) >= 7;
+    // A run still called a workout had reps or a tempo in it: hard, but not a race.
+    const hard = w.category !== 'workout' && Math.max(w.effort || 0, w.hr_effort || 0) >= 7;
     if (!(labelled || hard || (hrPct != null ? hrPct >= 0.86 || (raceDay && hrPct >= 0.8) : raceDay))) continue;
     // Nobody stops mid-race: a long pause means a workout with rests, unless it is labelled a race (a watch left running at the finish).
     if (!labelled && w.elapsed_sec && w.moving_sec && w.elapsed_sec > w.moving_sec * 1.3) continue;
@@ -797,6 +798,26 @@ function prsToUpdate(currentRaw, candidates) {
   return out;
 }
 
+// Track PRs Kestrel once took from a cross-country race, before it knew the race was on a course: an auto PR with no run
+// on file whose date and time match a run now on a course. That race is the course's PR, never a track one.
+export function misfiledPrs(prsRaw, workouts, events = []) {
+  const prs = normalizePrs(parsePrs(prsRaw));
+  const out = [];
+  for (const [event, v] of Object.entries(prs)) {
+    if (!v?.auto || v.run || !PR_METERS[event] || parseCourseKey(event)) continue;
+    const sec = parseTime(v.time);
+    if (!sec || !v.date) continue;
+    const scale = event === '5K' ? 1 : null; // 1600 and 3200 are scaled from a mile or two; matched within 1% below
+    const hit = workouts.some((w) => {
+      if (w.date !== v.date || !courseIdOf(w, events) || !w.moving_sec) return false;
+      const t = w.elapsed_sec && w.elapsed_sec <= w.moving_sec * 1.05 ? w.elapsed_sec : w.moving_sec;
+      return scale ? Math.abs(t - sec) <= 1.5 : Math.abs(t - sec) / sec <= 0.01;
+    });
+    if (hit) out.push(event);
+  }
+  return out;
+}
+
 // Takes back the PRs Kestrel found from one run (its course was changed or cleared). The recompute that follows
 // finds again whatever is still true. A PR this run had beaten, from more than a year ago, is not searched for again.
 export async function dropAutoPrsFrom(db, personId, run) {
@@ -810,6 +831,13 @@ export async function dropAutoPrsFrom(db, personId, run) {
 export async function recomputeFitness(db, personId, today) {
   const inputs = await loadInputs(db, personId, today);
   if (!inputs.person) return null;
+  const misfiled = misfiledPrs(inputs.person.prs, inputs.workouts, inputs.events);
+  if (misfiled.length) {
+    const prs = normalizePrs(parsePrs(inputs.person.prs));
+    misfiled.forEach((k) => delete prs[k]);
+    await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(prs), personId).run();
+    inputs.person.prs = JSON.stringify(prs);
+  }
   const found = prsToUpdate(inputs.person.prs, computeFitness(inputs, today).pr_candidates || []);
   if (Object.keys(found).length) {
     const prs = { ...normalizePrs(parsePrs(inputs.person.prs)), ...found };
