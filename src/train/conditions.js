@@ -67,8 +67,9 @@ export function courseOf(w, events = []) {
   const notVc = w.gps_vc === 0;
   if (!notVc && VC_RE.test(w.name || '')) return 'vc';
   if (w.course === 'xc' || (w.course === 'vc' && !notVc)) return w.course;
-  if (w.course === 'flat') return '';
   const fpm = ftPerMile(w);
+  // Kai reads "Van Cortlandt Park - Track & Field" as the track; a run that climbed 40+ ft a mile wasn't flat, so the calendar decides.
+  if (w.course === 'flat' && !(fpm >= 40)) return '';
   if (fpm != null && fpm < 20) return '';
   const here = events.filter((e) => e.date === w.date);
   if (!notVc && here.some((e) => VC_RE.test(eventText(e)))) return 'vc';
