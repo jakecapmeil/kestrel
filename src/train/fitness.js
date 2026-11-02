@@ -131,9 +131,9 @@ const recency = (age, halfLife) => Math.pow(0.5, age / halfLife);
 //   hardRunDays: an unlabelled hard run leaves Lite's inputs once a real race is this recent (it may not have been all-out).
 //   rangeSpread: the 80% range widens by this much per unit of log distance between the target and the nearest input.
 //     1 puts 79% of synthetic runners' races inside the range (0: 64%), and 6 of 6 real track PRs (0: 5 of 6).
-//   undatedDays, hardRunDays and trend made the real races' estimates worse in the 2026-11 backtest, so they are off.
 //   trend: in season a runner keeps improving after their last race. The share of their recent rate of improvement
 //     (from real races in the last trendWindow days) carried forward from the newest one, for up to trendCap days.
+//   undatedDays, hardRunDays and trend made the real races' estimates worse in the 2026-11 backtest, so they are off.
 export const TUNE = { undatedDays: null, hardRunDays: null, rangeSpread: 1, trend: 0, trendWindow: 60, trendCap: 21, trendMax: 0.002 }; // null: off
 
 // Snap a GPS distance to the race distance it probably was.
