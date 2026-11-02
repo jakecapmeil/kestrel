@@ -1718,6 +1718,65 @@
     .chip-scroll{flex-wrap:wrap;overflow:visible;margin:0;padding:0;}
   }
 
+
+  /* ---- Train: customizable tabs, Goals, Cross-train, Fuel (track.js) ------ */
+  #tpViews{overflow-x:auto;scrollbar-width:none;max-width:100%;}
+  #tpViews::-webkit-scrollbar{display:none;}
+  #tpViews .seg-btn{flex:1 0 auto;}
+  #tpViews .tk-gear{flex:0 0 auto;width:38px;padding:0;}
+  .tk-gear svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;}
+  .page-head #tpViews{max-width:640px;}
+  .tk-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--r-control);}
+  .tk-row{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);padding:6px 10px;border-top:1px solid var(--line);}
+  .tk-row:first-child{border-top:none;}
+  .tk-row.off{background:var(--bg);}
+  .tk-move{display:flex;gap:4px;}
+  .tk-move button{height:32px;width:32px;padding:0;}
+  .tk-x{height:18px;width:18px;padding:0;border:none;background:transparent;color:inherit;font-size:11px;}
+  .tk-tips{margin:var(--sp-2) 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-footnote);line-height:1.5;color:var(--ink-soft);}
+  .tk-tips b{color:var(--ink);}
+  .gl-card.main{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold);}
+  .gl-stats{margin:var(--sp-2) 0 var(--sp-3);}
+  .gl-bar{height:10px;border-radius:var(--r-pill);background:var(--track);overflow:hidden;margin:var(--sp-2) 0 6px;}
+  .gl-bar i{display:block;height:100%;border-radius:inherit;background:var(--gold);transition:width .4s ease;}
+  .gl-sub{font-size:var(--fs-footnote);font-weight:700;margin:var(--sp-4) 0 var(--sp-2);}
+  .gl-weeks{position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;align-items:end;height:90px;margin:var(--sp-3) 0 var(--sp-2);}
+  .gl-wk{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;}
+  .gl-wk i{display:block;width:100%;border-radius:4px;background:var(--track);}
+  .gl-wk.met i{background:var(--gold);}
+  .gl-wk span{height:14px;font-size:var(--fs-caption2);font-weight:600;color:var(--ink-soft);}
+  .gl-wk.now span{color:var(--ink);}
+  .gl-line{position:absolute;left:0;right:0;border-top:2px dashed var(--ink-soft);opacity:.45;pointer-events:none;}
+  .gl-custom input{flex:1;accent-color:var(--gold);}
+  #tpXtrainView input[type=range],#tpGoalsView input[type=range]{accent-color:var(--gold);}
+  .gl-actions{margin-top:var(--sp-3);}
+  .gl-past summary{cursor:pointer;}
+  .gl-past .gl-card{margin:var(--sp-3) 0 0;}
+  .chip.ghosty{background:var(--bg);}
+  .xt-day{padding:var(--sp-2) 0;border-top:1px solid var(--line);}
+  .xt-day:first-of-type{border-top:none;}
+  .xt-row{display:flex;align-items:center;gap:var(--sp-2);padding:6px 0;}
+  .xt-what{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .xt-what .hint{margin:0;}
+  .xt-num{font-size:var(--fs-footnote);font-variant-numeric:tabular-nums;color:var(--ink-soft);white-space:nowrap;}
+  .xt-bars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;align-items:end;height:118px;margin-top:var(--sp-4);}
+  .xt-wk{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;font-size:var(--fs-caption2);color:var(--ink-soft);font-weight:600;}
+  .xt-stack{display:flex;flex-direction:column-reverse;width:100%;gap:1px;}
+  .xt-stack i{display:block;width:100%;border-radius:3px;}
+  .xt-stack .run{background:var(--gold);}
+  .xt-stack .xt{background:var(--int-2);}
+  .fu-macros{display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-4);}
+  .fu-name{font-weight:700;font-size:var(--fs-subhead);display:flex;justify-content:space-between;gap:var(--sp-2);}
+  .fu-name .hint{font-weight:500;margin:0;}
+  .fu-bar{position:relative;height:12px;border-radius:var(--r-pill);background:var(--track);overflow:hidden;margin-top:6px;}
+  .fu-band{position:absolute;top:0;bottom:0;background:var(--int-1-bg);box-shadow:inset 0 0 0 1px var(--int-1);}
+  .fu-bar i{position:absolute;left:0;top:3px;bottom:3px;border-radius:var(--r-pill);background:var(--ink-soft);}
+  .fu-bar.in i{background:var(--int-1);}
+  .fu-bar.over i{background:var(--int-2);}
+  .fu-legend{display:flex;justify-content:space-between;font-size:var(--fs-caption);color:var(--ink-soft);margin-top:4px;font-variant-numeric:tabular-nums;}
+  .fu-noweight{margin-top:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-control);background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .fu-flag{border-color:var(--int-3);background:var(--int-3-bg);}
+  .fu-flag p{margin:var(--sp-2) 0 0;font-size:var(--fs-footnote);line-height:1.5;}
 </style>
 <link rel="stylesheet" href="/ds/tokens.css">
 <link rel="stylesheet" href="/ds/base.css">
@@ -2133,6 +2192,10 @@
         </section>
       </div>
     </div>
+
+    <div id="tpGoalsView" style="display:none;"></div>
+    <div id="tpXtrainView" style="display:none;"></div>
+    <div id="tpFoodView" style="display:none;"></div>
 
     <div id="tpFitnessView" class="split split-fit" style="display:none;">
       <div class="stack-cards">
@@ -4913,7 +4976,7 @@ function wireUI(){
     setTimeout(()=>{ btn.textContent = orig; }, 1200);
   });
 
-  $('tpViews').querySelectorAll('[data-tview]').forEach(b=> b.addEventListener('click', ()=> setTrainingView(b.dataset.tview)));
+  $('tpViews').addEventListener('click', (e)=>{ const b = e.target.closest('[data-tview]'); if(b) setTrainingView(b.dataset.tview); });
   $('tlPrev').addEventListener('click', ()=>{ tlMonthIdx--; if(tlMonthIdx < 0){ tlMonthIdx = 11; tlYear--; } tlSelected = null; renderTrainingLog(); });
   $('tlNext').addEventListener('click', ()=>{ tlMonthIdx++; if(tlMonthIdx > 11){ tlMonthIdx = 0; tlYear++; } tlSelected = null; renderTrainingLog(); });
   $('tlSave').addEventListener('click', saveTrainingDay);
@@ -6121,17 +6184,26 @@ async function renderPlanSide(){
   }
 }
 
+const TRAIN_VIEWS = ['plan','log','goals','xtrain','food','library','fitness','kai'];
+const TRAIN_VIEW_ID = { plan:'Plan', log:'Log', goals:'Goals', xtrain:'Xtrain', food:'Food', library:'Library', fitness:'Fitness', kai:'Kai' };
+const TRAIN_VIEW_LABEL = { plan:'Plan', log:'Log', goals:'Goals', xtrain:'Cross-train', food:'Fuel', library:'Workouts', fitness:'Fitness', kai:'Coach' };
 async function renderTraining(){
-  if(!['plan','log','library','fitness','kai'].includes(trainingView)) trainingView = 'plan';
-  $('tpViews').querySelectorAll('[data-tview]').forEach(b=>{ const on = b.dataset.tview === trainingView; b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on)); });
-  ['plan','log','library','fitness','kai'].forEach(v=> $('tp' + { plan:'Plan', log:'Log', library:'Library', fitness:'Fitness', kai:'Kai' }[v] + 'View').style.display = trainingView === v ? '' : 'none');
-  const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
-  $('trTitle').textContent = { plan: p ? `${p.first_name || p.name.split(' ')[0]}’s plan` : 'Training plans', log: 'Training log', library: 'Workouts', fitness: 'Fitness States', kai: 'Kestrel AI' }[trainingView];
+  // The runner picks which Train tabs show and in what order (Customize); a hidden tab falls back to the plan.
+  const own = isRealPerson();
+  const tabs = own && window.kTrack ? window.kTrack.visibleTabs() : TRAIN_VIEWS.filter(v=> !['goals','xtrain','food'].includes(v));
+  if(!tabs.includes(trainingView)) trainingView = 'plan';
+  if(window.kTrack && own) window.kTrack.paintTabs();
+  else $('tpViews').innerHTML = tabs.map(v=> `<button type="button" class="seg-btn ${v === trainingView ? 'active' : ''}" role="tab" aria-selected="${v === trainingView}" data-tview="${v}">${TRAIN_VIEW_LABEL[v]}</button>`).join('');
+  TRAIN_VIEWS.forEach(v=> $('tp' + TRAIN_VIEW_ID[v] + 'View').style.display = trainingView === v ? '' : 'none');
+  const p = own ? people.find(x=>x.id===activePersonId) : null;
+  $('trTitle').textContent = { plan: p ? `${p.first_name || p.name.split(' ')[0]}’s plan` : 'Training plans', log: 'Training log', goals: 'Goals', xtrain: 'Cross-training', food: 'Fuel', library: 'Workouts', fitness: 'Fitness States', kai: 'Kestrel AI' }[trainingView];
+  if(trainingView === 'goals') return window.kTrack.goals($('tpGoalsView'));
+  if(trainingView === 'xtrain') return window.kTrack.xtrain($('tpXtrainView'));
+  if(trainingView === 'food') return window.kTrack.food($('tpFoodView'));
   if(trainingView === 'log') return renderTrainingLog();
   if(trainingView === 'library') return renderLibrary();
   if(trainingView === 'fitness') return renderFitness();
   if(trainingView === 'kai') return renderKaiTab();
-  const own = isRealPerson();
   if(own && window.kestrelRenderPersonalPlan) window.kestrelRenderPersonalPlan($('kPersonalPlan'));
   $('todayCard').style.display = 'none';
   ['healthCard','levelCard'].forEach(id=> $(id).style.display = own ? $(id).style.display : 'none');
@@ -6267,6 +6339,7 @@ window.kestrelSetPage = (p, sub)=>{ setPage(p); if(p === 'team' && sub) setTeamV
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>
+<script src="/track.js"></script>
 <script src="/record.js"></script>
 <script src="/shoes.js"></script>
 <script type="module" src="/kestrel.js"></script>

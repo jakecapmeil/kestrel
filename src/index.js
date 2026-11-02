@@ -27,6 +27,7 @@ import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, le
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
+import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -81,6 +82,7 @@ async function meView(db, me) {
       age_ok: !!me.age_ok, share_miles: !!me.share_miles, share_activities: !!me.share_activities, plan_rank: me.plan_rank,
     },
     profile: settingsOf(me).profile || {},
+    prefs: prefsOf(settingsOf(me)),
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
     teams,
@@ -88,7 +90,8 @@ async function meView(db, me) {
 }
 
 // The sign-up questionnaire. Stored in settings.profile; every field is optional and clipped.
-const PROFILE_GOALS = ['race', 'faster', 'distance', 'fitness', 'weight', 'team'];
+const PROFILE_GOALS = ['race', 'faster', 'distance', 'fitness', 'comeback', 'weight', 'team'];
+const PROFILE_DAYS = ['', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const PROFILE_EXPERIENCE = ['new', 'under1', '1to3', '3plus'];
 function cleanProfile(p) {
   const num = (v, lo, hi) => { const n = Number(v); return v !== '' && v != null && Number.isFinite(n) && n >= lo && n <= hi ? Math.round(n * 10) / 10 : null; };
@@ -108,10 +111,24 @@ function cleanProfile(p) {
     injuries: txt(p.injuries, 300),
     resting_hr: num(p.resting_hr, 30, 120),
     max_hr: num(p.max_hr, 120, 230),
-    watch: ['', 'garmin', 'coros', 'apple', 'strava', 'other', 'none'].includes(p.watch) ? p.watch : '',
+    watch: ['', 'garmin', 'coros', 'suunto', 'polar', 'wahoo', 'apple', 'strava', 'other', 'none'].includes(p.watch) ? p.watch : '',
+    // The coaching intake: why, what got in the way, the long view, the week, and how they like to be coached.
+    goal_race_name: txt(p.goal_race_name, 80),
+    why: txt(p.why, 300),
+    blockers: txt(p.blockers, 300),
+    long_goal: txt(p.long_goal, 200),
+    long_run_day: PROFILE_DAYS.includes(p.long_run_day) ? p.long_run_day : '',
+    rest_day: PROFILE_DAYS.includes(p.rest_day) ? p.rest_day : '',
+    run_time: ['', 'morning', 'midday', 'evening', 'varies'].includes(p.run_time) ? p.run_time : '',
+    xtrain: Array.isArray(p.xtrain) ? p.xtrain.map((x) => txt(x, 30)).filter(Boolean).slice(0, 12) : [],
+    likes: txt(p.likes, 200),
+    coach_tone: ['', 'encouraging', 'direct', 'detailed'].includes(p.coach_tone) ? p.coach_tone : '',
+    diet: ['', 'none', 'vegetarian', 'vegan', 'gluten_free', 'other'].includes(p.diet) ? p.diet : '',
+    fuel_notes: txt(p.fuel_notes, 200),
     completed_at: Date.now(),
   };
-  for (const k of Object.keys(out)) if (out[k] === null) delete out[k];
+  for (const k of Object.keys(out)) if (out[k] === null || out[k] === '' || (Array.isArray(out[k]) && !out[k].length)) delete out[k];
+  out.units = p.units === 'km' ? 'km' : 'mi';
   return out;
 }
 
@@ -135,7 +152,8 @@ async function updateMe(db, me, b) {
   let settings = settingsOf(me);
   let settingsDirty = false;
   if (b.profile && typeof b.profile === 'object') {
-    settings = { ...settings, profile: cleanProfile(b.profile) };
+    // Merged, so a form that edits part of the profile keeps the rest.
+    settings = { ...settings, profile: cleanProfile({ ...(settings.profile || {}), ...b.profile }) };
     settingsDirty = true;
   }
   if (b.prs && typeof b.prs === 'object' && Object.keys(b.prs).length) await setPrs(db, me.id, b.prs);
@@ -204,6 +222,7 @@ async function deleteMe(db, me) {
   await db.prepare("UPDATE teams SET created_by = (SELECT person_id FROM team_members WHERE team_id = teams.id AND role = 'owner') WHERE created_by = ?").bind(me.id).run();
   await db.prepare('DELETE FROM api_keys WHERE person_id = ?').bind(me.id).run();
   await db.prepare('DELETE FROM ai_usage WHERE person_id = ?').bind(me.id).run();
+  for (const t of ['xtrain', 'food_log', 'goals']) await db.prepare(`DELETE FROM ${t} WHERE person_id = ?`).bind(me.id).run();
   await db.prepare('DELETE FROM people WHERE id = ?').bind(me.id).run();
 }
 
@@ -1231,6 +1250,21 @@ async function route(request, env, url) {
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
 
+  // Which Train tabs to show and in what order, custom cross-training, fueling display and targets.
+  if (path === '/api/me/prefs') {
+    const cur = prefsOf(settingsOf(me));
+    if (method === 'GET') return json({ prefs: cur, ...trackMeta(cur) });
+    if (method === 'PUT') {
+      const next = cleanPrefs(await readJson(request), cur);
+      await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...settingsOf(me), prefs: next }), me.id).run();
+      return json({ prefs: next, ...trackMeta(next) });
+    }
+  }
+  // The onboarding race goal becomes a tracked goal (once, if there are no goals yet).
+  if (path === '/api/me/goal-from-profile' && method === 'POST') {
+    return json({ goal: await goalFromProfile(db, me.id, settingsOf(me).profile, await getFitness(db, me.id, today).catch(() => null)) });
+  }
+
   if (path === '/api/shoes') {
     if (method === 'GET') return json({ shoes: await shoesView(db, me) });
     if (method === 'PUT') return json({ shoes: await saveShoes(db, me, (await readJson(request)).shoes) });
@@ -1433,6 +1467,10 @@ async function route(request, env, url) {
     if (path === '/api/fitness') return json({ fitness: await getFitness(db, me.id, today), history: await fitnessHistory(db, me.id) });
     if (path === '/api/predict') { try { return json(await racePredictions(env, me.id, today)); } catch (e) { return json({ enabled: false, error: String(e?.message || e) }); } }
     if (path === '/api/kai') return json(await kaiState(db, me.id));
+    if (path === '/api/xtrain') return json(await xtrainView(db, me.id, today, prefsOf(settingsOf(me))));
+    if (path === '/api/food') return json(await foodView(db, me.id, str(q.get('date'), 10) || today, settingsOf(me).profile, prefsOf(settingsOf(me)), str(q.get('tier'), 12)));
+    if (path === '/api/food/recent') return json({ foods: await recentFoods(db, me.id) });
+    if (path === '/api/goals') return json(await goalsView(db, me.id, today, await getFitness(db, me.id, today).catch(() => null)));
     if (path === '/api/workouts') return json(await workoutsForApp(db, me.id));
     if (path === '/api/models') return json({ models: await listModels(db, me.id, { task: str(q.get('task'), 20) }) });
     if (path === '/api/calendar-link') {
@@ -1638,6 +1676,12 @@ async function route(request, env, url) {
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
     return json(day);
   }
+  if (path === '/api/xtrain') return json(await saveXtrain(db, me.id, b, prefsOf(settingsOf(me))));
+  if (path === '/api/xtrain/delete') return json(await deleteXtrain(db, me.id, b.id));
+  if (path === '/api/food') return json(await saveFood(db, me.id, b));
+  if (path === '/api/food/delete') return json(await deleteFood(db, me.id, b.id));
+  if (path === '/api/goals') return json(await saveGoal(db, me.id, b, await getFitness(db, me.id, today).catch(() => null)));
+  if (path === '/api/goals/delete') return json(await deleteGoal(db, me.id, b.id));
   if (path === '/api/fitness/refresh') return json({ fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/people/prs') return json({ ...(await setPrs(db, me.id, b.prs)), fitness: await recomputeFitness(db, me.id, today) });
   if (path === '/api/courses') return json(await createCourse(db, me.id, { name: b.name, place: b.place, distances: b.distances }));
@@ -1724,7 +1768,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }
