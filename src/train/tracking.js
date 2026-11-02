@@ -101,7 +101,7 @@ export function cleanPrefs(b, current) {
     for (const k of ['show_kcal', 'show_fat', 'show_fluid']) if (k in b.food) f[k] = !!b.food[k];
     // A custom band in g/kg, or null for Kestrel's training-scaled default.
     const band = (v, lo, hi) => (Array.isArray(v) && v.length === 2 && num(v[0], lo, hi) !== null && num(v[1], lo, hi) !== null && Number(v[0]) <= Number(v[1]) ? [num(v[0], lo, hi), num(v[1], lo, hi)] : null);
-    if ('carbs' in b.food) f.carbs = band(b.food.carbs, 2, 14);
+    if ('carbs' in b.food) f.carbs = band(b.food.carbs, 3, 14);
     if ('protein' in b.food) f.protein = band(b.food.protein, 0.8, 2.5);
     out.food = f;
   }
@@ -286,7 +286,8 @@ export async function foodView(db, personId, date, profile, prefs, tierKey = '')
       if (p.n < 3 || !(p.carbs > 0)) continue;
       logged++;
       const d = days[p.date];
-      const lo = (prefs.food.carbs || tierFor(Math.round((d?.run_min || 0) + (d?.xt_min || 0))).carbs)[0] * kg;
+      // Always the position stand's floor for that day, whatever custom band is set, so the referral can't be switched off.
+      const lo = tierFor(Math.round((d?.run_min || 0) + (d?.xt_min || 0))).carbs[0] * kg;
       if (p.carbs < lo * 0.85) low++;
     }
   }
@@ -421,7 +422,15 @@ export async function goalsView(db, personId, today, fitness) {
   for (const g of results) {
     const base = { id: g.id, kind: g.kind, title: g.title, event: g.event, target: g.target, target_date: g.target_date, why: g.why, status: g.status, priority: g.priority, created_at: g.created_at };
     if (g.target_date && isDate(g.target_date)) base.days_left = Math.round((Date.parse(g.target_date) - Date.parse(today)) / DAY);
-    if (g.kind === 'race') Object.assign(base, await raceProgress(db, personId, g, fitness, today), { mpw: avg4 });
+    if (g.kind === 'race') {
+      // A goal set before Kestrel had an estimate starts its progress bar at the first estimate it gets.
+      const est = (fitness?.estimates || []).find((e) => e.event === g.event)?.sec;
+      if (!(g.start_value > 0) && est) {
+        await db.prepare('UPDATE goals SET start_value = ? WHERE id = ? AND person_id = ?').bind(est, g.id, personId).run();
+        g.start_value = est;
+      }
+      Object.assign(base, await raceProgress(db, personId, g, fitness, today), { mpw: avg4 });
+    }
     if (g.kind === 'mileage') {
       base.current = avg4;
       base.pct = g.target > 0 ? clamp(Math.round((avg4 / g.target) * 100), 0, 100) : 0;

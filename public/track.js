@@ -243,7 +243,7 @@
       $('glForm').onsubmit = async (e)=>{
         e.preventDefault();
         const f = Object.fromEntries(new FormData(e.target));
-        const btn = e.submitter; btn.disabled = true;
+        const btn = e.submitter || e.target.querySelector('[type=submit]'); btn.disabled = true;
         try{
           await send('/api/goals', { id:g?.id, kind:x.kind, status:g?.status || 'active', progress:g?.pct, ...f, priority: !!f.priority });
           closeModal(); renderGoals($('tpGoalsView'));
@@ -327,9 +327,9 @@
     form.onsubmit = async (e)=>{
       e.preventDefault();
       const f = Object.fromEntries(new FormData(form));
-      e.submitter.disabled = true;
+      const btn = e.submitter || form.querySelector('[type=submit]'); btn.disabled = true;
       try{ await send('/api/xtrain', { ...f, sport:T.xtSport }); renderXtrain(el); }
-      catch(err){ $('xtMsg').textContent = err.message; e.submitter.disabled = false; }
+      catch(err){ $('xtMsg').textContent = err.message; btn.disabled = false; }
     };
     el.querySelectorAll('[data-xdel]').forEach(b=> b.onclick = async ()=>{
       if(!confirm('Delete this session?')) return;
@@ -472,8 +472,8 @@
     modal('Your fuel targets', `<p class="hint">By default Kestrel sets carbohydrate by how big your training day is (3-12 g per kg of body weight) and protein at 1.2-2.0 g/kg. If a dietitian gave you different numbers, put them here. Leave blank to use Kestrel's.</p>
       <form id="tgForm" class="stack">
         <div class="field-grid">
-          <label class="field"><span>Carbs from (g/kg)</span><input name="c0" type="number" step="0.5" min="2" max="14" value="${c[0]}"></label>
-          <label class="field"><span>Carbs to (g/kg)</span><input name="c1" type="number" step="0.5" min="2" max="14" value="${c[1]}"></label>
+          <label class="field"><span>Carbs from (g/kg)</span><input name="c0" type="number" step="0.5" min="3" max="14" value="${c[0]}"></label>
+          <label class="field"><span>Carbs to (g/kg)</span><input name="c1" type="number" step="0.5" min="3" max="14" value="${c[1]}"></label>
           <label class="field"><span>Protein from (g/kg)</span><input name="p0" type="number" step="0.1" min="0.8" max="2.5" value="${p[0]}"></label>
           <label class="field"><span>Protein to (g/kg)</span><input name="p1" type="number" step="0.1" min="0.8" max="2.5" value="${p[1]}"></label>
         </div>

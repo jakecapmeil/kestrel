@@ -231,7 +231,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
       ${metric
         ? field('Height (cm)', num('height_cm', 'e.g. 172', 'min="100" max="230"'))
         : field('Height', html`<div class="k-row2">${num('ft', 'ft', 'min="3" max="7"')}${num('in', 'in', 'min="0" max="11.9"')}</div>`)}
-      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', 'min="50" max="500"'), 'Optional. Sets your fueling targets (Train → Fuel). Only you see it.')}
+      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', metric ? 'min="25" max="220"' : 'min="55" max="485"'), 'Optional. Sets your fueling targets (Train → Fuel). Only you see it.')}
       ${field('Resting heart rate (bpm)', num('resting_hr', 'e.g. 52', 'min="30" max="120"'), 'Optional. Your watch shows this.')}
       ${field('Max heart rate (bpm)', num('max_hr', 'e.g. 195', 'min="120" max="230"'), 'Optional. Leave blank and we estimate it from your age.')}`,
     running: () => html`
@@ -315,16 +315,17 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
   if ($('kObBack')) $('kObBack').onclick = () => { grab(); renderOnboarding(step - 1, d, edit); };
   if ($('kObCancel')) $('kObCancel').onclick = () => { K.ob = null; openApp(); };
   const save = () => {
-    const n = (v) => (v === '' || v == null ? undefined : Number(v));
-    const height_cm = metric ? n(d.height_cm) : (d.ft || d.in) ? Math.round((Number(d.ft || 0) * 12 + Number(d.in || 0)) * 2.54) : undefined;
-    const weight_kg = d.weight ? (metric ? Number(d.weight) : Math.round(Number(d.weight) * 0.4536 * 10) / 10) : undefined;
+    // Blanks are null, not left out, so clearing a field in Edit runner profile clears it on the server too.
+    const n = (v) => (v === '' || v == null ? null : Number(v));
+    const height_cm = metric ? n(d.height_cm) : (d.ft || d.in) ? Math.round((Number(d.ft || 0) * 12 + Number(d.in || 0)) * 2.54) : null;
+    const weight_kg = d.weight ? (metric ? Number(d.weight) : Math.round(Number(d.weight) * 0.4536 * 10) / 10) : null;
     const prs = {};
     for (const ev of ['800', '1600', '3200', '5K']) if (d['pr' + ev]) prs[ev] = { time: d['pr' + ev].trim() };
     const keep = ['units', 'experience', 'goal', 'goal_event', 'goal_time', 'goal_date', 'goal_race_name', 'injuries', 'watch', 'why', 'blockers', 'long_goal', 'long_run_day', 'rest_day', 'run_time', 'likes', 'diet', 'fuel_notes', 'coach_tone'];
     const profile = { height_cm, weight_kg, weekly_miles: n(d.weekly_miles), birth_year: n(d.birth_year), longest_run_mi: n(d.longest_run_mi), days_per_week: n(d.days_per_week), resting_hr: n(d.resting_hr), max_hr: n(d.max_hr), xtrain: d.xtrain || [] };
     for (const k of keep) profile[k] = d[k] ?? '';
     return api('/api/me', { method: 'PUT', body: JSON.stringify({
-      name: d.name, sex: d.sex || '', class_year: d.class_year || '', weekly_miles: n(d.weekly_miles), ...(edit ? {} : { age_ok: true }), profile, ...(edit ? {} : { prs }),
+      name: d.name, sex: d.sex || '', class_year: d.class_year || '', weekly_miles: n(d.weekly_miles) ?? undefined, ...(edit ? {} : { age_ok: true }), profile, ...(edit ? {} : { prs }),
     }) });
   };
   const finishEdit = async () => {
