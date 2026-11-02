@@ -506,3 +506,23 @@ export async function goalFromProfile(db, personId, profile, fitness) {
   if (any) return null;
   return saveGoal(db, personId, { kind: 'race', event, target_time: profile.goal_time, target_date: profile.goal_date || '', why: profile.why || '', priority: true }, fitness);
 }
+
+// For the coach: who the runner is (the intake), what they're chasing, and their cross-training and fueling lately.
+export async function coachTracking(db, person, today) {
+  let settings = {};
+  const raw = person.settings ?? (await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first())?.settings;
+  try { settings = JSON.parse(raw || '{}'); } catch { /* bad JSON: no intake */ }
+  const { completed_at, ...runner } = settings.profile || {};
+  const { results: goals } = await db.prepare("SELECT title, kind, event, target, target_date, why, priority FROM goals WHERE person_id = ? AND status = 'active' ORDER BY priority DESC, created_at").bind(person.id).all();
+  const from = addDays(today, -13);
+  const { results: xt } = await db.prepare('SELECT date, sport, minutes, rpe, notes FROM xtrain WHERE person_id = ? AND date >= ? ORDER BY date').bind(person.id, from).all();
+  const { results: food } = await db.prepare(
+    'SELECT date, COUNT(*) AS entries, ROUND(SUM(COALESCE(carbs_g, 0))) AS carbs_g, ROUND(SUM(COALESCE(protein_g, 0))) AS protein_g FROM food_log WHERE person_id = ? AND date >= ? GROUP BY date ORDER BY date'
+  ).bind(person.id, addDays(today, -6)).all();
+  return {
+    runner,
+    goals: goals.map((g) => ({ ...g, main: !!g.priority, priority: undefined, target: g.kind === 'race' ? fmtTime(g.target, false) : g.target })),
+    cross_training_by_hand_last_14_days: xt.map((x) => ({ ...x, sport: sportLabel(x.sport) })),
+    fuel_last_7_days: food.length ? { weight_kg: runner.weight_kg || null, days: food } : null,
+  };
+}

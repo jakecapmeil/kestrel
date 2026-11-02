@@ -171,110 +171,263 @@ function renderNewPassword() {
   };
 }
 
-const OB_STEPS = ['About you', 'Body', 'Running', 'Personal records', 'Goals'];
+// The runner intake: who you are, where your running is, what you're working towards and why, the rest of your
+// training and how you like to be coached. The answers live in settings.profile and feed the plan builder and the
+// coach; a race goal also becomes a tracked goal (Train > Goals). Editing later (You > Profile) reopens the same steps.
+const OB_STEPS = [
+  { key: 'about', title: 'About you', sub: 'Let’s set up your profile so your coach can build the right plan.' },
+  { key: 'body', title: 'Body', sub: 'Helps with pace, effort, fueling and heart-rate zones. All of it is private.' },
+  { key: 'running', title: 'Your running', sub: 'Where you are today, so the plan starts at the right level.' },
+  { key: 'week', title: 'Your week', sub: 'Your plan fits around your life, not the other way round.' },
+  { key: 'prs', title: 'Personal records', sub: 'Your coach uses these to predict your races and set your paces.' },
+  { key: 'goals', title: 'Your goal', sub: 'What are you working towards? Kestrel tracks your progress in Train → Goals.' },
+  { key: 'coach', title: 'Your coach', sub: 'The rest of your training, fueling, and how you like to be coached.' },
+];
 const OB_YEAR = new Date().getFullYear();
+const DAYS = [['', 'No preference'], ['mon', 'Monday'], ['tue', 'Tuesday'], ['wed', 'Wednesday'], ['thu', 'Thursday'], ['fri', 'Friday'], ['sat', 'Saturday'], ['sun', 'Sunday']];
+const XT = [['bike', 'Cycling'], ['swim', 'Swimming'], ['strength', 'Strength'], ['mobility', 'Yoga or mobility'], ['elliptical', 'Elliptical'], ['pool_run', 'Pool running'], ['row', 'Rowing'], ['sport', 'Another sport']];
+const GOAL_EVENTS = ['800', '1600', '3200', '5K', '10K', 'Half marathon', 'Marathon'];
+const EVENT_M = { '800': 800, '1600': 1609.344, '3200': 3218.688, '5K': 5000, '10K': 10000, 'Half marathon': 21097.5, Marathon: 42195 };
+const GOAL_PICKS = [['Sub-3 marathon', 'Marathon', '2:59:59'], ['Sub-4 marathon', 'Marathon', '3:59:59'], ['Sub-1:30 half', 'Half marathon', '1:29:59'], ['Sub-20 5K', '5K', '19:59'], ['Sub-5 mile', '1600', '4:59']];
+const secOf = (t) => { const p = String(t || '').trim().split(':').map(Number); return p.length && p.every((n) => Number.isFinite(n)) ? p.reduce((a, n) => a * 60 + n, 0) : 0; };
+const clockOf = (s) => { s = Math.round(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: false })) {
+// The saved profile as form values (for editing it later).
+function obFromProfile() {
+  const p = K.me.profile || {};
+  const u = K.me.user;
+  const metric = p.units === 'km';
+  const d = { ...p, name: u.name, sex: u.sex, class_year: u.class_year, units: p.units || 'mi', age: true };
+  if (p.height_cm && !metric) { const inch = p.height_cm / 2.54; d.ft = String(Math.floor(inch / 12)); d.in = String(Math.round(inch % 12)); }
+  if (p.weight_kg) d.weight = String(metric ? p.weight_kg : Math.round(p.weight_kg / 0.4536));
+  d.xtrain = p.xtrain || [];
+  return d;
+}
+
+function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: false, xtrain: [] }), edit = false) {
   K.ob = d;
   const u = K.me.user;
   const metric = d.units === 'km';
+  const steps = edit ? OB_STEPS.filter((s) => s.key !== 'prs') : OB_STEPS;
+  const S = steps[step];
   const sel = (name, opts, cur) => html`<select class="k-input" name="${name}">${opts.map(([v, l]) => html`<option value="${v}" ${String(cur ?? '') === v ? 'selected' : ''}>${l}</option>`)}</select>`;
   const field = (label, inner, hint = '') => html`<label class="k-label">${label}</label>${inner}${hint ? html`<p class="k-small">${hint}</p>` : ''}`;
-  const num = (name, ph, extra = '') => html`<input class="k-input" name="${name}" type="number" inputmode="decimal" step="any" placeholder="${ph}" value="${d[name] ?? ''}" ${extra}>`;
+  const num = (name, ph, extra = '') => html`<input class="k-input" name="${name}" type="number" inputmode="decimal" step="any" placeholder="${ph}" value="${d[name] ?? ''}" ${raw(extra)}>`;
+  const cell = (label, inner) => html`<div>${field(label, inner)}</div>`;
   const time = (name, ph) => html`<input class="k-input mono" name="${name}" placeholder="${ph}" value="${d[name] ?? ''}" maxlength="10" inputmode="numeric" pattern="[0-9:.]*">`;
-  const panels = [
-    () => html`
-      ${K.cfg?.freeAi ? html`<div class="k-ai-fill"><label class="k-label" for="kObAi">Short on time? Describe yourself and let Kestrel AI fill this in.</label>
-        <textarea class="k-input" id="kObAi" rows="3" maxlength="2000" placeholder="e.g. I'm 5'10, 150 lb, run about 30 miles a week with a Garmin. 5K PR 19:38, mile 5:10. Want to run 18:30 at the Oct 25 5K."></textarea>
+  const text = (name, ph, n = 300) => html`<textarea class="k-input" name="${name}" maxlength="${n}" rows="2" placeholder="${ph}">${d[name] ?? ''}</textarea>`;
+  const panels = {
+    about: () => html`
+      ${K.cfg?.freeAi && !edit ? html`<div class="k-ai-fill"><label class="k-label" for="kObAi">Short on time? Describe yourself and let Kestrel AI fill this in.</label>
+        <textarea class="k-input" id="kObAi" rows="3" maxlength="2000" placeholder="e.g. I'm 5'10, 150 lb, run about 40 miles a week with a Garmin, long run Sundays. Half PR 1:31, 5K 19:38. I want to break 3 hours at the Boston Marathon on April 20 because my dad never did."></textarea>
         <button class="k-btn small" type="button" id="kObAiGo">Fill in with AI</button>
-        <p class="k-small">You can check and change everything before you finish. Or fill it in by hand below.</p></div><hr class="k-rule">` : ''}
+        <p class="k-small">You can check and change everything before you finish. Or fill it in by hand below.</p></div>` : ''}
       ${field('Your name (teammates see this)', html`<input class="k-input" name="name" value="${d.name ?? u.name}" maxlength="60" required>`)}
       ${field('Year you were born', num('birth_year', 'e.g. 2008', `min="1930" max="${OB_YEAR - 8}" required`), 'Used for heart-rate zones and age-graded comparisons.')}
       ${field('Sex (race models use it if you give it)', sel('sex', [['', 'Prefer not to say'], ['f', 'Female'], ['m', 'Male']], d.sex))}
       ${field('Grade', sel('class_year', [['', 'Not set'], ...['Middle school', 'Freshman', 'Sophomore', 'Junior', 'Senior', 'College', 'Adult'].map((x) => [x, x])], d.class_year))}
       ${field('Units', sel('units', [['mi', 'Miles, feet and pounds'], ['km', 'Kilometres and kilograms']], d.units))}`,
-    () => html`
+    body: () => html`
       ${metric
         ? field('Height (cm)', num('height_cm', 'e.g. 172', 'min="100" max="230"'))
         : field('Height', html`<div class="k-row2">${num('ft', 'ft', 'min="3" max="7"')}${num('in', 'in', 'min="0" max="11.9"')}</div>`)}
-      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', 'min="50" max="500"'), 'Optional. Used for calorie and pace estimates. Only you see it.')}
+      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', 'min="50" max="500"'), 'Optional. Sets your fueling targets (Train → Fuel). Only you see it.')}
       ${field('Resting heart rate (bpm)', num('resting_hr', 'e.g. 52', 'min="30" max="120"'), 'Optional. Your watch shows this.')}
       ${field('Max heart rate (bpm)', num('max_hr', 'e.g. 195', 'min="120" max="230"'), 'Optional. Leave blank and we estimate it from your age.')}`,
-    () => html`
+    running: () => html`
       ${field('How long have you been running?', sel('experience', [['', 'Choose one'], ['new', 'Just starting'], ['under1', 'Under a year'], ['1to3', '1 to 3 years'], ['3plus', 'More than 3 years']], d.experience))}
-      ${field('Miles you run in a typical week right now', num('weekly_miles', 'e.g. 25', 'min="0" max="150" required'), 'We start your plan on the level that fits.')}
+      ${field('Miles you run in a typical week right now', num('weekly_miles', 'e.g. 25', 'min="0" max="150" required'), 'Be honest, not hopeful: the plan starts here and builds safely.')}
       ${field('Longest run in the last month (miles)', num('longest_run_mi', 'e.g. 8', 'min="0" max="100"'))}
+      ${field('What do you run with?', sel('watch', [['', 'Choose one'], ['garmin', 'Garmin'], ['coros', 'COROS'], ['apple', 'Apple Watch'], ['suunto', 'Suunto'], ['polar', 'Polar'], ['wahoo', 'Wahoo'], ['strava', 'Strava only'], ['other', 'Something else'], ['none', 'Nothing yet']], d.watch), 'Right after setup we walk you through connecting it.')}
+      ${field('Injuries or limits we should know about', text('injuries', 'e.g. shin splints last spring, a sore left Achilles'))}`,
+    week: () => html`
       ${field('Days a week you want to run', sel('days_per_week', [['', 'Choose one'], ...[3, 4, 5, 6, 7].map((n) => [String(n), `${n} days`])], d.days_per_week))}
-      ${field('What do you train with?', sel('watch', [['', 'Choose one'], ['garmin', 'Garmin'], ['coros', 'COROS'], ['apple', 'Apple Watch'], ['strava', 'Strava only'], ['other', 'Something else'], ['none', 'Nothing yet']], d.watch), 'You can connect it in You → Settings.')}
-      ${field('Injuries or limits we should know about', html`<textarea class="k-input" name="injuries" maxlength="300" rows="2" placeholder="e.g. shin splints last spring">${d.injuries ?? ''}</textarea>`)}`,
-    () => html`<p class="k-small">Add the ones you have, skip the rest. Times look like 58.4, 2:15 or 19:38.</p>
+      ${field('Best day for your long run', sel('long_run_day', DAYS, d.long_run_day))}
+      ${field('A day you can never run', sel('rest_day', DAYS.map(([v, l]) => [v, v ? l : 'Any day works']), d.rest_day))}
+      ${field('When do you usually run?', sel('run_time', [['', 'Choose one'], ['morning', 'Mornings'], ['midday', 'Middle of the day'], ['evening', 'Afternoons or evenings'], ['varies', 'It changes']], d.run_time))}
+      ${field('Workouts you love (or hate)', text('likes', 'e.g. love hills and long runs, hate the track', 200))}`,
+    prs: () => html`<p class="k-small">Add the ones you have, skip the rest. Times look like 58.4, 2:15 or 19:38. Longer races go in You → Records after setup.</p>
       ${field('800 m', time('pr800', 'e.g. 2:20'))}
       ${field('1600 m (mile)', time('pr1600', 'e.g. 5:15'))}
       ${field('3200 m (2 mile)', time('pr3200', 'e.g. 11:30'))}
       ${field('5K', time('pr5K', 'e.g. 19:38'), 'Your best or current 5K sets all your training paces.')}`,
-    () => html`
-      ${field('What are you here for?', sel('goal', [['', 'Choose one'], ['race', 'Run a specific race'], ['faster', 'Get faster'], ['distance', 'Build up distance'], ['fitness', 'Stay fit and healthy'], ['weight', 'Lose weight'], ['team', 'Train with my team']], d.goal))}
-      ${field('Target event (if you have one)', sel('goal_event', [['', 'None yet'], ...['800', '1600', '3200', '5K', '10K', 'Half marathon', 'Marathon'].map((x) => [x, x])], d.goal_event))}
-      ${field('Goal time', time('goal_time', 'e.g. 18:30'))}
-      ${field('Race date', html`<input class="k-input" name="goal_date" type="date" value="${d.goal_date ?? ''}">`)}
-      <label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel. I agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>, and I understand Kestrel is not medical advice.</span></label>
-      <p class="k-small">Teammates see your name, colour, availability and RSVPs, plus your miles and recent activities unless you turn those off in You → Profile. Your health, body map and predictions are only yours.</p>`,
-  ];
-  const last = step === OB_STEPS.length - 1;
-  gate(html`<div class="k-auth narrow"><div class="k-steps" aria-label="Step ${step + 1} of ${OB_STEPS.length}">${OB_STEPS.map((n, i) => html`<i class="${i < step ? 'done' : i === step ? 'on' : ''}"></i>`)}</div>
-    <div class="k-kicker">Step ${step + 1} of ${OB_STEPS.length}</div>
-    <h2>${step === 0 ? 'Welcome to Kestrel' : OB_STEPS[step]}</h2>
-    <p class="k-small">${['Let’s set up your profile so your coach can build the right plan.', 'Helps with pace, effort and heart-rate zones. All of it is private.', 'Where you are today, so the plan starts at the right level.', 'Your coach uses these to predict your races.', 'Tell us what you’re working towards.'][step]}</p>
-    <form id="kOb" novalidate>${panels[step]()}
-      <div class="k-nav">${step ? html`<button class="k-btn ghost" type="button" id="kObBack">Back</button>` : ''}<button class="k-btn primary" style="flex:1">${last ? 'Finish' : 'Continue'}</button></div>
+    goals: () => {
+      const sec = secOf(d.goal_time); const m = EVENT_M[d.goal_event];
+      return html`
+      ${field('What are you here for?', sel('goal', [['', 'Choose one'], ['race', 'Run a specific race'], ['faster', 'Get faster'], ['distance', 'Build up distance'], ['fitness', 'Stay fit and healthy'], ['comeback', 'Come back from injury or a break'], ['team', 'Train with my team']], d.goal))}
+      <label class="k-label">Pick a common goal, or set your own</label>
+      <div class="k-chips">${GOAL_PICKS.map(([l, ev, t], i) => html`<button type="button" class="k-chip ${d.goal_event === ev && d.goal_time === t ? 'on' : ''}" data-pick="${i}">${l}</button>`)}</div>
+      <div class="k-row2">${cell('Race distance', sel('goal_event', [['', 'None yet'], ...GOAL_EVENTS.map((x) => [x, x])], d.goal_event))}${cell('Goal time', time('goal_time', 'e.g. 2:59:59'))}</div>
+      <p class="k-small" id="kObPace">${m && sec ? `That’s ${clockOf(sec / (m / 1609.344))}/mi (${clockOf(sec / (m / 1000))}/km) the whole way.` : ''}</p>
+      <div class="k-row2">${cell('Race name', html`<input class="k-input" name="goal_race_name" maxlength="80" placeholder="e.g. Boston" value="${d.goal_race_name ?? ''}">`)}${cell('Race date', html`<input class="k-input" name="goal_date" type="date" value="${d.goal_date ?? ''}">`)}</div>
+      ${field('Why does this goal matter to you?', text('why', 'e.g. My dad never broke 3 hours. I want to do it for both of us.'), 'Your coach brings this up when training gets hard.')}
+      ${field('What has gotten in the way before?', text('blockers', 'e.g. I get hurt when I add miles fast; school gets busy in March'))}
+      ${field('A bigger goal, a year or more away', html`<input class="k-input" name="long_goal" maxlength="200" placeholder="e.g. Run Boston, break 17 in the 5K" value="${d.long_goal ?? ''}">`)}`;
+    },
+    coach: () => html`
+      <label class="k-label">Other training you do</label>
+      <div class="k-chips">${XT.map(([v, l]) => html`<label class="k-chip k-tick"><input type="checkbox" name="xtrain" value="${v}" ${(d.xtrain || []).includes(v) ? 'checked' : ''}><span>${l}</span></label>`)}</div>
+      <p class="k-small">Log it in Train → Cross-train; your coach counts it in your load.</p>
+      ${field('How do you eat?', sel('diet', [['', 'Prefer not to say'], ['none', 'Anything'], ['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['gluten_free', 'Gluten-free'], ['other', 'Something else']], d.diet))}
+      ${field('Anything about fueling we should know?', html`<input class="k-input" name="fuel_notes" maxlength="200" placeholder="e.g. Gels upset my stomach; nut allergy" value="${d.fuel_notes ?? ''}">`)}
+      ${field('How should your coach talk to you?', sel('coach_tone', [['', 'Whatever works'], ['encouraging', 'Encouraging and positive'], ['direct', 'Straight to the point'], ['detailed', 'The details and the why']], d.coach_tone))}
+      ${edit ? '' : html`<label class="k-check"><input type="checkbox" name="age" ${d.age ? 'checked' : ''} required><span>I am 13 or older. If I'm under 18, a parent or guardian knows I'm using Kestrel. I agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>, and I understand Kestrel is not medical advice.</span></label>
+      <p class="k-small">Teammates see your name, colour, availability and RSVPs, plus your miles and recent activities unless you turn those off in You → Profile. Your health, goals, food log and predictions are only yours.</p>`}`,
+  };
+  const last = step === steps.length - 1;
+  gate(html`<div class="k-auth narrow"><div class="k-steps" aria-label="Step ${step + 1} of ${steps.length}">${steps.map((n, i) => html`<i class="${i < step ? 'done' : i === step ? 'on' : ''}"></i>`)}</div>
+    <div class="k-kicker">${edit ? 'Runner profile · ' : ''}Step ${step + 1} of ${steps.length}</div>
+    <h2>${step === 0 && !edit ? 'Welcome to Kestrel' : S.title}</h2>
+    <p class="k-small">${S.sub}</p>
+    <form id="kOb" novalidate>${panels[S.key]()}
+      <div class="k-nav">${step ? html`<button class="k-btn ghost" type="button" id="kObBack">Back</button>` : edit ? html`<button class="k-btn ghost" type="button" id="kObCancel">Cancel</button>` : ''}<button class="k-btn primary" style="flex:1">${last ? (edit ? 'Save' : 'Finish') : 'Continue'}</button></div>
+      ${edit && !last ? html`<button class="k-link" type="button" id="kObSaveNow" style="margin-top:10px">Save and close</button>` : ''}
     </form></div>`);
   const grab = () => {
-    const f = form($('kOb'));
+    const el = $('kOb');
+    const f = form(el);
     for (const [k, v] of Object.entries(f)) d[k] = v;
-    if (step === 4) d.age = !!f.age;
+    if (S.key === 'coach') { d.xtrain = [...el.querySelectorAll('[name=xtrain]:checked')].map((c) => c.value); if (!edit) d.age = !!f.age; }
   };
   if ($('kObAiGo')) $('kObAiGo').onclick = (e) => attempt(async () => {
     const text = $('kObAi').value;
     grab();
     const { fields: x } = await api('/api/me/parse', { method: 'POST', body: JSON.stringify({ text }) });
     let n = 0;
-    const put = (k, v) => { if (v !== undefined && v !== null && v !== '') { d[k] = String(v); n++; } };
+    const put = (k, v) => { if (v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)) { d[k] = Array.isArray(v) ? v : String(v); n++; } };
     if (x.height_cm) {
       if (metric) put('height_cm', Math.round(x.height_cm));
       else { const inch = x.height_cm / 2.54; d.ft = String(Math.floor(inch / 12)); d.in = String(Math.round(inch % 12)); n++; }
     }
     if (x.weight_kg) put('weight', metric ? Math.round(x.weight_kg) : Math.round(x.weight_kg / 0.4536));
-    for (const k of ['birth_year', 'sex', 'experience', 'weekly_miles', 'longest_run_mi', 'days_per_week', 'resting_hr', 'max_hr', 'watch', 'injuries', 'goal', 'goal_event', 'goal_time', 'goal_date']) put(k, x[k]);
+    for (const k of ['birth_year', 'sex', 'experience', 'weekly_miles', 'longest_run_mi', 'days_per_week', 'resting_hr', 'max_hr', 'watch', 'injuries', 'goal', 'goal_event', 'goal_time', 'goal_date', 'goal_race_name', 'why', 'long_goal', 'long_run_day', 'xtrain']) put(k, x[k]);
     for (const [ev, t] of Object.entries(x.prs || {})) put('pr' + ev, t);
     if (!n) { toast('I couldn’t find anything to fill in. Add a few details and try again.', true); return; }
     toast(`Filled in ${n} ${n === 1 ? 'field' : 'fields'}. Check each step, then finish.`);
-    renderOnboarding(step, d);
+    renderOnboarding(step, d, edit);
   }, e.currentTarget);
-  if ($('kObBack')) $('kObBack').onclick = () => { grab(); renderOnboarding(step - 1, d); };
-  $('kOb').onsubmit = (e) => {
-    e.preventDefault();
-    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
-    grab();
-    if (!last) { renderOnboarding(step + 1, d); return; }
-    if (!d.age) { toast('Please confirm your age to continue.', true); return; }
+  document.querySelectorAll('#kOb [data-pick]').forEach((b) => { b.onclick = () => { grab(); const [, ev, t] = GOAL_PICKS[+b.dataset.pick]; d.goal = 'race'; d.goal_event = ev; d.goal_time = t; renderOnboarding(step, d, edit); }; });
+  const paceEl = $('kObPace');
+  if (paceEl) $('kOb').oninput = () => {
+    const f = form($('kOb')); const sec = secOf(f.goal_time); const m = EVENT_M[f.goal_event];
+    paceEl.textContent = m && sec ? `That’s ${clockOf(sec / (m / 1609.344))}/mi (${clockOf(sec / (m / 1000))}/km) the whole way.` : '';
+  };
+  if ($('kObBack')) $('kObBack').onclick = () => { grab(); renderOnboarding(step - 1, d, edit); };
+  if ($('kObCancel')) $('kObCancel').onclick = () => { K.ob = null; openApp(); };
+  const save = () => {
     const n = (v) => (v === '' || v == null ? undefined : Number(v));
     const height_cm = metric ? n(d.height_cm) : (d.ft || d.in) ? Math.round((Number(d.ft || 0) * 12 + Number(d.in || 0)) * 2.54) : undefined;
     const weight_kg = d.weight ? (metric ? Number(d.weight) : Math.round(Number(d.weight) * 0.4536 * 10) / 10) : undefined;
     const prs = {};
     for (const ev of ['800', '1600', '3200', '5K']) if (d['pr' + ev]) prs[ev] = { time: d['pr' + ev].trim() };
+    const keep = ['units', 'experience', 'goal', 'goal_event', 'goal_time', 'goal_date', 'goal_race_name', 'injuries', 'watch', 'why', 'blockers', 'long_goal', 'long_run_day', 'rest_day', 'run_time', 'likes', 'diet', 'fuel_notes', 'coach_tone'];
+    const profile = { height_cm, weight_kg, weekly_miles: n(d.weekly_miles), birth_year: n(d.birth_year), longest_run_mi: n(d.longest_run_mi), days_per_week: n(d.days_per_week), resting_hr: n(d.resting_hr), max_hr: n(d.max_hr), xtrain: d.xtrain || [] };
+    for (const k of keep) profile[k] = d[k] ?? '';
+    return api('/api/me', { method: 'PUT', body: JSON.stringify({
+      name: d.name, sex: d.sex || '', class_year: d.class_year || '', weekly_miles: n(d.weekly_miles), ...(edit ? {} : { age_ok: true }), profile, ...(edit ? {} : { prs }),
+    }) });
+  };
+  const finishEdit = async () => {
+    K.me = await save();
+    await api('/api/me/goal-from-profile', { method: 'POST', body: '{}' }).catch(() => null);
+    K.ob = null;
+    toast('Runner profile saved.');
+    openApp();
+    await window.kestrelReload();
+  };
+  if ($('kObSaveNow')) $('kObSaveNow').onclick = (e) => { grab(); attempt(finishEdit, e.currentTarget); };
+  $('kOb').onsubmit = (e) => {
+    e.preventDefault();
+    if (!e.target.checkValidity()) { e.target.reportValidity(); return; }
+    grab();
+    if (!last) { renderOnboarding(step + 1, d, edit); return; }
+    if (edit) { attempt(finishEdit, e.submitter); return; }
+    if (!d.age) { toast('Please confirm your age to continue.', true); return; }
     attempt(async () => {
-      K.me = await api('/api/me', { method: 'PUT', body: JSON.stringify({
-        name: d.name, sex: d.sex || '', class_year: d.class_year || '', weekly_miles: n(d.weekly_miles), age_ok: true,
-        profile: { height_cm, weight_kg, birth_year: n(d.birth_year), units: d.units, experience: d.experience, longest_run_mi: n(d.longest_run_mi),
-          days_per_week: n(d.days_per_week), goal: d.goal, goal_event: d.goal_event, goal_time: d.goal_time, goal_date: d.goal_date,
-          injuries: d.injuries, resting_hr: n(d.resting_hr), max_hr: n(d.max_hr), watch: d.watch },
-        prs,
-      }) });
+      K.me = await save();
+      const watch = d.watch;
       K.ob = null;
+      await api('/api/me/goal-from-profile', { method: 'POST', body: '{}' }).catch(() => null);
+      if (watch && watch !== 'none') { renderWatchSetup(watch, false); return; }
       await finishSetup();
     }, e.submitter);
   };
 }
+
+// You > Profile: edit the intake later, starting at a step (1 = Body, for "Add your weight").
+window.kestrelEditRunner = (step = 0) => { renderOnboarding(step, obFromProfile(), true); };
+
+// ---------- connecting a watch through intervals.icu
+
+const BRAND = { garmin: 'Garmin', coros: 'COROS', suunto: 'Suunto', polar: 'Polar', wahoo: 'Wahoo' };
+const ARROW = raw('<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2"/></svg>');
+
+// The steps for one kind of watch. intervals.icu is the bridge: the watch brand sends it runs officially, Kestrel reads
+// them with the runner's own API key (encrypted at rest), and writes the plan back as workouts named "Kestrel:".
+function watchSteps(watch) {
+  const brand = BRAND[watch];
+  const account = html`<li><b>Make a free intervals.icu account.</b> Sign up with your email or Google. It’s a free training site that most watches send runs to officially, and it’s how Kestrel gets yours. <a href="https://intervals.icu" target="_blank" rel="noopener">Open intervals.icu ${ARROW}</a></li>`;
+  const keys = html`<li><b>Copy two things from intervals.icu.</b> Go to <b>Settings</b>, scroll to the bottom to <b>Developer Settings</b>. Copy your <b>Athlete ID</b> (it starts with <b>i</b>, like i123456) and your <b>API key</b> (generate one if there isn’t one yet). Treat the key like a password: it only goes in the box below.</li>`;
+  const paste = html`<li><b>Paste them below and tap Connect.</b> Kestrel checks them straight away and pulls in your recent runs.</li>`;
+  if (brand) return html`<ol class="k-wsteps">${account}
+    <li><b>Link your ${brand} to intervals.icu.</b> In intervals.icu go to <b>Settings → Connections</b>, tap <b>${brand}</b> and log in with your ${brand} account. ${watch === 'garmin' ? html`When Garmin asks, allow <b>both</b> permissions (activities and training/workouts) so your Kestrel plan can be sent to your watch.` : 'Allow it to share your activities and workouts.'} Then use the option on that card to <b>download your older activities</b>, so your history comes across too.</li>
+    ${keys}${paste}</ol>`;
+  if (watch === 'apple') return html`<ol class="k-wsteps">${account}
+    <li><b>Send your Apple Watch runs to intervals.icu.</b> Apple Health doesn’t connect to intervals.icu by itself, so you need an iPhone app that does it. <b>HealthFit</b> and <b>RunGap</b> are the ones most runners use: install one, connect it to intervals.icu, and turn on automatic upload for runs (and any cross-training).</li>
+    ${keys}${paste}</ol>`;
+  if (watch === 'strava') return html`<div class="k-note"><b>Strava on its own won’t work.</b> Strava doesn’t let intervals.icu pass your runs on to other apps, so Kestrel would get nothing. But whatever watch or phone app sends your runs to Strava can almost always send them to intervals.icu too (Garmin, COROS, Suunto, Polar, Wahoo, or HealthFit for Apple Watch). Pick your watch above, or log runs by hand in Train → Log.</div>`;
+  return html`<div class="k-note">Most watches can send runs to intervals.icu (Settings → Connections there lists them). If yours can, the steps are: link it in intervals.icu, then paste your Athlete ID and API key below. If not, log runs by hand in Train → Log, or record them with your phone on the Record tab.</div><ol class="k-wsteps">${keys}${paste}</ol>`;
+}
+
+function renderWatchSetup(watch, fromApp) {
+  const brands = [['garmin', 'Garmin'], ['coros', 'COROS'], ['apple', 'Apple Watch'], ['suunto', 'Suunto'], ['polar', 'Polar'], ['wahoo', 'Wahoo'], ['strava', 'Strava'], ['other', 'Other']];
+  const canConnect = watch !== 'strava';
+  gate(html`<div class="k-auth narrow k-watch">
+    <div class="k-kicker">${fromApp ? 'Watch sync' : 'Last step'}</div>
+    <h2>Connect your watch</h2>
+    <p class="k-small">About 5 minutes, once. After that every run (and ride, swim or lift) lands in Kestrel on its own: your log, Fitness States, goals and cross-training fill themselves in.</p>
+    <div class="k-chips" role="radiogroup" aria-label="Your watch">${brands.map(([v, l]) => html`<button type="button" class="k-chip ${v === watch ? 'on' : ''}" data-watch="${v}" role="radio" aria-checked="${v === watch}">${l}</button>`)}</div>
+    ${watchSteps(watch)}
+    ${canConnect ? html`<form id="kWForm" class="k-wform">
+      <label class="k-label" for="kWId">Athlete ID</label><input class="k-input mono" id="kWId" name="id" placeholder="i123456" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <label class="k-label" for="kWKey">API key</label><input class="k-input mono" id="kWKey" name="key" type="password" placeholder="Paste key" autocomplete="off" required>
+      <p class="k-small" id="kWMsg" role="status"></p>
+      <button class="k-btn primary wide">Connect</button>
+    </form>` : ''}
+    <details class="k-help"><summary>Something not working?</summary><ul class="k-list">
+      <li><b>“Athlete id looks like i12345”</b>: copy it from Developer Settings in intervals.icu, including the i.</li>
+      <li><b>Connected but no runs?</b> Check intervals.icu shows your runs first. If it doesn’t, unlink and relink your watch there (for Garmin, also remove intervals.icu in Garmin Connect → Settings → Connected Apps, then connect again from intervals.icu).</li>
+      <li><b>Plan not showing on your watch?</b> In intervals.icu → Settings → Connections, turn on uploading planned workouts to your watch.</li>
+      <li><b>Is it safe?</b> Kestrel stores your key encrypted, only reads your activities and only writes workouts named “Kestrel:”. Disconnect any time in You → Watch and data.</li>
+    </ul></details>
+    <div class="k-nav"><button class="k-btn ghost" type="button" id="kWSkip" style="flex:1">${fromApp ? 'Back to Kestrel' : 'I’ll do this later'}</button></div>
+    ${fromApp ? '' : html`<p class="k-small">You can connect any time in You → Watch and data.</p>`}
+  </div>`);
+  document.querySelectorAll('[data-watch]').forEach((b) => { b.onclick = () => renderWatchSetup(b.dataset.watch, fromApp); });
+  const done = async () => { if (fromApp) { openApp(); await window.kestrelReload(); } else await finishSetup(); };
+  $('kWSkip').onclick = () => attempt(done);
+  if (!canConnect) return;
+  $('kWId').oninput = (e) => { const v = e.target.value.trim(); if (/^\d+$/.test(v)) e.target.value = 'i' + v; };
+  $('kWForm').onsubmit = (e) => {
+    e.preventDefault();
+    const f = form(e.target);
+    const msg = $('kWMsg');
+    msg.className = 'k-small'; msg.textContent = 'Checking with intervals.icu…';
+    attempt(async () => {
+      try {
+        const r = await api('/api/intervals/connect', { method: 'POST', body: JSON.stringify({ athleteId: f.id.trim(), apiKey: f.key.trim() }) });
+        msg.textContent = `Connected${r.name ? ` to ${r.name}` : ''}. Pulling in your recent runs…`;
+        const s = await api('/api/intervals/sync', { method: 'POST', body: '{}' }).catch(() => null);
+        api('/api/intervals/import', { method: 'POST', body: '{}' }).catch(() => null);
+        msg.className = 'k-small k-good';
+        msg.textContent = `Connected.${s?.imported != null ? ` ${s.imported} recent ${s.imported === 1 ? 'activity' : 'activities'} in.` : ''} Your older history keeps importing in the background.${s?.note ? ' ' + s.note : ''}`;
+        toast('Watch connected.');
+        setTimeout(() => attempt(done), 1600);
+      } catch (err) { msg.className = 'k-small k-bad'; msg.textContent = err.message; }
+    }, e.submitter);
+  };
+}
+window.kestrelWatchSetup = (watch) => renderWatchSetup(watch || K.me?.profile?.watch || 'garmin', true);
 
 function renderTeamStart(back = false) {
   gate(html`<div class="k-start">

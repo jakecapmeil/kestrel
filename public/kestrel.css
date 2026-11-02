@@ -154,6 +154,20 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-ai-fill .k-label{margin:0;}
 .k-ai-fill .k-btn{justify-self:start;}
 .k-rule{display:none;}
+.k-chip.on{background:var(--accent);color:var(--on-accent);}
+.k-tick{display:inline-flex;align-items:center;gap:6px;}
+.k-tick input{accent-color:var(--accent);margin:0;}
+.k-tick:has(input:checked){background:var(--accent-subtle);box-shadow:inset 0 0 0 1.5px var(--accent);}
+.k-wsteps{margin:var(--s-4) 0;padding-left:22px;display:grid;gap:12px;font-size:14.5px;line-height:1.5;}
+.k-wsteps li::marker{font-weight:700;color:var(--accent);}
+.k-wsteps a{font-weight:600;white-space:nowrap;}
+.k-note{margin:var(--s-4) 0;padding:12px 14px;border-radius:var(--r-md,12px);background:var(--surface-2);font-size:14px;line-height:1.5;}
+.k-wform{display:grid;gap:4px;padding:var(--s-3);border-radius:var(--r-lg,14px);border:1px solid var(--line);}
+.k-wform .k-label{margin-top:6px;}
+.k-help{margin-top:var(--s-4);font-size:14px;}
+.k-help summary{cursor:pointer;font-weight:600;}
+.k-help .k-list{margin-top:8px;}
+.k-bad{color:var(--danger);}
 
 /* ---------- roster, plan builder */
 .k-table{display:flex;flex-direction:column;margin-top:var(--s-3);}

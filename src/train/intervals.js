@@ -76,7 +76,7 @@ const athletePath = (id) => `/athlete/${encodeURIComponent(id)}`;
 export async function connect(env, personId, athleteId, apiKey) {
   const id = String(athleteId || '').trim();
   const key = String(apiKey || '').trim();
-  if (!/^i?\d{1,12}$/.test(id)) throw new IntervalsError('Athlete id looks like i12345 (Settings on intervals.icu, under your name).');
+  if (!/^i?\d{1,12}$/.test(id)) throw new IntervalsError('Athlete ID looks like i123456: copy it from intervals.icu → Settings → Developer Settings (bottom of the page).');
   if (key.length < 10 || key.length > 200) throw new IntervalsError('Paste the API key from intervals.icu Settings → Developer Settings.');
   const me = await icu(key, athletePath(id), env);
   const person = await env.DB.prepare('SELECT id FROM people WHERE id = ?').bind(personId).first();

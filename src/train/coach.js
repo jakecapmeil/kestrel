@@ -3,6 +3,7 @@
 // per-person MCP endpoint (/mcp/coach/<coach_token>). The assistant only labels each run and writes a short
 // note; the numbers (effort, load, plan match) are worked out here so every run is scored the same way no
 // matter which AI sent it. The built-in Kestrel AI (gemini.js) uses the same scoring.
+import { coachTracking } from './tracking.js';
 import { plansOf, rankOf } from './plans.js';
 import { logTools, callLogTool, LogError, getDays, compactDays, fiveKFor, getPrs, PR_EVENTS } from './log.js';
 import { getFitness } from './fitness.js';
@@ -385,6 +386,7 @@ export async function getCoachContext(db, person) {
     fitness: compactFitness(await getFitness(db, person.id, today)),
     body: await bodyStatus(db, person.id),
     training_log_last_14_days: compactDays(await getDays(db, person.id, addDays(today, -13), today)),
+    ...(await coachTracking(db, person, today).catch(() => ({}))),
     rubric: COACH_RUBRIC,
   };
 }

@@ -102,6 +102,7 @@ function cleanProfile(p) {
     birth_year: num(p.birth_year, 1930, new Date().getFullYear() - 8),
     units: p.units === 'km' ? 'km' : 'mi',
     experience: PROFILE_EXPERIENCE.includes(p.experience) ? p.experience : '',
+    weekly_miles: num(p.weekly_miles, 0, 200),
     longest_run_mi: num(p.longest_run_mi, 0, 100),
     days_per_week: num(p.days_per_week, 1, 7),
     goal: PROFILE_GOALS.includes(p.goal) ? p.goal : '',

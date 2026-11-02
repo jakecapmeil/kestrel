@@ -1776,6 +1776,9 @@
   .fu-legend{display:flex;justify-content:space-between;font-size:var(--fs-caption);color:var(--ink-soft);margin-top:4px;font-variant-numeric:tabular-nums;}
   .fu-noweight{margin-top:var(--sp-3);padding:var(--sp-3);border-radius:var(--r-control);background:var(--bg);display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
   .fu-flag{border-color:var(--int-3);background:var(--int-3-bg);}
+  .rp-list{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px var(--sp-3);margin:0 0 var(--sp-3);font-size:var(--fs-footnote);}
+  .rp-list dt{color:var(--ink-soft);font-weight:600;}
+  .rp-list dd{margin:0;}
   .fu-flag p{margin:var(--sp-2) 0 0;font-size:var(--fs-footnote);line-height:1.5;}
 </style>
 <link rel="stylesheet" href="/ds/tokens.css">
@@ -2428,6 +2431,7 @@
           </div>
         </div>
       </div>
+      <div class="card" id="runnerCard" style="display:none;"></div>
     </div>
     <div id="youRecordsView" class="you-stack" style="display:none;">
       <div class="hint" id="recHint">Reload and pick your name to see your records.</div>
@@ -2601,15 +2605,16 @@
             <div class="setup-num">2</div>
             <div class="setup-body">
               <b>Connect your watch there</b>
-              <p>On intervals.icu go to <b>Settings → Connections</b> and connect <b>Garmin</b> (or COROS). Then use the option on that connection to <b>import your old activities</b>, so your full history comes across, not just new runs.</p>
-              <p class="hint">Don't connect Strava there instead: Strava doesn't let intervals.icu share your runs, so Kestrel can't see them.</p>
+              <p>On intervals.icu go to <b>Settings → Connections</b> and connect your watch: <b>Garmin, COROS, Suunto, Polar or Wahoo</b>. For Garmin, allow <b>both</b> permissions (activities and training) so your plan can reach your watch. Then use the option on that connection to <b>download your older activities</b>, so your full history comes across.</p>
+              <p class="hint"><b>Apple Watch:</b> use an iPhone app such as HealthFit or RunGap to upload to intervals.icu. <b>Don't use Strava</b> as the link: Strava doesn't let intervals.icu share your runs, so Kestrel can't see them.</p>
+              <button type="button" class="ghost sm-btn" id="watchGuideBtn">Step-by-step guide for my watch</button>
             </div>
           </li>
           <li data-step="3">
             <div class="setup-num">3</div>
             <div class="setup-body">
               <b>Copy your athlete id and API key</b>
-              <p>Still in intervals.icu <b>Settings</b>: your <b>athlete id</b> is under your name (looks like i12345). Scroll to <b>Developer Settings</b> for the <b>API key</b>.</p>
+              <p>In intervals.icu <b>Settings</b>, scroll to the bottom to <b>Developer Settings</b>. Copy the <b>Athlete ID</b> (starts with <b>i</b>, like i123456) and the <b>API key</b>. Treat the key like a password: it only goes here, and Kestrel stores it encrypted.</p>
               <div id="icuSetup" class="stack">
                 <div class="field-grid">
                   <label class="field"><span>Athlete id</span><input type="text" id="icuAthlete" placeholder="i12345" maxlength="14" autocomplete="off"></label>
@@ -3900,6 +3905,7 @@ function renderYou(){
   $('youTitle').textContent = p ? (p.first_name || p.name) : activePersonId === COACH_ID ? 'Coach' : 'Guest';
   if(youView === 'records') window.kRecords?.render();
   else if(youView !== 'body') renderPersonal();
+  if(youView === 'profile') window.kTrack?.runnerCard($('runnerCard'));
   else renderBodyMap();
 }
 
@@ -4497,7 +4503,7 @@ SETUP. Do these one at a time, in plain friendly language, and wait for me after
 
 3. LINK MY WATCH THERE. Have me go to intervals.icu Settings > Connections and connect Garmin (or COROS) and log in there. Then have me use the option on that connection to import my old activities, so my whole history comes across, not just new runs. Warn me not to connect Strava there instead: Strava doesn't let intervals.icu share runs, so Kestrel would get nothing.
 
-4. CONNECT TO KESTREL. Have me open intervals.icu Settings. My athlete id is under my name (it looks like i12345). My API key is under Developer Settings. Ask me to paste both here, then call connect_watch with them. If it fails, read me the error and help me fix it (usually a copy-paste problem or the wrong id).
+4. CONNECT TO KESTREL. Have me open intervals.icu Settings and scroll to Developer Settings at the bottom. My Athlete ID is there (it starts with i, like i123456), and so is my API key. Remind me the key is like a password. Ask me to paste both here, then call connect_watch with them. If it fails, read me the error and help me fix it (usually a copy-paste problem or the wrong id).
 
 5. IMPORT HISTORY. Call sync_watch with full_history: true and keep calling it until done is true. Tell me roughly how far back my runs go. If it says activities came from Strava, explain step 3 again.
 
@@ -4976,6 +4982,7 @@ function wireUI(){
     setTimeout(()=>{ btn.textContent = orig; }, 1200);
   });
 
+  $('watchGuideBtn').addEventListener('click', ()=> window.kestrelWatchSetup?.());
   $('tpViews').addEventListener('click', (e)=>{ const b = e.target.closest('[data-tview]'); if(b) setTrainingView(b.dataset.tview); });
   $('tlPrev').addEventListener('click', ()=>{ tlMonthIdx--; if(tlMonthIdx < 0){ tlMonthIdx = 11; tlYear--; } tlSelected = null; renderTrainingLog(); });
   $('tlNext').addEventListener('click', ()=>{ tlMonthIdx++; if(tlMonthIdx > 11){ tlMonthIdx = 0; tlYear++; } tlSelected = null; renderTrainingLog(); });

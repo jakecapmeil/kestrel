@@ -269,7 +269,9 @@
     T.xt = d;
     const w = d.this_week;
     const top = Math.max(1, ...d.weeks.map(x=> x.run_min + x.xt_min));
-    const sports = d.sports;
+    // The activities the runner said they do at setup come first.
+    const mine = window.KESTREL?.me?.profile?.xtrain || [];
+    const sports = [...d.sports].sort((a, b)=> (mine.includes(b.key) ? 1 : 0) - (mine.includes(a.key) ? 1 : 0));
     if(!T.xtSport || !sports.some(s=> s.key === T.xtSport)) T.xtSport = sports[0].key;
     const byDate = {};
     d.entries.forEach(e=> (byDate[e.date] ||= []).push(e));
@@ -487,7 +489,36 @@
     });
   }
 
+  // You > Profile: what the runner told Kestrel at setup, with a way back into it.
+  function runnerCard(el){
+    if(!el) return;
+    const me = window.KESTREL?.me;
+    if(!me || !isRealPerson()){ el.style.display = 'none'; return; }
+    const p = me.profile || {};
+    const L = {
+      experience:{ new:'Just starting', under1:'Under a year', '1to3':'1 to 3 years', '3plus':'More than 3 years' },
+      goal:{ race:'Run a specific race', faster:'Get faster', distance:'Build up distance', fitness:'Stay fit and healthy', comeback:'Come back from injury or a break', weight:'Get healthier', team:'Train with my team' },
+      day:{ mon:'Monday', tue:'Tuesday', wed:'Wednesday', thu:'Thursday', fri:'Friday', sat:'Saturday', sun:'Sunday' },
+      watch:{ garmin:'Garmin', coros:'COROS', apple:'Apple Watch', suunto:'Suunto', polar:'Polar', wahoo:'Wahoo', strava:'Strava only', other:'Something else', none:'Nothing yet' },
+      tone:{ encouraging:'Encouraging', direct:'Straight to the point', detailed:'The details and the why' },
+    };
+    const rows = [
+      ['Goal', [p.goal_event && p.goal_time ? `${p.goal_event} in ${p.goal_time}` : L.goal[p.goal], p.goal_race_name, p.goal_date].filter(Boolean).join(' · ')],
+      ['Why', p.why], ['Bigger goal', p.long_goal], ['What gets in the way', p.blockers],
+      ['Running', [L.experience[p.experience], p.weekly_miles != null ? `${p.weekly_miles} mi a week at setup` : '', p.days_per_week ? `${p.days_per_week} days a week` : ''].filter(Boolean).join(' · ')],
+      ['Week', [p.long_run_day ? `Long run ${L.day[p.long_run_day]}` : '', p.rest_day ? `never ${L.day[p.rest_day]}` : ''].filter(Boolean).join(' · ')],
+      ['Watch', L.watch[p.watch]], ['Injuries', p.injuries], ['Coaching style', L.tone[p.coach_tone]],
+    ].filter(r=> r[1]);
+    el.style.display = '';
+    el.innerHTML = `<div class="section-head"><div><div class="card-title">Runner profile</div><div class="hint">What your coach knows about you: goals, your week, injuries, fueling and how you like to be coached.</div></div></div>
+      ${rows.length ? `<dl class="rp-list">${rows.map(([k, v])=> `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '<p class="hint">Not filled in yet.</p>'}
+      <div class="cluster"><button type="button" id="rpEdit">Edit runner profile</button><button type="button" class="ghost" id="rpTabs">Customize Train tabs</button></div>`;
+    $('rpEdit').onclick = ()=> window.kestrelEditRunner?.(0);
+    $('rpTabs').onclick = customizeTabs;
+  }
+
   window.kTrack = {
+    runnerCard,
     paintTabs, visibleTabs, loadPrefs, customizeTabs,
     goals: renderGoals, xtrain: renderXtrain, food: renderFood,
     reset(){ Object.assign(T, { prefs:null, meta:null, foodDate:null, foodTier:'', recent:null, goals:null, xt:null }); },
