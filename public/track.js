@@ -249,13 +249,13 @@
         const btn = e.submitter || e.target.querySelector('[type=submit]'); btn.disabled = true;
         try{
           await send('/api/goals', { id:g?.id, kind:x.kind, status:g?.status || 'active', progress:g?.pct, ...f, priority: !!f.priority });
-          closeModal(); renderGoals($('tpGoalsView'));
+          closeModal(); renderGoals($('tpGoalsView')); window.kvRefresh?.();
         }catch(err){ alert(err.message); btn.disabled = false; }
       };
       if($('glDelete')) $('glDelete').onclick = async ()=>{
         if(!confirm('Delete this goal?')) return;
         await send('/api/goals/delete', { id:g.id }).catch(err=> alert(err.message));
-        closeModal(); renderGoals($('tpGoalsView'));
+        closeModal(); renderGoals($('tpGoalsView')); window.kvRefresh?.();
       };
     };
     modal(g ? 'Edit goal' : 'New goal', '', draw);
@@ -522,7 +522,7 @@
 
   window.kTrack = {
     runnerCard,
-    paintTabs, visibleTabs, loadPrefs, customizeTabs,
+    paintTabs, visibleTabs, loadPrefs, customizeTabs, editGoal, GOAL_TEMPLATES,
     goals: renderGoals, xtrain: renderXtrain, food: renderFood,
     reset(){ Object.assign(T, { prefs:null, meta:null, foodDate:null, foodTier:'', recent:null, goals:null, xt:null }); },
   };

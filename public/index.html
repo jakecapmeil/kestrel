@@ -1785,6 +1785,7 @@
 <link rel="stylesheet" href="/ds/base.css">
 <link rel="stylesheet" href="/ds/components.css">
 <link rel="stylesheet" href="/ds/shell.css">
+<link rel="stylesheet" href="/ds/views.css">
 <link rel="stylesheet" href="/kestrel.css">
 <link rel="stylesheet" href="/ds/motion.css">
 </head>
@@ -1826,6 +1827,9 @@
     <div class="nav-titles"><button type="button" class="nav-back" id="navBack" hidden>‹ Back</button><h2 class="page-title" id="navTitle"></h2><div class="nav-sub" id="navSub"></div></div>
     <div class="seg" id="navSegs" role="tablist" aria-label="Views"></div>
   </div>
+
+  <!-- The redesigned screens draw here (views.js, views2.js). -->
+  <div id="pageV" style="display:none;"></div>
 
   <div id="pageToday" style="display:none;">
     <div class="td-grid" id="tdGrid">
@@ -2835,7 +2839,7 @@ let selectedDate = null;
 let editMode = false;
 let showPastEvents = false;
 let currentPage = 'schedule';
-const PAGES = ['today','schedule','training','record','team','you'];
+const PAGES = ['v','today','schedule','training','record','team','you'];
 let scheduleView = 'calendar';
 let youView = 'profile';
 try{ const v = localStorage.getItem('kestrel.scheduleView'); scheduleView = ['meets','places'].includes(v) ? v : 'calendar'; }catch(e){}
@@ -3921,6 +3925,7 @@ let navLastTab = 'today';
 const navLastView = {};
 // Which tab and view the page on screen belongs to.
 function navState(){
+  if(currentPage === 'v'){ const k = window.KV.key(); return k === 'today' ? ['today', null] : k.split('/'); }
   if(currentPage === 'today') return ['today', null];
   if(currentPage === 'training'){
     if(trainingView === 'log') return ['calendar', 'log'];
@@ -3934,6 +3939,9 @@ function navState(){
 }
 function navGo(tab, view){
   view = view || navLastView[tab] || (NAV[tab]?.segs[0] || [])[0];
+  // Views that have a redesigned screen draw in #pageV; the rest (Coach, You, Record) keep their pages.
+  const kv = tab === 'today' ? 'today' : `${tab}/${view}`;
+  if(window.KV?.has(kv)){ window.KV.show(kv); return setPage('v'); }
   if(tab === 'today') return setPage('today');
   const train = (v)=>{ trainingView = v; try{ localStorage.setItem('kestrel.trainingView', v); }catch(e){} document.body.classList.remove('tl-sheet'); setPage('training'); };
   if(tab === 'run') return train(view);
@@ -3963,8 +3971,9 @@ function renderNav(){
     b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on));
   });
   document.body.dataset.nav = tab;
-  $('navTitle').textContent = navTitle(tab, view);
-  $('navSub').textContent = tab === 'today' ? todaySubtitle() : '';
+  $('navTitle').textContent = currentPage === 'v' ? window.KV.title() : navTitle(tab, view);
+  $('navSub').textContent = currentPage === 'v' ? window.KV.sub() : tab === 'today' ? todaySubtitle() : '';
+  document.body.classList.toggle('kv-spoke', currentPage === 'v' && !!window.KV.spoke());
   $('navBack').hidden = !['you','record'].includes(tab);
   // Run's views follow the runner's choice (Customize); the view on screen always shows.
   const custom = tab === 'run' && isRealPerson() && window.kTrack;
@@ -4995,6 +5004,8 @@ function renderAll(){
   if(currentPage === 'training' && !tlDirty) renderTraining();
   if(currentPage === 'team') renderTeam();
   if(currentPage === 'today' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) renderTodayPage();
+  // The redesigned screens redraw with fresh data unless someone is typing in one.
+  if(currentPage === 'v' && !document.activeElement?.closest?.('#pageV form, #pageV input, #pageV textarea, #pageV select')) window.KV?.redraw();
   renderNav();
 }
 
@@ -6567,6 +6578,8 @@ window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('admi
 <script src="/track.js"></script>
 <script src="/record.js"></script>
 <script src="/shoes.js"></script>
+<script src="/views.js"></script>
+<script src="/views2.js"></script>
 <script type="module" src="/kestrel.js"></script>
 </body>
 </html>
