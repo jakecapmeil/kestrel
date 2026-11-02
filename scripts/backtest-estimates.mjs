@@ -36,7 +36,7 @@ function prsToUpdate(cur, candidates) {
     const have = F.parseTime((out[c.event] || cur[c.event])?.time);
     if (have && have <= c.sec + 0.5) continue;
     if (c.fill && cur[c.event] && !cur[c.event].auto && !out[c.event]) continue;
-    out[c.event] = { time: F.fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, auto: true, fill: !!c.fill, name: c.name, run: c.run, sec: c.sec };
+    out[c.event] = { time: F.fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, auto: true, fill: !!c.fill, name: c.name, run: c.run, sec: c.sec, ...(c.course ? { course: c.course } : {}) };
   }
   return out;
 }
@@ -90,7 +90,7 @@ for (const p of people) {
     // Typed PRs dated today: the athlete raced it.
     for (const [k, v] of typedDated) if (v.date === day) {
       const have = F.parseTime(prs[k]?.time), sec = F.parseTime(v.time);
-      if (!have || sec < have - 0.5) newPrs.push({ event: k, sec, source: 'typed', name: v.meet || '' });
+      if (!have || sec < have - 0.5) newPrs.push({ event: k, sec, source: 'typed', name: v.meet || '', course: v.course });
     }
     // PRs the app would find in today's runs.
     const today = F.computeFitness(inputsAsOf(p, day, prs), day);
@@ -100,30 +100,33 @@ for (const p of people) {
       const raced = v.fill && (today.pr_candidates || []).find((c) => c.date === day && c.event === k && !c.fill && mine.find((x) => x.strava_id === c.run)?.category === 'race');
       if (raced) { const have = F.parseTime(prs[k]?.time); if (!have || raced.sec < have - 0.5) newPrs.push({ event: k, sec: raced.sec, source: 'race', name: '' }); continue; }
       const w = mine.find((x) => x.strava_id === v.run);
-      newPrs.push({ event: k, sec: v.sec, source: v.fill ? 'split' : w?.category === 'race' ? 'race' : 'hard-run', name: w?.name || v.name });
+      newPrs.push({ event: k, sec: v.sec, source: v.fill ? 'split' : w?.category === 'race' ? 'race' : 'hard-run', name: w?.name || v.name, course: v.course });
     }
     if (opt.mode === 'races') {
       newPrs.length = 0;
-      for (const [k, v] of typedDated) if (v.date === day) newPrs.push({ event: k, sec: F.parseTime(v.time), source: 'typed', name: v.meet || '' });
+      for (const [k, v] of typedDated) if (v.date === day) newPrs.push({ event: k, sec: F.parseTime(v.time), source: 'typed', name: v.meet || '', course: v.course });
       for (const c of (today.pr_candidates || []).filter((c) => c.date === day && !c.fill)) {
         const w = mine.find((x) => x.strava_id === c.run);
-        if (w?.category === 'race' && !newPrs.some((n) => n.event === c.event)) newPrs.push({ event: c.event, sec: c.sec, source: 'race', name: w.name });
+        if (w?.category === 'race' && !newPrs.some((n) => n.event === c.event)) newPrs.push({ event: c.event, sec: c.sec, source: 'race', name: w.name, course: c.course });
       }
     }
     // Races mode: the day's PR improvements join the PR state only after the day is scored.
     const better = (k, sec) => { const have = F.parseTime(prs[k]?.time); return !have || sec < have - 0.5; };
     // Found PRs keep auto, as in the app: a later split may replace them, never a typed one.
-    const setPr = (k, sec, auto) => { prs[k] = { time: F.fmtTime(sec, { tenths: sec < 180 }), date: day, ...(auto ? { auto: true } : {}) }; };
-    const apply = () => { if (opt.mode === 'races') for (const [k, v] of Object.entries(found)) if (better(k, v.sec)) setPr(k, v.sec, true); };
+    const setPr = (k, sec, auto, course) => { prs[k] = { time: F.fmtTime(sec, { tenths: sec < 180 }), date: day, ...(auto ? { auto: true } : {}), ...(course ? { course } : {}) }; };
+    const apply = () => { if (opt.mode === 'races') for (const [k, v] of Object.entries(found)) if (better(k, v.sec)) setPr(k, v.sec, true, v.course); };
     if (!newPrs.length) { apply(); continue; }
     const prev = addDays(day, -1);
     const prsBefore = JSON.parse(JSON.stringify(prs));
     const inp = inputsAsOf(p, prev, prsBefore);
     const data = F.computeFitness(inp, prev);
     for (const n of newPrs) {
-      const pred = data.estimates?.length ? predict(data, inp, n.event) : null;
+      // A 5K raced on a course is scored as that course's 5K, once.
+      const key = n.course ? C.courseKey(n.course, 5000) : n.event;
+      const dup = n.course && newPrs.some((o) => o.event === key);
+      const pred = !dup && data.estimates?.length ? predict(data, inp, key) : null;
       rows.push({
-        athlete: p.name.split(' ')[0], date: day, event: n.event, source: n.source, name: n.name,
+        athlete: p.name.split(' ')[0], date: day, event: key, dup, source: n.source, name: n.name,
         prev_pr: prs[n.event]?.time || null, actual: Math.round(n.sec * 10) / 10,
         pred: pred ? Math.round(pred.sec * 10) / 10 : null, lo: pred?.lo ?? null, hi: pred?.hi ?? null,
         err_sec: pred ? Math.round((n.sec - pred.sec) * 10) / 10 : null,
@@ -131,8 +134,8 @@ for (const p of people) {
         in_range: pred?.lo != null ? n.sec >= pred.lo && n.sec <= pred.hi : null,
         basis: data.basis, inputs: (data.lite_inputs || []).length, lite_inputs: data.lite_inputs, prs_before: prsBefore,
       });
-      if (opt.mode !== 'races') setPr(n.event, n.sec, n.source !== 'typed');
-      else if (n.source === 'typed' && better(n.event, n.sec)) setPr(n.event, n.sec, false);
+      if (opt.mode !== 'races') setPr(n.event, n.sec, n.source !== 'typed', n.course);
+      else if (n.source === 'typed' && better(n.event, n.sec)) setPr(n.event, n.sec, false, n.course);
     }
     apply();
   }
@@ -140,7 +143,7 @@ for (const p of people) {
 if (opt.json) fs.writeFileSync(opt.json, JSON.stringify(rows, null, 1));
 const fmt = (s) => (s == null ? '-' : F.fmtTime(s, { tenths: s < 180 }));
 if (!opt.quiet) for (const r of rows) console.log([r.athlete.padEnd(6), r.date, r.event.padEnd(15), r.source.padEnd(8), `prev ${String(r.prev_pr ?? '-').padEnd(7)}`, `est ${fmt(r.pred).padEnd(7)}`, `ran ${fmt(r.actual).padEnd(7)}`, `${r.err_sec == null ? '' : (r.err_sec > 0 ? '+' : '') + r.err_sec + 's'}`.padEnd(8), r.err_pct == null ? '' : `${r.err_pct > 0 ? '+' : ''}${r.err_pct}%`, r.in_range == null ? '' : r.in_range ? 'in80' : 'OUT', r.basis].join('  '));
-const scored = rows.filter((r) => r.err_pct != null && (r.source === 'race' || r.source === 'typed'));
+const scored = rows.filter((r) => !r.dup && r.err_pct != null && (r.source === 'race' || r.source === 'typed'));
 const detected = rows.filter((r) => r.source === 'hard-run' || r.source === 'split');
 console.log(`\ndetected (unlabelled) PRs: ${detected.length} (${detected.map((r) => r.athlete + ' ' + r.event + ' ' + r.date).join(', ')})`);
 const mae = scored.reduce((a, r) => a + Math.abs(r.err_pct), 0) / scored.length;

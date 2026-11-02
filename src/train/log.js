@@ -550,7 +550,10 @@ export async function setPrs(db, personId, prs) {
     if (!PR_TIME.test(time)) throw new LogError(`${event}: time must look like 58.4, 2:15 or 19:38`);
     const date = clip(v?.date, 10);
     if (date && !isDate(date)) throw new LogError(`${event}: date must be YYYY-MM-DD`);
-    current[event] = { time, ...(date ? { date } : {}), ...(v?.meet ? { meet: clip(v.meet, 100) } : {}) };
+    // A 5K raced on a course keeps the course, so the estimate credits it back to flat.
+    const course = event === '5K' && v?.course ? clip(v.course, 40) : '';
+    if (course && !(await getCourse(db, course))) throw new LogError(`Unknown course "${course}".`);
+    current[event] = { time, ...(date ? { date } : {}), ...(v?.meet ? { meet: clip(v.meet, 100) } : {}), ...(course ? { course } : {}) };
   }
   const res = await db.prepare('UPDATE people SET prs = ? WHERE id = ?').bind(JSON.stringify(current), personId).run();
   if (!res.meta.changes) throw new LogError('Unknown person');

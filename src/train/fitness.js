@@ -263,19 +263,20 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     if (!m || !sec) continue;
     const dated = /^\d{4}-\d{2}-\d{2}$/.test(v?.date || '');
     const age = dated ? ageDays(v.date, today) : 240;
-    const shortSrc = ck ? null : SHORT_ONLY_PR[event] ? { ev: SHORT_ONLY_PR[event], sec } : RM.shortSource(m, sec);
+    // XC courses run slower than the track: a course PR names its course, and a 5K raced on a course carries it.
+    const cid = ck ? ck.id : v?.course || '';
+    const shortSrc = cid ? null : SHORT_ONLY_PR[event] ? { ev: SHORT_ONLY_PR[event], sec } : RM.shortSource(m, sec);
     if (shortSrc && !/XC|VC/.test(event)) shortPrs.push({ ...shortSrc, age });
     if (SHORT_ONLY_PR[event]) continue;
-    // XC courses run slower than the track: a course PR names its course.
-    const onCourse = !!ck;
+    const onCourse = !!cid;
     if (onCourse) {
       const key = `${m}|${Math.round(sec)}`;
       if (seenCourse.has(key)) continue;
       seenCourse.add(key);
     }
-    const vc = !!ck && ck.id === 'vc';
-    const t = onCourse ? toFlatOn(ck.id, sec, m) : sec;
-    const name = ck ? courseLabel(courses.get(ck.id), m) : event;
+    const vc = cid === 'vc';
+    const t = onCourse ? toFlatOn(cid, sec, m) : sec;
+    const name = ck ? courseLabel(courses.get(ck.id), m) : cid ? `${event} at ${courses.get(cid)?.name || 'a course'}` : event;
     sources.push({
       kind: 'pr', max: true, event, m, s: t, age, date: dated ? v.date : null,
       quality: (dated ? 0.9 : 0.5) * (onCourse ? 0.8 : 1),
@@ -331,6 +332,8 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const cname = cid ? courses.get(cid)?.name || '' : '';
     const picked = !!w.course_id && w.course_id !== 'none';
     if (cid && m >= 2000 && (picked || w.surface !== 'track')) prCandidates.push({ event: courseKey(cid, m), sec: t, date: w.date, name: cname, run: w.strava_id });
+    // A whole 5K raced on a course is also the runner's 5K: the PR keeps its course, so the estimate credits it back to flat.
+    if (cid && m === 5000 && (picked || w.surface !== 'track')) prCandidates.push({ event: '5K', sec: t, date: w.date, name: cname, run: w.strava_id, course: cid });
     if (!cond.course && PR_FOR[m]) prCandidates.push({ event: PR_FOR[m], sec: t * (m === MILE ? 1600 / MILE : m === 2 * MILE ? 3200 / (2 * MILE) : 1), date: w.date, name: w.name || '', run: w.strava_id });
   }
 
@@ -797,7 +800,7 @@ function prsToUpdate(currentRaw, candidates) {
     if (have && have <= c.sec + 0.5) continue;
     // A PR someone typed in stays; the nonstop-best search only fills blanks and Kestrel's own finds.
     if (c.fill && cur[c.event] && !cur[c.event].auto && !out[c.event]) continue;
-    out[c.event] = { time: fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, meet: `Found by Kestrel${c.name && !/running$|^run$/i.test(c.name) ? `: ${c.name}` : ''}`, auto: true, ...(c.run ? { run: c.run } : {}) };
+    out[c.event] = { time: fmtTime(c.sec, { tenths: c.sec < 180 }), date: c.date, meet: `Found by Kestrel${c.name && !/running$|^run$/i.test(c.name) ? `: ${c.name}` : ''}`, auto: true, ...(c.run ? { run: c.run } : {}), ...(c.course ? { course: c.course } : {}) };
   }
   return out;
 }
@@ -808,7 +811,7 @@ export function misfiledPrs(prsRaw, workouts, events = []) {
   const prs = normalizePrs(parsePrs(prsRaw));
   const out = [];
   for (const [event, v] of Object.entries(prs)) {
-    if (!v?.auto || v.run || !PR_METERS[event] || parseCourseKey(event)) continue;
+    if (!v?.auto || v.run || v.course || !PR_METERS[event] || parseCourseKey(event)) continue;
     const sec = parseTime(v.time);
     if (!sec || !v.date) continue;
     const scale = event === '5K' ? 1 : null; // 1600 and 3200 are scaled from a mile or two; matched within 1% below

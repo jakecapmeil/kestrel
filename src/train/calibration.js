@@ -43,6 +43,8 @@ export async function recordPrChecks(db, personId, prs, today) {
   for (const [event, v] of Object.entries(prs)) {
     const sec = parseTime(v?.time);
     if (!sec || !v?.date || v.date > today) continue;
+    // A 5K raced on a course is checked once, as that course's PR, against the course estimate.
+    if (v.course) continue;
     const prSec = round1(sec);
     if (have.get(`${event}|${v.date}`) === prSec) continue;
     const snap = await db.prepare(
