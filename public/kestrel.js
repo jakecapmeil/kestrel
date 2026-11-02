@@ -832,7 +832,10 @@ function dayLine(day, c) {
 
 function renderPlanGrid(el, plans, lead, save) {
   const levels = Object.keys(plans).map(Number).sort((a, b) => a - b);
-  const open = new Set();
+  // The level this athlete trains from is marked and starts open.
+  const myMiles = window.kestrelMyLevelMiles?.();
+  const mine = levels.find((l) => myMiles && Number(plans[l].weeks[0].miles) === Number(myMiles));
+  const open = new Set(mine ? [mine] : []);
   const paint = () => {
     const cellsOf = (lvl, wi) => plans[lvl].days.map((d, di) => {
       const c = d.cells[wi];
@@ -842,9 +845,9 @@ function renderPlanGrid(el, plans, lead, save) {
       return html`<button type="button" class="k-pc ${TYPE_CLASS[c.type] || ''}" data-l="${lvl}" data-w="${wi}" data-d="${di}" title="${tip}" aria-label="${tip}">${rest && !n ? '·' : fmtMi(n)}</button>`;
     });
     const total = (lvl, wi) => fmtMi(plans[lvl].days.reduce((a, d) => a + numOf(d.cells[wi]), 0));
-    el.innerHTML = html`<div class="k-pgrid" role="table" aria-label="Team training plan by level">
+    el.innerHTML = html`${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
       <div class="k-pr k-ph" role="row"><span>Level</span>${DAYS7.map((d) => html`<span role="columnheader">${d}</span>`)}<span>Total</span></div>
-      ${levels.map((lvl) => html`<div class="k-pr" role="row"><button type="button" class="k-plvl" data-open="${lvl}" aria-expanded="${String(open.has(lvl))}"><i>${open.has(lvl) ? '▾' : '▸'}</i>${plans[lvl].weeks[0].miles}<small>mi</small></button>${cellsOf(lvl, 0)}<span class="k-ptot">${total(lvl, 0)}</span></div>
+      ${levels.map((lvl) => html`<div class="k-pr ${lvl === mine ? 'mine' : ''}" role="row"><button type="button" class="k-plvl" data-open="${lvl}" aria-expanded="${String(open.has(lvl))}"><i>${open.has(lvl) ? '▾' : '▸'}</i>${plans[lvl].weeks[0].miles}<small>${lvl === mine ? 'mi · you' : 'mi'}</small></button>${cellsOf(lvl, 0)}<span class="k-ptot">${total(lvl, 0)}</span></div>
         ${open.has(lvl) ? [1, 2].map((wi) => html`<div class="k-pr sub" role="row"><span class="k-pwk">${WEEKS[wi][1]}</span>${cellsOf(lvl, wi)}<span class="k-ptot">${total(lvl, wi)}</span></div>`) : ''}`)}
     </div>
     <div class="k-pleg"><span class="easy">Easy</span><span class="wo">Workout</span><span class="lr">Long run</span><span class="race">Race</span><span class="rest">Rest · cross-train</span> <small>Miles per day. Race week and Taper are under each level.</small></div>`.s;

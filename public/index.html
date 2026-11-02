@@ -2344,6 +2344,7 @@
         <h2 class="page-title">Record a run</h2>
       </div>
     </div>
+    <div class="rec-top"><button type="button" class="rec-close" id="recClose">‹ Back</button><span class="rec-top-t">Record a run</span></div>
     <div id="recRoot"></div>
   </div>
 
@@ -3965,9 +3966,15 @@ function renderNav(){
   $('navTitle').textContent = navTitle(tab, view);
   $('navSub').textContent = tab === 'today' ? todaySubtitle() : '';
   $('navBack').hidden = !['you','record'].includes(tab);
-  const segs = NAV[tab]?.segs || [];
+  // Run's views follow the runner's choice (Customize); the view on screen always shows.
+  const custom = tab === 'run' && isRealPerson() && window.kTrack;
+  const keep = custom ? window.kTrack.visibleTabs() : null;
+  const segs = (NAV[tab]?.segs || []).filter(([v])=> !keep || keep.includes(v) || v === view)
+    .sort((a, b)=> keep ? keep.indexOf(a[0]) - keep.indexOf(b[0]) : 0);
   $('navSegs').hidden = !segs.length;
-  $('navSegs').innerHTML = segs.map(([v, l])=> `<button type="button" class="seg-btn ${v === view ? 'active' : ''}" role="tab" aria-selected="${v === view}" data-navv="${v}">${l}</button>`).join('');
+  $('navSegs').innerHTML = segs.map(([v, l])=> `<button type="button" class="seg-btn ${v === view ? 'active' : ''}" role="tab" aria-selected="${v === view}" data-navv="${v}">${l}</button>`).join('')
+    + (custom ? `<button type="button" class="seg-btn tk-gear" id="navCustomize" aria-label="Customize Run views" title="Customize Run views"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>` : '');
+  $('navCustomize')?.addEventListener('click', ()=> window.kTrack.customizeTabs());
   $('navSegs').querySelectorAll('[data-navv]').forEach(b=> b.addEventListener('click', ()=> navGo(tab, b.dataset.navv)));
   $('navSegs').querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
 }
@@ -4028,9 +4035,21 @@ function renderTodayTeam(){
   $('tdTeam').querySelector('[data-tdcal]')?.addEventListener('click', ()=> navGo('calendar', 'team'));
 }
 function renderTodayOff(){
-  $('tdOff').innerHTML = `<button type="button" class="card td-tile" data-tdgo="xtrain"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l2 7M13.5 6H16"/></svg><span><b>Cross-train</b><small>Bike, pool, strength</small></span></button>
-    <button type="button" class="card td-tile" data-tdgo="food"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-1.5-2.5-6-2-6 2.5 0 5 3.5 10.5 6 10.5s6-5.5 6-10.5C18 5 13.5 4.5 12 7z"/><path d="M12 7c0-2 1-3.5 2.5-4"/></svg><span><b>Fuel</b><small>Log what you eat</small></span></button>`;
-  $('tdOff').querySelectorAll('[data-tdgo]').forEach(b=> b.addEventListener('click', ()=> navGo('body', b.dataset.tdgo)));
+  const tile = (go, icon, title, sub)=> `<button type="button" class="card td-tile" data-tdgo="${go}">${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
+  const BIKE = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l2 7M13.5 6H16"/></svg>';
+  const FUEL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-1.5-2.5-6-2-6 2.5 0 5 3.5 10.5 6 10.5s6-5.5 6-10.5C18 5 13.5 4.5 12 7z"/><path d="M12 7c0-2 1-3.5 2.5-4"/></svg>';
+  const draw = (x, f)=>{
+    const wk = x?.this_week || {};
+    const xtSub = x ? (wk.sessions ? `${wk.sessions} ${wk.sessions === 1 ? 'session' : 'sessions'} · ${Math.round(wk.xt_min || 0)} min this week` : 'Nothing yet this week') : 'Bike, pool, strength';
+    const carbs = f?.targets?.carbs_g;
+    const fuelSub = f ? `${Math.round(f.totals?.kcal || 0).toLocaleString()} kcal · ${Math.round(f.totals?.carbs_g || 0)} g carbs${Array.isArray(carbs) ? ` of ${carbs[0]}–${carbs[1]}` : carbs ? ` of ${carbs}` : ''} today` : 'Log what you eat';
+    $('tdOff').innerHTML = tile('xtrain', BIKE, 'Cross-train', escapeHtml(xtSub)) + tile('food', FUEL, 'Fuel', escapeHtml(fuelSub));
+    $('tdOff').querySelectorAll('[data-tdgo]').forEach(b=> b.addEventListener('click', ()=> navGo('body', b.dataset.tdgo)));
+  };
+  draw(null, null);
+  if(!isRealPerson()) return;
+  const get = (u)=> fetch(u, { cache:'no-store' }).then(r=> r.ok ? r.json() : null).catch(()=> null);
+  Promise.all([get('/api/xtrain'), get('/api/food')]).then(([x, f])=>{ if(currentPage === 'today') draw(x, f); });
 }
 // Today's coach box hands the message to the Coach view and sends it there.
 async function askFromToday(){
@@ -5109,6 +5128,7 @@ function wireUI(){
   document.querySelectorAll('.page-tabs [data-nav]').forEach(b=> b.addEventListener('click', ()=> navGo(b.dataset.nav)));
   $('kRecBtn').addEventListener('click', ()=> setPage('record'));
   $('navBack').addEventListener('click', ()=> navGo(navLastTab));
+  $('recClose').addEventListener('click', ()=> navGo(navLastTab));
   $('tdAskBtn').addEventListener('click', askFromToday);
   $('tdAskInput').addEventListener('keydown', e=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); askFromToday(); } });
   $('tlFull').addEventListener('click', ()=>{ const on = $('tpLogView').classList.toggle('tl-full'); $('tlFull').textContent = on ? 'Exit full screen' : 'Full screen'; $('tlFull').setAttribute('aria-pressed', String(on)); });
@@ -5936,14 +5956,27 @@ const WO_ICON = {
   fartlek: '<svg viewBox="0 0 24 24"><path d="M3 14l3-4 3 6 3-8 3 6 3-3 3 3"/><path d="M3 21h18"/></svg>',
   all: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>',
   kai: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 19l-5-3-5 3 1.4-6.2L4 9l5.8-.7z"/></svg>',
+  hills: '<svg viewBox="0 0 24 24"><path d="M3 18l6-9 4 5 3-3 5 7z"/></svg>',
+  race: '<svg viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2 4 2 4H6"/></svg>',
+  easy: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>',
 };
+// One box per kind of workout (the library's types), plus All and Ask Kestrel AI.
 const WO_TILES = [
-  { key:'tempo', label:'Tempo', sub:'Threshold, cruise reps, progressions' },
-  { key:'short', label:'Short intervals', sub:'200-600m reps and hills' },
-  { key:'long', label:'Long intervals', sub:'800m to 2 mile reps' },
-  { key:'fartlek', label:'Fartlek', sub:'Timed surges, on/off' },
-  { key:'all', label:'All workouts', sub:'Every session in the library' },
-  { key:'kai', label:'Ask Kestrel AI', sub:'Build one for today' },
+  { key:'easy', icon:'easy', label:'Easy & recovery', sub:'Most of your miles' },
+  { key:'steady', icon:'long', label:'Steady', sub:'Aerobic running' },
+  { key:'long', icon:'long', label:'Long runs', sub:'Endurance' },
+  { key:'progression', icon:'tempo', label:'Progressions', sub:'Finish faster' },
+  { key:'tempo', icon:'tempo', label:'Tempo', sub:'Comfortably hard' },
+  { key:'threshold', icon:'tempo', label:'Threshold', sub:'Cruise intervals' },
+  { key:'vo2', icon:'short', label:'VO2max', sub:'800m to mile reps' },
+  { key:'track', icon:'short', label:'Track reps', sub:'200 to 600m speed' },
+  { key:'fartlek', icon:'fartlek', label:'Fartlek', sub:'Timed surges' },
+  { key:'hills', icon:'hills', label:'Hills', sub:'Strength and form' },
+  { key:'strides', icon:'short', label:'Strides', sub:'Speed development' },
+  { key:'race_specific', icon:'race', label:'Race-specific', sub:'Goal-pace work' },
+  { key:'time_trial', icon:'race', label:'Time trials', sub:'Race simulations' },
+  { key:'all', icon:'all', label:'All workouts', sub:'Every session' },
+  { key:'kai', icon:'kai', label:'Ask Kestrel AI', sub:'Build one for today' },
 ];
 const PACE_SHORT = { recovery:'Recovery', easy:'Easy', steady:'Steady', tempo:'Tempo', threshold:'Threshold', cv:'CV', '10k':'10K', '5k':'5K', '3200':'3200', mile:'Mile', '800':'800', '400':'400' };
 
@@ -5958,7 +5991,7 @@ function setWoGroup(g){
     openKai(`Build me ${kind ? 'a ' + kind : 'a'} workout for tomorrow${filt ? ' ' + filt : ''}, with my rep targets.`, false);
     return;
   }
-  woGroup = g; libType = '';
+  woGroup = WO_TILES.some(t=> t.key === g) ? g : 'all'; libType = '';
   try{ localStorage.setItem('kestrel.woGroup', g); }catch(e){}
   renderLibrary();
 }
@@ -5966,14 +5999,19 @@ function setWoGroup(g){
 async function renderLibrary(){
   const lib = await loadLibrary();
   if(currentPage !== 'training' || trainingView !== 'library') return;
-  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'kai' ? 'kai' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.key]}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
+  if(!WO_TILES.some(t=> t.key === woGroup)) woGroup = 'all';
+  // How many workouts in each box pass the other filters.
+  const fRace = $('libRace').value, fPhase = $('libPhase').value, fLen = Number($('libLen').value || 0), fLevel = Number($('libLevel').value || 0);
+  const passes = (w)=> (!fRace || w.races.includes(fRace)) && (!fPhase || w.phase.includes(fPhase)) && (!fLevel || w.level === fLevel) && (!fLen || (fLen === 999 ? w.total_min > 65 : w.total_min <= fLen));
+  const count = (k)=> lib ? lib.workouts.filter(w=> passes(w) && (k === 'all' || w.type === k)).length : 0;
+  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'kai' ? 'kai' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.icon]}${t.key === 'kai' ? '' : `<i class="wo-n">${count(t.key)}</i>`}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
   $('woTiles').querySelectorAll('[data-g]').forEach(b=> b.addEventListener('click', ()=> setWoGroup(b.dataset.g)));
   if(!lib){ $('libList').innerHTML = '<div class="hint">Couldn’t load the library.</div>'; return; }
   const me = isRealPerson();
   const f = lib.fitness;
 
-  // "Also show" type chips only make sense on All.
-  $('libMoreWrap').style.display = woGroup === 'all' ? '' : 'none';
+  // The boxes are the types now, so the old "Also show" type chips stay hidden.
+  $('libMoreWrap').style.display = 'none';
   $('libTypes').innerHTML = [['', 'All types'], ...Object.entries(lib.types)].map(([v,l])=>`<button type="button" class="chip ${v===libType?'on':''}" data-ltype="${v}">${escapeHtml(l.split(' /')[0])}</button>`).join('');
   $('libTypes').querySelectorAll('[data-ltype]').forEach(b=> b.addEventListener('click', ()=>{ libType = b.dataset.ltype; renderLibrary(); }));
   const fill = (id, entries)=>{ const el = $(id); if(el.options.length <= 1) el.insertAdjacentHTML('beforeend', entries.map(([v,l])=>`<option value="${v}">${escapeHtml(l)}</option>`).join('')); };
@@ -5981,7 +6019,7 @@ async function renderLibrary(){
   fill('libPhase', lib.phases.map(p=>[p, cap(p)]));
 
   const race = $('libRace').value, phase = $('libPhase').value, len = Number($('libLen').value || 0), level = Number($('libLevel').value || 0);
-  const list = lib.workouts.filter(w=> (woGroup === 'all' || w.group === woGroup) && (!libType || w.type === libType)
+  const list = lib.workouts.filter(w=> (woGroup === 'all' || w.type === woGroup)
     && (!race || w.races.includes(race)) && (!phase || w.phase.includes(phase))
     && (!level || w.level === level) && (!len || (len === 999 ? w.total_min > 65 : w.total_min <= len)));
   const tile = WO_TILES.find(t=>t.key === woGroup);
@@ -6197,7 +6235,7 @@ async function renderTeam(){
   if(!hasTeam) return;
   if(teamView === 'activities'){ window.kestrelRenderActivities?.($('teamActivitiesView')); return; }
   if(teamView === 'roster'){ window.kestrelRenderRoster?.($('teamRosterView')); return; }
-  if(teamView === 'training'){ window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
+  if(teamView === 'training'){ if(isRealPerson()) await loadKai(); window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
   renderPosts();
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
@@ -6522,6 +6560,7 @@ window.kestrelInit = init;
 window.kestrelReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
 // The view is set before the page so the tab bar and Back follow the view being opened.
 window.kestrelSetPage = (p, sub)=>{ if(sub){ if(p === 'team') teamView = sub; if(p === 'you') youView = sub; if(p === 'training'){ trainingView = sub; try{ localStorage.setItem('kestrel.trainingView', sub); }catch(e){} } } setPage(p); };
+window.kestrelMyLevelMiles = ()=> kaiData && kaiData._for === activePersonId ? kaiData.level?.weekly_miles : null;
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>
