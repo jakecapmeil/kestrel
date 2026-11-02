@@ -125,6 +125,17 @@ const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
 const round1 = (n) => Math.round(n * 10) / 10;
 const recency = (age, halfLife) => Math.pow(0.5, age / halfLife);
 
+// Tuning knobs for KestrelPredict-Lite's inputs, set by scripts/backtest-estimates.mjs (--tune) and fitted against
+// real races. The defaults are the shipped behaviour.
+//   undatedDays: an undated typed PR leaves Lite's inputs once a dated race or PR is this recent (it may have been run after it).
+//   hardRunDays: an unlabelled hard run leaves Lite's inputs once a real race is this recent (it may not have been all-out).
+//   rangeSpread: the 80% range widens by this much per unit of log distance between the target and the nearest input.
+//     1 puts 79% of synthetic runners' races inside the range (0: 64%), and 6 of 6 real track PRs (0: 5 of 6).
+//   undatedDays, hardRunDays and trend made the real races' estimates worse in the 2026-11 backtest, so they are off.
+//   trend: in season a runner keeps improving after their last race. The share of their recent rate of improvement
+//     (from real races in the last trendWindow days) carried forward from the newest one, for up to trendCap days.
+export const TUNE = { undatedDays: null, hardRunDays: null, rangeSpread: 1, trend: 0, trendWindow: 60, trendCap: 21, trendMax: 0.002 }; // null: off
+
 // Snap a GPS distance to the race distance it probably was.
 function snapDistance(m) {
   for (const d of [1600, MILE, 3200, 5000, 8000, 10000, 21097.5]) if (Math.abs(m - d) / d <= 0.04) return d;
@@ -499,8 +510,11 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
   // only when nothing newer exists) from the last two years, every one already
   // credited back to a flat, cool course. Splits from runs, rep sets, heart
   // rate and Garmin are not race evidence and stay out. Needs at least one.
+  const newestRealRace = Math.min(...sources.filter((x) => (x.kind === 'race' && x.quality >= 1) || (x.kind === 'pr' && x.date)).map((x) => x.age), Infinity);
   const liteIn = sources.filter((s) => s.max && s.m && s.s && s.age <= 730
-    && (s.kind === 'race' || s.kind === 'pr' || (s.kind === 'manual' && newestRace > 75)));
+    && (s.kind === 'race' || s.kind === 'pr' || (s.kind === 'manual' && newestRace > 75))
+    && !(TUNE.undatedDays != null && s.kind === 'pr' && !s.date && newestRace <= TUNE.undatedDays)
+    && !(TUNE.hardRunDays != null && s.kind === 'race' && s.quality < 1 && newestRealRace <= TUNE.hardRunDays));
   let lite = null;
   if (liteIn.length) {
     const results = liteIn.map((s) => ({ m: s.m, sec: s.s, surf: 'track' }));
@@ -602,10 +616,24 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     return 'low';
   };
 
+  // In-season improvement: the slope of this runner's real races (each as a flat 5K) over the last few weeks, carried forward.
+  let trendMul = 1;
+  if (lite && TUNE.trend) {
+    const pts = sources.filter((x) => x.max && x.m >= 1500 && x.s && x.date && x.age <= TUNE.trendWindow && ((x.kind === 'race' && x.quality >= 1) || x.kind === 'pr'))
+      .map((x) => ({ a: x.age, y: Math.log(x.s * Math.pow(5000 / x.m, 1.06)) }));
+    const ages = pts.map((p) => p.a);
+    if (pts.length >= 2 && Math.max(...ages) - Math.min(...ages) >= 10) {
+      const am = ages.reduce((a, b) => a + b, 0) / pts.length;
+      const ym = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+      const b = pts.reduce((a, p) => a + (p.a - am) * (p.y - ym), 0) / pts.reduce((a, p) => a + (p.a - am) ** 2, 0); // log time per day of age: > 0 is improving
+      trendMul = Math.exp(-TUNE.trend * clamp(b, 0, TUNE.trendMax) * Math.min(Math.min(...ages) + 1, TUNE.trendCap));
+    }
+  }
+
   const est = {};
   const mileT = timeFor(vo2r, 1600) * Math.pow(1600 / 5000, speedIndex);
   for (const e of EVENTS) {
-    let t = lite ? lite.by[e.key].sec : e.m >= 1500 ? timeFor(vo2r, e.m) * Math.pow(e.m / 5000, speedIndex) : shortFromMile(mileT, e.m);
+    let t = lite ? lite.by[e.key].sec * trendMul : e.m >= 1500 ? timeFor(vo2r, e.m) * Math.pow(e.m / 5000, speedIndex) : shortFromMile(mileT, e.m);
     if (!lite && cs && e.m >= 1500 && e.m <= 5000) t = 0.7 * t + 0.3 * ((e.m - cs.dPrime) / cs.speed);
     // A recent race or PR at this exact distance is the best evidence there
     // is; the model is pulled toward it (strongly for 400/800, where the
@@ -619,7 +647,9 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     if (e.key === '10K') t *= 1 + clamp((25 - mpw) * 0.0015, 0, 0.05);
     if (e.key === 'half') t *= 1 + clamp((35 - mpw) * 0.003, 0, 0.09);
     const scale = t / raw;
-    est[e.key] = { ...e, sec: t, raw, lo: lite ? lite.by[e.key].lo * scale : null, hi: lite ? lite.by[e.key].hi * scale : null };
+    // A target far from every input is less certain than the model's own range says.
+    const spread = lite && TUNE.rangeSpread ? 1 + TUNE.rangeSpread * Math.min(...liteIn.map((s) => Math.abs(Math.log(e.m / s.m)))) : 1;
+    est[e.key] = { ...e, sec: t, raw, lo: lite ? t * Math.pow(lite.by[e.key].lo * trendMul * scale / t, spread) : null, hi: lite ? t * Math.pow(lite.by[e.key].hi * trendMul * scale / t, spread) : null };
   }
 
   // KestrelPredict-Short: the events Lite was not trained on. Its sources are Lite's own estimates (a little

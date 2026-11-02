@@ -61,12 +61,21 @@ export async function recordPrChecks(db, personId, prs, today) {
         else if (typeof s.courses?.[event] === 'number') pred = { sec: s.courses[event], lo: null, hi: null };
       } catch { /* an unreadable snapshot just leaves the PR unscored */ }
     }
+    // A corrected time for a PR already checked, with no snapshot to rescore it from (a backtest row, or one older than the
+    // snapshots), keeps its estimate: the estimate from before that day hasn't changed.
     writes.push(db.prepare(
       `INSERT INTO pr_checks (person_id, event, pr_date, pr_sec, auto, snap_date, pred_sec, pred_lo, pred_hi, error_pct, in_range, model, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(person_id, event, pr_date) DO UPDATE SET pr_sec = excluded.pr_sec, auto = excluded.auto, snap_date = excluded.snap_date,
-         pred_sec = excluded.pred_sec, pred_lo = excluded.pred_lo, pred_hi = excluded.pred_hi, error_pct = excluded.error_pct,
-         in_range = excluded.in_range, model = excluded.model`
+       ON CONFLICT(person_id, event, pr_date) DO UPDATE SET pr_sec = excluded.pr_sec, auto = excluded.auto,
+         snap_date = COALESCE(excluded.snap_date, pr_checks.snap_date),
+         pred_sec = COALESCE(excluded.pred_sec, pr_checks.pred_sec),
+         pred_lo = CASE WHEN excluded.pred_sec IS NULL THEN pr_checks.pred_lo ELSE excluded.pred_lo END,
+         pred_hi = CASE WHEN excluded.pred_sec IS NULL THEN pr_checks.pred_hi ELSE excluded.pred_hi END,
+         error_pct = CASE WHEN excluded.pred_sec IS NULL AND pr_checks.pred_sec IS NOT NULL
+           THEN ROUND((excluded.pr_sec - pr_checks.pred_sec) / pr_checks.pred_sec * 1000, 1) / 10 ELSE excluded.error_pct END,
+         in_range = CASE WHEN excluded.pred_sec IS NULL AND pr_checks.pred_lo IS NOT NULL
+           THEN (excluded.pr_sec >= pr_checks.pred_lo AND excluded.pr_sec <= pr_checks.pred_hi) ELSE excluded.in_range END,
+         model = COALESCE(excluded.model, pr_checks.model)`
     ).bind(
       personId, event, v.date, prSec, v.auto ? 1 : 0, pred ? snap.date : null,
       pred?.sec ?? null, pred?.lo ?? null, pred?.hi ?? null,

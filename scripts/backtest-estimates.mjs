@@ -22,6 +22,8 @@ import * as M from '../src/models.js';
 const [dump] = process.argv.slice(2);
 const opt = Object.fromEntries(process.argv.slice(3).map((a) => a.replace(/^--/, '').split('=')));
 const undated = opt.undated || 'include';
+// --tune='{"undatedDays":180}': try Fitness States' tuning knobs (TUNE in fitness.js) without editing it.
+if (opt.tune) Object.assign(F.TUNE, JSON.parse(opt.tune));
 const load = (n) => JSON.parse(fs.readFileSync(path.join(dump, n + '.json'), 'utf8'));
 const people = load('people'), workouts = load('workouts'), tdays = load('training_days'), efforts = load('best_efforts'),
   wellness = load('wellness'), events = load('events');
