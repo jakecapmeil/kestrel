@@ -79,3 +79,136 @@ body .wrap > #whoCard{display:none;}
   body .wrap > .page-tabs .page-tab.active svg .fill{fill:var(--on-inverse);}
   body .wrap > [id^="page"]{grid-area:page;margin-top:0;min-width:0;}
 }
+
+/* ---------- one heading row for every page (the pages' own heads are replaced by it) */
+body .wrap [id^="page"] > .page-head{display:none;}
+.nav-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s-3) var(--s-5);flex-wrap:wrap;margin:0 0 var(--s-4);}
+.nav-titles{min-width:0;}
+.nav-head .page-title{margin:0;}
+.nav-sub{color:var(--text-2);font-size:15px;margin-top:6px;}
+.nav-sub:empty{display:none;}
+.nav-back{border:0;background:none;padding:0;margin:0 0 6px;font:600 14px var(--font-ui);color:var(--text-2);cursor:pointer;}
+.nav-head .seg{flex:0 1 auto;max-width:100%;overflow-x:auto;scrollbar-width:none;}
+.nav-head .seg::-webkit-scrollbar{display:none;}
+.nav-head .seg[hidden]{display:none;}
+.nav-head .seg-btn{white-space:nowrap;}
+@media (max-width:1023px){
+  /* Phones: no page name (the tab bar says where you are); just the views, full width. Today keeps its date. */
+  .nav-head{margin-bottom:var(--s-3);}
+  .nav-head .nav-titles{display:none;}
+  body[data-nav="today"] .nav-head .nav-titles,body[data-nav="you"] .nav-head .nav-titles,body[data-nav="record"] .nav-head .nav-titles{display:block;}
+  .nav-head .seg{width:100%;}
+  .nav-head .seg-btn{flex:1 0 auto;}
+}
+@media (min-width:1024px){
+  body .wrap{grid-template-areas:"head head" "rail nav" "rail page";grid-template-rows:auto auto 1fr;}
+  body .wrap > .nav-head{grid-area:nav;}
+  body .wrap > .page-tabs{grid-area:rail;align-self:start;}
+}
+
+/* ---------- Record lives in the header */
+.rec-btn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px 0 12px;border:0;border-radius:var(--r-pill);background:var(--accent);color:var(--on-accent);font:700 14px var(--font-ui);cursor:pointer;flex:none;}
+.rec-btn i{width:12px;height:12px;border-radius:50%;background:currentColor;box-shadow:0 0 0 3px rgba(255,255,255,.3);}
+body.rec-live .rec-btn{background:var(--inverse);color:var(--on-inverse);}
+body.rec-live .rec-btn i{background:var(--accent);animation:pulse 1.2s ease-in-out infinite;}
+body.rec-live .rec-btn span::after{content:" · live";}
+@media (max-width:420px){.rec-btn{padding:0 12px 0 10px;}}
+
+/* ---------- Today */
+.td-grid{display:grid;gap:var(--s-5);}
+.td-main,.td-side{display:flex;flex-direction:column;gap:var(--s-5);min-width:0;}
+.td-sec{min-width:0;}
+.td-h{font:700 19px/1.2 var(--font-display);letter-spacing:-.01em;margin:0 0 var(--s-3);display:flex;justify-content:space-between;align-items:baseline;gap:var(--s-3);}
+.td-h small{font:500 13px var(--font-ui);color:var(--text-2);}
+#pageToday .today-card{margin:0;}
+.td-week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}
+.td-day{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;padding:10px 10px 9px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface);color:var(--text);text-align:left;cursor:pointer;font:inherit;}
+.td-day .td-dn{font:600 11px var(--font-ui);text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);}
+.td-day b{font:700 13px/1.25 var(--font-ui);width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.td-day .td-mi{font:600 14px var(--font-mono);}
+.td-day.off{background:transparent;}
+.td-day.past{opacity:.7;}
+.td-day.is-today{background:var(--inverse);color:var(--on-inverse);border-color:transparent;opacity:1;}
+.td-day.is-today .td-dn{color:inherit;opacity:.65;}
+.td-off{display:grid;grid-template-columns:1fr 1fr;gap:var(--s-3);}
+.td-tile{display:flex;align-items:center;gap:var(--s-3);text-align:left;cursor:pointer;font:inherit;color:var(--text);margin:0;}
+.td-tile svg{width:26px;height:26px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.td-tile span{display:flex;flex-direction:column;min-width:0;}
+.td-tile b{font:700 16px var(--font-ui);}
+.td-tile small{color:var(--text-2);font-size:13px;}
+.td-health{display:flex;gap:8px;flex-wrap:wrap;}
+.td-link{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:var(--s-3);padding:var(--s-3) 0 0;border:0;border-top:1px solid var(--line);background:none;font:600 14px var(--font-ui);color:var(--text);cursor:pointer;text-align:left;}
+.td-ev{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);margin-bottom:var(--s-2);}
+.td-ev-main{min-width:0;}
+.td-ask .kai-compose{margin-top:var(--s-3);}
+@media (max-width:1023px){
+  .td-day{padding:8px 4px 7px;align-items:center;text-align:center;}
+  .td-day b{display:none;}
+  .td-day .td-mi{font-size:13px;}
+}
+@media (min-width:1024px){
+  .td-grid{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);align-items:start;}
+}
+
+/* ---------- Calendar › Training: a day can take the whole width */
+#tpLogView.tl-full{grid-template-columns:minmax(0,1fr);}
+#tpLogView.tl-full > section:first-child{display:none;}
+#tpLogView.tl-full > .split-side > section:not(#tlDayCard){display:none;}
+@media (max-width:1023px){.tl-full-btn{display:none;}}
+.team-feed-acts{margin-top:var(--s-5);}
+.td-day,.td-tile,.td-link{height:auto;min-height:0;box-shadow:none;}
+.td-off{grid-template-columns:repeat(2,minmax(0,1fr));}
+.td-tile small{white-space:normal;}
+@media (max-width:520px){
+  /* Phones: logo, Run/Lab, Record and you fit on one row; the wordmark goes. */
+  body .wrap > header .wordmark .k-brand span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
+  body .wrap > header{flex-wrap:wrap;}
+  body .wrap > header .head-right{flex:1;justify-content:flex-end;}
+}
+
+/* ---------- Run › Workouts: a box for every kind of workout */
+#woTiles.wo-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+#woTiles .wo-tile{position:relative;}
+#woTiles .wo-n{position:absolute;top:10px;right:12px;font:600 12px var(--font-mono);font-style:normal;color:var(--text-2);}
+#woTiles .wo-tile.on .wo-n{color:inherit;opacity:.7;}
+@media (min-width:700px){#woTiles.wo-tiles{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media (min-width:1024px){#woTiles.wo-tiles{grid-template-columns:repeat(5,minmax(0,1fr));}}
+
+/* ---------- Team › Plan: your level stands out */
+.k-pr.mine{background:var(--accent-subtle);border-radius:12px;}
+.k-pr.mine .k-plvl small{color:var(--accent-ink);font-weight:700;}
+.k-mine-note{margin:0 0 10px;}
+
+/* ---------- Record opens over everything; Back leaves it running */
+body[data-nav="record"] #pageRecord{position:fixed;inset:0;z-index:60;overflow-y:auto;background:var(--bg);padding:calc(10px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));}
+body[data-nav="record"] #pageRecord > *{max-width:560px;margin-left:auto;margin-right:auto;}
+body[data-nav="record"]{overflow:hidden;}
+.rec-top{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.rec-close{height:40px;padding:0 16px;border-radius:var(--r-pill);border:0;background:var(--surface-2);font:600 14px var(--font-ui);color:var(--text);cursor:pointer;}
+.rec-top-t{font:700 18px var(--font-display);}
+
+/* ---------- Body on desktop: everything on one screen */
+@media (min-width:1024px){
+  /* Recovery: how you feel beside the body map */
+  #youBodyView{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start;max-width:none;}
+  #youBodyView > .card{margin:0;}
+  #youBodyView #bodyMapMount svg{max-height:min(520px,calc(100vh - 470px)) !important;width:auto !important;}
+  /* Cross-train and Fuel: summary and the form side by side, the tips in their own column */
+  #tpXtrainView .split-fit,#tpFoodView .split-fit{grid-template-columns:minmax(0,2.1fr) minmax(0,1fr);align-items:start;}
+  #tpXtrainView .stack-cards,#tpFoodView .stack-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px;align-items:start;}
+  #tpXtrainView .stack-cards > .card,#tpFoodView .stack-cards > .card{margin:0;}
+  #tpXtrainView .stack-cards > :nth-child(1),#tpFoodView .stack-cards > :nth-child(1){grid-column:1;grid-row:1;}
+  #tpXtrainView .stack-cards > :nth-child(2),#tpFoodView .stack-cards > :nth-child(2){grid-column:2;grid-row:1 / span 2;}
+  #tpXtrainView .stack-cards > :nth-child(3),#tpFoodView .stack-cards > :nth-child(3){grid-column:1;grid-row:2;}
+}
+}
+@media (min-width:1024px){
+  body{padding-bottom:20px;}
+  .nav-head{margin-bottom:var(--s-3);}
+  #tpFoodView .stack-cards > :nth-child(2) .card-title + .hint{margin-bottom:6px;}
+}
+@media (min-width:1024px){
+  body{padding-bottom:8px;}
+  #youBodyView #bodyMapMount svg{max-height:min(500px,calc(100vh - 500px)) !important;}
+  #tpFoodView .stack-cards > :nth-child(2) .cluster{gap:6px;}
+}
