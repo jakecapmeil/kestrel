@@ -26,7 +26,7 @@ import { parseReps, snap100 } from './workouts.js';
 import { conditionsOf, courseIdOf, heatCost, hillCost, VC_FACTOR, XC_FACTOR, VC_RE } from './conditions.js';
 import { normalizePrs, parseCourseKey, courseKey, courseLabel, trackedOf, coursesById } from './courses.js';
 // Race models come from Kestrel Lab: whichever the athlete picked for each task (KestrelPredict by default).
-import { modelSet, pickedModels, SHORT_METERS } from '../models.js';
+import { modelSet, pickedModels, SHORT_METERS, liteFeatures } from '../models.js';
 import { snapshotOf, recordPrChecks, dropPrCheck } from './calibration.js';
 const Z80 = 1.2816;
 
@@ -134,7 +134,17 @@ const recency = (age, halfLife) => Math.pow(0.5, age / halfLife);
 //   trend: in season a runner keeps improving after their last race. The share of their recent rate of improvement
 //     (from real races in the last trendWindow days) carried forward from the newest one, for up to trendCap days.
 //   undatedDays, hardRunDays and trend made the real races' estimates worse in the 2026-11 backtest, so they are off.
-export const TUNE = { undatedDays: null, hardRunDays: null, rangeSpread: 1, trend: 0, trendWindow: 60, trendCap: 21, trendMax: 0.002 }; // null: off
+//   kShift: Lite reads every runner's speed against endurance the same way. Predicting outside the distances a runner has
+//     raced, it scales by the log distance from the nearest one with an exponent this much steeper (teenagers are relatively
+//     quicker over short races and slower over long ones than Lite's runners).
+//   kOwn, kShrink, kRef: the runner's own exponent from their results at two or more distances, when Lite can't see it
+//     (their distances share one of its buckets, e.g. a 600 and a 1000), shrunk toward kRef by span² / (span² + kShrink²).
+//   glitchK: a watch's nonstop 400 or 800 faster than the runner's longer races allow at this exponent is a GPS spike.
+//     kOwn 1, kShrink 0.3 (picked on synthetic runners: 3.74% -> 3.70%) took the real races from 2.91% to 2.01%: Jake's
+//     600 and 1000 had put his first 5K at 16:13; he ran 19:32. kRef is Lite's own exponent from a 5K (1.10-1.15).
+//     kShift and glitchK made one of the three real runners worse, so they are off.
+export const TUNE = { undatedDays: null, hardRunDays: null, rangeSpread: 1, trend: 0, trendWindow: 60, trendCap: 21, trendMax: 0.002,
+  kShift: 0, kOwn: 1, kShrink: 0.3, kRef: 1.11, glitchK: null }; // null: off
 
 // Snap a GPS distance to the race distance it probably was.
 function snapDistance(m) {
@@ -350,8 +360,12 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
 
   // Fastest stretches inside any run (intervals.icu's pace curve). Real
   // efforts, but often a split from a longer run, so a little less weight.
+  // The fastest a runner's longer races allow over a short distance, for spotting GPS spikes in the pace curve.
+  const longest = sources.filter((x) => x.max && x.m >= 1500 && x.s && (x.kind === 'race' || x.kind === 'pr'));
+  const fastestAllowed = (m) => (longest.length ? Math.min(...longest.map((x) => x.s * Math.pow(m / x.m, TUNE.glitchK))) : 0);
   for (const e of efforts) {
     if (!e.sec || !e.meters) continue;
+    if (TUNE.glitchK && e.meters <= 800 && e.sec < fastestAllowed(e.meters)) continue;
     // Auto-PR: the fastest nonstop time ever recorded at a PR distance (the
     // pace curve is the best unbroken stretch). Raw time, filled only where
     // nobody has typed a PR of their own (see prsToUpdate). A 1600 and above
@@ -630,10 +644,32 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     }
   }
 
+  // Outside the distances a runner has raced: steeper than Lite's exponent (kShift), plus their own exponent when Lite can't see it.
+  const extrapolation = (m) => {
+    if (!lite || !(TUNE.kShift || TUNE.kOwn)) return 1;
+    const ms = liteIn.map((s) => s.m);
+    const lo = Math.min(...ms), hi = Math.max(...ms);
+    if (m >= lo * 0.98 && m <= hi * 1.02) return 1;
+    const gap = Math.log(m / (m < lo ? lo : hi)); // < 0 below the shortest, > 0 above the longest
+    let k = TUNE.kShift;
+    if (TUNE.kOwn && Number.isNaN(liteFeatures(liteIn.map((s) => ({ m: s.m, sec: s.s, surf: 'track' })), { m, surf: 'track' }).k_ind)) {
+      const best = new Map();
+      for (const s of liteIn) if (s.age <= 365) { const d = Math.round(s.m); if (!best.has(d) || s.s < best.get(d)) best.set(d, s.s); }
+      const pts = [...best].map(([d, sec]) => ({ x: Math.log(d), y: Math.log(sec) }));
+      const span = pts.length >= 2 ? Math.max(...pts.map((p) => p.x)) - Math.min(...pts.map((p) => p.x)) : 0;
+      if (span >= Math.log(1.4)) {
+        const xm = pts.reduce((a, p) => a + p.x, 0) / pts.length, ym = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+        const kHat = clamp(pts.reduce((a, p) => a + (p.x - xm) * (p.y - ym), 0) / pts.reduce((a, p) => a + (p.x - xm) ** 2, 0), 0.95, 1.3);
+        k += TUNE.kOwn * (kHat - TUNE.kRef) * (span ** 2 / (span ** 2 + TUNE.kShrink ** 2));
+      }
+    }
+    return Math.exp(k * gap);
+  };
+
   const est = {};
   const mileT = timeFor(vo2r, 1600) * Math.pow(1600 / 5000, speedIndex);
   for (const e of EVENTS) {
-    let t = lite ? lite.by[e.key].sec * trendMul : e.m >= 1500 ? timeFor(vo2r, e.m) * Math.pow(e.m / 5000, speedIndex) : shortFromMile(mileT, e.m);
+    let t = lite ? lite.by[e.key].sec * trendMul * extrapolation(e.m) : e.m >= 1500 ? timeFor(vo2r, e.m) * Math.pow(e.m / 5000, speedIndex) : shortFromMile(mileT, e.m);
     if (!lite && cs && e.m >= 1500 && e.m <= 5000) t = 0.7 * t + 0.3 * ((e.m - cs.dPrime) / cs.speed);
     // A recent race or PR at this exact distance is the best evidence there
     // is; the model is pulled toward it (strongly for 400/800, where the
@@ -649,7 +685,7 @@ export function computeFitness({ person, models = modelSet(), workouts, days, ma
     const scale = t / raw;
     // A target far from every input is less certain than the model's own range says.
     const spread = lite && TUNE.rangeSpread ? 1 + TUNE.rangeSpread * Math.min(...liteIn.map((s) => Math.abs(Math.log(e.m / s.m)))) : 1;
-    est[e.key] = { ...e, sec: t, raw, lo: lite ? t * Math.pow(lite.by[e.key].lo * trendMul * scale / t, spread) : null, hi: lite ? t * Math.pow(lite.by[e.key].hi * trendMul * scale / t, spread) : null };
+    est[e.key] = { ...e, sec: t, raw, lo: lite ? t * Math.pow(lite.by[e.key].lo / lite.by[e.key].sec, spread) : null, hi: lite ? t * Math.pow(lite.by[e.key].hi / lite.by[e.key].sec, spread) : null };
   }
 
   // KestrelPredict-Short: the events Lite was not trained on. Its sources are Lite's own estimates (a little
