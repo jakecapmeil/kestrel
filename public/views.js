@@ -32,7 +32,12 @@
   async function logRange(from, to){ return own() ? await getJson(`/api/log?personId=${encodeURIComponent(activePersonId)}&from=${from}&to=${to}`) : null; }
   const weekStart = (d = new Date())=>{ const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
   const intensity = (diff)=> !diff ? 'i1' : diff <= 3 ? 'i1' : diff <= 5 ? 'i2' : diff <= 7 ? 'i3' : 'i4';
-  const runTitle = (d)=> d?.summary || d?.sessions?.[0] && (SESSION_LABEL[d.sessions[0].category] || 'Run') || (d?.miles ? 'Run' : 'Rest day');
+  // A run's name: the main run's own title (not a watch's "Morning Run"), else its kind. Kestrel AI's summary is a paragraph, not a name.
+  const runTitle = (d)=>{
+    const s = (d?.sessions || []).filter((x)=> x.category !== 'crosstrain').sort((a, b)=> (b.miles || 0) - (a.miles || 0))[0] || d?.sessions?.[0];
+    if(s) return s.title && !/^(morning|afternoon|evening|lunch|night)? ?run$/i.test(s.title) ? s.title : SESSION_LABEL[s.category] || 'Run';
+    return d?.summary && d.summary.length <= 40 ? d.summary : d?.miles ? 'Run' : 'Rest day';
+  };
   const paceOf = (mi, min)=> mi && min ? clock(min * 60 / mi) : '–';
   async function saveDayFields(date, fields){ const r = await post('/api/log/day', { personId:activePersonId, date, fields }); if(r?.error) alert(r.error); else { fitnessData = null; V.cache = {}; } return r; }
 

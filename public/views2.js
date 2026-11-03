@@ -21,8 +21,8 @@
   }
 
   // ---------------------------------------------------------------- Calendar › Training
-  // The day is the app's own day card (sessions with their splits, Kestrel AI's note, what happened, recovery, the editor),
-  // moved in beside the month. Phones get a short summary under the month; a tap opens the card on its own page.
+  // Beside (desktop) or under (phone) the month: the day's summary from dayview.js. Its full-screen page has the
+  // route, charts and splits, with the app's own day card (sessions, the editor) under them.
   const wide = ()=> window.innerWidth >= 1024;
   let tlHome = null;
   // Put the day card back on its own page before this page's HTML is replaced, or the redraw would delete it.
@@ -75,27 +75,29 @@
     V.days = byDate;
     return `<div class="kv-row" style="--c:1.15fr 1fr"><div class="kv-stack">${monthGrid(y, m, cell, side, 'logMonth')}
         <div class="kv-legend"><span><i class="i1"></i>Easy 1-3</span><span><i class="i2"></i>Moderate 4-5</span><span><i class="i3"></i>Hard 6-7</span><span><i class="i4"></i>Very hard 8-10</span><span><i class="pl"></i>Planned</span></div></div>
-      <div class="kv-stack">${wide() ? '<div id="kvDayHost"></div>' : dayPanel(V.sel, byDate[V.sel], plan[V.sel])}</div></div>`;
+      <div class="kv-stack">${dayPanel(V.sel, byDate[V.sel], plan[V.sel])}</div></div>`;
   };
-  SCREENS.log.after = ()=>{ if(wide()) mountDay(V.sel, V.days, false); };
+  SCREENS.log.after = ()=>{ const x = V.days?.[V.sel]; if(wide() && x?.miles) window.KDay.mountPeek(x, own()); };
   ACT.logMonth = (s)=>{ let [y, m] = V.month; m += +s; if(m < 0){ m = 11; y--; } if(m > 11){ m = 0; y++; } V.month = [y, m];
     // The day beside the month must belong to it: keep the same day number, or the 1st.
     const t = todayKey(), inMonth = (k)=> k && +k.slice(0, 4) === y && +k.slice(5, 7) === m + 1;
     V.sel = inMonth(t) ? t : iso(new Date(y, m, Math.min(+(V.sel || t).slice(8), new Date(y, m + 1, 0).getDate())));
     redraw(); };
-  ACT.logSel = (d)=>{ if(tlDirty && wide() && !confirm('Discard your changes to this day?')) return; tlDirty = tlSplitDirty = false; if(V.sel === d && !wide()) return push('day|' + d); V.sel = d; redraw(); };
+  ACT.logSel = (d)=>{ if(V.sel === d && !wide()) return push('day|' + d); V.sel = d; redraw(); };
 
-  // Phones: what was planned or run, in a few lines. The card opens from it.
+  // What was planned or run. A run day shows its six numbers, difficulty and Kestrel AI's line (desktop adds the route).
   function dayPanel(d, x, p){
     const isToday = d === todayKey();
     const ttl = x?.miles ? runTitle(x) : p ? (p.type === 'Off' ? 'Rest day' : p.type) : 'Rest day';
+    if(x?.miles) return `<div class="card kv-card kd-peek"><div class="kv-ch"><div><div class="kv-eb">${esc(nice(d, { weekday:'long', month:'short', day:'numeric' }))}${isToday ? ' · today' : ''}</div><div class="kv-ct big">${esc(ttl)}</div></div>
+      <div class="kv-ch-r"><button type="button" class="pri kd-open" data-a="dayFull" data-v="${d}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 2h4v4M6 14H2v-4M14 2 9 7M2 14l5-5"/></svg>${wide() ? 'Full screen' : 'Open'}</button></div></div>
+      ${window.KDay.peekHtml(x, wide())}</div>`;
     const head = `<div class="card kv-card kv-dayhead"><div class="kv-ch"><div><div class="kv-eb">${esc(nice(d, { weekday:'long', month:'short', day:'numeric' }))}${isToday ? ' · today' : ''}</div><div class="kv-ct big">${esc(ttl)}</div></div>
-      <div class="kv-ch-r"><button type="button" class="pri" data-a="dayFull" data-v="${d}">${x?.miles || x?.notes || x?.summary ? 'Open' : d <= todayKey() ? 'Add a run' : 'Details'}</button></div></div>
+      <div class="kv-ch-r"><button type="button" class="pri" data-a="dayFull" data-v="${d}">${x?.notes || x?.summary ? 'Open' : d <= todayKey() ? 'Add a run' : 'Details'}</button></div></div>
       ${p && !x?.miles ? `<div class="kv-hint">Planned: ${esc(p.type === 'Off' ? 'rest' : `${p.type} ${p.miles} mi`)}${sessionText(p) || p.base?.notes ? ' · ' + esc(sessionText(p) || p.base.notes) : ''}</div>` : ''}
       ${x?.plan ? `<div class="kv-hint">Plan: ${esc(x.plan.planned || x.plan.label || '')}</div>` : ''}
       ${x?.day_line ? `<div class="kv-note"><b>Kestrel AI:</b> ${esc(x.day_line)}</div>` : ''}</div>`;
-    if(!x?.miles) return head + (d > todayKey() && p ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
-    return head + tiles([['Miles', Math.round(x.miles * 100) / 100], ['Time', x.minutes ? clock(x.minutes * 60) : '–'], ['Pace', paceOf(x.miles, x.minutes) + (x.miles && x.minutes ? '/mi' : '')], ['Effort', x.difficulty ? x.difficulty + '/10' : '–']], 4);
+    return head + (d > todayKey() && p ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
   }
   ACT.dayFull = (d)=>{ V.sel = d; push('day|' + d); };
   ACT.dayKai = (d)=> openKai(`About ${nice(d, { weekday:'long', month:'short', day:'numeric' })}: `, false);
@@ -103,9 +105,10 @@
     const [lg] = await Promise.all([logRange(d, d)]);
     const x = lg?.days?.[0]; V.cache['day:' + d] = x;
     V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
-    return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
+    // A run gets the full layout; the day card (sessions, notes, the editor) follows it, or stands alone on other days.
+    return `<button type="button" class="kv-back" data-a="back">‹ Back</button>${x?.miles ? window.KDay.fullHtml(x) + '<h2 class="kv-ct kd-cardh">Sessions and notes</h2>' : ''}<div id="kvDayHost"></div>`;
   };
-  SCREENS.day.after = (el, d)=> mountDay(d, V.days, true);
+  SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(V.days[d]?.miles) window.KDay.mountFull(V.days[d], own()); };
 
   // ---------------------------------------------------------------- Calendar › Team
   SCREENS.teamcal = async ()=>{

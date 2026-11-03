@@ -369,6 +369,10 @@
   async function toggle3d(host, btn, pts, st){
     if(!host.hidden){ host.hidden = true; btn.textContent = 'View in 3D'; if(map3d){ map3d.remove(); map3d = null; } return; }
     host.hidden = false; btn.textContent = 'Hide 3D';
+    await mount3d(host, pts, st);
+  }
+  // Draws the route on 3D terrain in host. The day page calls this for its 3D tab too.
+  async function mount3d(host, pts, st){
     host.innerHTML = '<div class="hint">Loading terrain…</div>';
     try{
       const gl = await loadMapLibre();
@@ -400,5 +404,5 @@
     }
   }
 
-  window.kRecords = { render, openPicker, closePicker, mountActivity, ensureCourses, courseName, state: S };
+  window.kRecords = { render, openPicker, closePicker, mountActivity, ensureCourses, courseName, mount3d, state: S };
 })();
