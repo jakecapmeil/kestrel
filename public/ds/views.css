@@ -385,7 +385,7 @@ body.kv-spoke #navSegs{display:none;}
 .kd-map{position:relative;height:300px;padding:0;overflow:hidden;border-radius:24px;background:var(--surface-2);}
 .kd-map .kd-map-in{position:absolute;inset:0;}
 .kd-map-in .kv-hint{padding:20px;}
-.kd-seg{position:absolute;left:12px;bottom:12px;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface);box-shadow:var(--shadow-2);z-index:2;}
+.kd-seg{position:absolute;left:12px;top:12px;display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--surface);box-shadow:var(--shadow-2);z-index:2;}
 .kd-seg button{height:38px;min-width:64px;border:0;border-radius:999px;background:transparent;color:var(--text);font:600 13px var(--font-ui);padding:0 12px;}
 .kd-seg button.on{background:var(--inverse);color:var(--on-inverse);}
 .kd-maptag{position:absolute;right:12px;top:12px;padding:6px 12px;border-radius:999px;background:var(--surface);font:600 12px var(--font-ui);z-index:2;}
@@ -419,7 +419,12 @@ body.kv-spoke #navSegs{display:none;}
 .kd-split > span:nth-child(4),.kd-split > span:nth-child(5){text-align:right;}
 .kd-split .bar{height:10px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
 .kd-split .bar i{display:block;height:100%;border-radius:999px;background:var(--accent);}
-.kd-cardh{margin:8px 0 10px;}
+.kd-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.kd-top .kv-back{margin:0;}
+.kd-map .kd-map-gl{position:absolute;inset:0;opacity:0;transition:opacity var(--t-med) var(--ease);}
+.kd-map-in.gl .kd-map-gl{opacity:1;}
+.kd-map-in.gl > .kd-route{visibility:hidden;}
+.kd-mile{display:flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#fff;color:#17171a;font:600 10px var(--font-mono);box-shadow:0 1px 3px rgba(0,0,0,.35);}
 @media (min-width:1024px){
   .kd-map{height:440px;}
   .kd-seg{left:16px;top:16px;bottom:auto;}
@@ -427,7 +432,6 @@ body.kv-spoke #navSegs{display:none;}
   .kd-sumcard .kd-stat{border-top:0;padding-top:0;border-left:1px solid var(--line);padding-left:16px;}
   .kd-sumcard .kd-stat:first-child{border-left:0;padding-left:0;}
   .kd-sumcard .kd-stat b{font-size:24px;line-height:1.15;}
-  .kd-sumcard .kd-diff{max-width:680px;}
   .kd-cols{grid-template-columns:minmax(0,1fr) minmax(320px,400px);grid-template-areas:"chart ai" "splits ai";align-items:start;}
   .kd-aicard{grid-area:ai;}.kd-chartcard{grid-area:chart;}.kd-splitcard{grid-area:splits;}
   .kd-plot svg{height:240px;}

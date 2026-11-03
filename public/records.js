@@ -404,5 +404,5 @@
     }
   }
 
-  window.kRecords = { render, openPicker, closePicker, mountActivity, ensureCourses, courseName, mount3d, state: S };
+  window.kRecords = { render, openPicker, closePicker, mountActivity, ensureCourses, courseName, mount3d, loadMapLibre, state: S };
 })();

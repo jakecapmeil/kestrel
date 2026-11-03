@@ -105,8 +105,14 @@
     const [lg] = await Promise.all([logRange(d, d)]);
     const x = lg?.days?.[0]; V.cache['day:' + d] = x;
     V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
-    // A run gets the full layout; the day card (sessions, notes, the editor) follows it, or stands alone on other days.
-    return `<button type="button" class="kv-back" data-a="back">‹ Back</button>${x?.miles ? window.KDay.fullHtml(x) + '<h2 class="kv-ct kd-cardh">Sessions and notes</h2>' : ''}<div id="kvDayHost"></div>`;
+    // A run gets the full layout, with the day card (the editor) kept out of sight until Edit. Other days show the card.
+    if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button><button type="button" class="sm-btn" data-a="dayEdit">Edit</button></div>${window.KDay.fullHtml(x)}<div id="kvDayHost" hidden></div>`;
+  };
+  ACT.dayEdit = ()=>{
+    const h = document.getElementById('kvDayHost'); if(!h) return;
+    h.hidden = false; document.getElementById('tlEdit')?.click();
+    h.scrollIntoView({ behavior:'smooth', block:'start' });
   };
   SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(V.days[d]?.miles) window.KDay.mountFull(V.days[d], own()); };
 
