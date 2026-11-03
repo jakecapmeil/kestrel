@@ -5,6 +5,8 @@
 import { credentials, IntervalsError } from './intervals.js';
 
 const MAX_POINTS = 400;
+// Version 2 added heart rate as each point's fifth value. Older cached routes are fetched again once to pick it up.
+const TRACK_VERSION = 2;
 const R = 6371000;
 const rad = (d) => (d * Math.PI) / 180;
 
@@ -29,17 +31,18 @@ export function buildTrack(streams) {
   const ll = pairsOf(by('latlng'));
   const alt = by('altitude')?.data || by('fixed_altitude')?.data || [];
   const time = by('time')?.data || [];
+  const hr = by('heartrate')?.data || [];
   const raw = [];
   ll.forEach((p, i) => {
     if (Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0]) > 0.01 && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180) {
-      raw.push([p[0], p[1], Number.isFinite(alt[i]) ? alt[i] : null, Number.isFinite(time[i]) ? time[i] : null]);
+      raw.push([p[0], p[1], Number.isFinite(alt[i]) ? alt[i] : null, Number.isFinite(time[i]) ? time[i] : null, Number.isFinite(hr[i]) && hr[i] > 0 ? hr[i] : null]);
     }
   });
   if (raw.length < 5) return null;
   const step = Math.max(1, Math.ceil(raw.length / MAX_POINTS));
   const pts = raw.filter((_, i) => i % step === 0 || i === raw.length - 1)
-    .map(([lat, lon, a, t]) => [Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, a == null ? null : Math.round(a * 10) / 10, t]);
-  return { pts };
+    .map(([lat, lon, a, t, h]) => [Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5, a == null ? null : Math.round(a * 10) / 10, t, h == null ? null : Math.round(h)]);
+  return { pts, v: TRACK_VERSION };
 }
 
 // Distance, climb and the box around the route, from the stored points.
@@ -73,23 +76,40 @@ export async function getTrack(env, personId, stravaId) {
   if (!run) return { error: 'not_found' };
   const cached = await db.prepare('SELECT points FROM run_tracks WHERE person_id = ? AND strava_id = ?').bind(personId, stravaId).first();
   let pts = null;
+  let stale = false;
   if (cached) {
-    try { pts = JSON.parse(cached.points).pts; } catch { /* refetch */ }
+    try { const c = JSON.parse(cached.points); pts = c.pts; stale = c.v !== TRACK_VERSION; } catch { /* refetch */ }
   }
-  if (!pts) {
-    if (!stravaId.startsWith('intervals:')) return { error: 'no_gps', note: 'This run came through a connector, which does not send GPS. Runs synced from a watch through intervals.icu have a route.' };
-    let creds;
-    try { creds = await credentials(env, personId); } catch (e) { return { error: 'no_gps', note: e instanceof IntervalsError ? e.message : 'Connect your watch to see routes.' }; }
-    const res = await fetch(`${creds.base}/activity/${encodeURIComponent(stravaId.slice('intervals:'.length))}/streams?types=latlng,altitude,time`, {
-      headers: { Authorization: 'Basic ' + btoa('API_KEY:' + creds.key), Accept: 'application/json' },
-    });
-    if (res.status === 404) return { error: 'no_gps', note: 'intervals.icu has no GPS for this run.' };
-    if (!res.ok) return { error: 'unavailable', note: `intervals.icu answered ${res.status}. Try again in a minute.` };
-    const built = buildTrack(await res.json());
-    if (!built) return { error: 'no_gps', note: 'This run has no GPS points (a treadmill or track run, or the watch had no signal).' };
-    pts = built.pts;
-    await db.prepare('INSERT OR REPLACE INTO run_tracks (person_id, strava_id, points, created_at) VALUES (?, ?, ?, ?)')
-      .bind(personId, stravaId, JSON.stringify({ pts }), Date.now()).run();
+  if (!pts || (stale && stravaId.startsWith('intervals:'))) {
+    const fresh = await fetchTrack(env, personId, stravaId);
+    if (fresh.pts) {
+      pts = fresh.pts;
+      await db.prepare('INSERT OR REPLACE INTO run_tracks (person_id, strava_id, points, created_at) VALUES (?, ?, ?, ?)')
+        .bind(personId, stravaId, JSON.stringify({ pts, v: TRACK_VERSION }), Date.now()).run();
+    } else if (!pts) return fresh;
+    // A stale route that can't be refetched still shows, without heart rate. When intervals.icu no longer has
+    // the streams at all, mark it current so it isn't asked again on every open.
+    else if (fresh.error === 'no_gps') {
+      await db.prepare('UPDATE run_tracks SET points = ? WHERE person_id = ? AND strava_id = ?')
+        .bind(JSON.stringify({ pts, v: TRACK_VERSION }), personId, stravaId).run();
+    }
   }
   return { pts, stats: trackStats(pts) };
+}
+
+async function fetchTrack(env, personId, stravaId) {
+  if (!stravaId.startsWith('intervals:')) return { error: 'no_gps', note: 'This run came through a connector, which does not send GPS. Runs synced from a watch through intervals.icu have a route.' };
+  let creds;
+  try { creds = await credentials(env, personId); } catch (e) { return { error: 'no_gps', note: e instanceof IntervalsError ? e.message : 'Connect your watch to see routes.' }; }
+  let res;
+  try {
+    res = await fetch(`${creds.base}/activity/${encodeURIComponent(stravaId.slice('intervals:'.length))}/streams?types=latlng,altitude,time,heartrate`, {
+      headers: { Authorization: 'Basic ' + btoa('API_KEY:' + creds.key), Accept: 'application/json' },
+    });
+  } catch { return { error: 'unavailable', note: 'Couldn’t reach intervals.icu. Try again in a minute.' }; }
+  if (res.status === 404) return { error: 'no_gps', note: 'intervals.icu has no GPS for this run.' };
+  if (!res.ok) return { error: 'unavailable', note: `intervals.icu answered ${res.status}. Try again in a minute.` };
+  const built = buildTrack(await res.json());
+  if (!built) return { error: 'no_gps', note: 'This run has no GPS points (a treadmill or track run, or the watch had no signal).' };
+  return built;
 }
