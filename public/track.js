@@ -62,11 +62,14 @@
     return d;
   }
 
-  const ALL_TABS = [['plan','Plan'],['log','Log'],['goals','Goals'],['xtrain','Cross-train'],['food','Fuel'],['library','Workouts'],['fitness','Fitness'],['kai','Coach']];
-  // The tab keys to show, in order. Before prefs load (or for a guest) every tab shows.
+  // The Run tab's views (Log, Cross-train and Fuel live under Calendar and Body now, so they aren't hideable here).
+  const ALL_TABS = [['plan','Plan'],['library','Workouts'],['fitness','Fitness'],['goals','Goals'],['kai','Coach']];
+  // The view keys to show, in order. Before prefs load (or for a guest) every view shows.
   function visibleTabs(){
     const p = T.prefs || window.KESTREL?.me?.prefs;
-    return p?.train_tabs?.length ? p.train_tabs : ALL_TABS.map(t=> t[0]);
+    const keys = ALL_TABS.map(t=> t[0]);
+    const mine = (p?.train_tabs || []).filter(k=> keys.includes(k));
+    return mine.length ? (mine.includes('plan') ? mine : ['plan', ...mine]) : keys;
   }
 
   function customizeTabs(){
@@ -74,7 +77,7 @@
     const hidden = ()=> ALL_TABS.map(t=> t[0]).filter(k=> !order.includes(k));
     const label = (k)=> ALL_TABS.find(t=> t[0] === k)[1];
     const draw = (box)=>{
-      box.innerHTML = `<p class="hint">Choose the Train tabs you use and put them in your order. Plan always stays.</p>
+      box.innerHTML = `<p class="hint">Choose the Run views you use and put them in your order. Plan always stays.</p>
         <div class="tk-list">${order.map((k, i)=> `<div class="tk-row"><label class="check-row"><input type="checkbox" data-tab="${k}" checked ${k === 'plan' ? 'disabled' : ''}><span>${label(k)}</span></label>
           <span class="tk-move"><button type="button" class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move ${label(k)} up">↑</button><button type="button" class="ghost" data-down="${i}" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Move ${label(k)} down">↓</button></span></div>`).join('')}
         ${hidden().map(k=> `<div class="tk-row off"><label class="check-row"><input type="checkbox" data-tab="${k}"><span>${label(k)}</span></label><span class="hint">Hidden</span></div>`).join('')}</div>
@@ -85,11 +88,11 @@
       $('tkReset').onclick = ()=>{ order = ALL_TABS.map(t=> t[0]); draw(box); };
       $('tkSave').onclick = async (e)=>{
         e.target.disabled = true;
-        try{ await savePrefs({ train_tabs: order }); closeModal(); window.kTrack.paintTabs(); renderTraining(); }
+        try{ await savePrefs({ train_tabs: order }); closeModal(); window.kTrack.paintTabs(); renderTraining(); window.renderNav?.(); }
         catch(err){ alert(err.message); e.target.disabled = false; }
       };
     };
-    modal('Customize Train', '', draw);
+    modal('Customize Run', '', draw);
   }
 
   // Draws the Train tab bar from the runner's choice; returns the view to show.
@@ -246,13 +249,13 @@
         const btn = e.submitter || e.target.querySelector('[type=submit]'); btn.disabled = true;
         try{
           await send('/api/goals', { id:g?.id, kind:x.kind, status:g?.status || 'active', progress:g?.pct, ...f, priority: !!f.priority });
-          closeModal(); renderGoals($('tpGoalsView'));
+          closeModal(); renderGoals($('tpGoalsView')); window.kvRefresh?.();
         }catch(err){ alert(err.message); btn.disabled = false; }
       };
       if($('glDelete')) $('glDelete').onclick = async ()=>{
         if(!confirm('Delete this goal?')) return;
         await send('/api/goals/delete', { id:g.id }).catch(err=> alert(err.message));
-        closeModal(); renderGoals($('tpGoalsView'));
+        closeModal(); renderGoals($('tpGoalsView')); window.kvRefresh?.();
       };
     };
     modal(g ? 'Edit goal' : 'New goal', '', draw);
@@ -519,7 +522,7 @@
 
   window.kTrack = {
     runnerCard,
-    paintTabs, visibleTabs, loadPrefs, customizeTabs,
+    paintTabs, visibleTabs, loadPrefs, customizeTabs, editGoal, GOAL_TEMPLATES,
     goals: renderGoals, xtrain: renderXtrain, food: renderFood,
     reset(){ Object.assign(T, { prefs:null, meta:null, foodDate:null, foodTier:'', recent:null, goals:null, xt:null }); },
   };

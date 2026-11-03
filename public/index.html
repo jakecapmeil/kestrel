@@ -1785,6 +1785,7 @@
 <link rel="stylesheet" href="/ds/base.css">
 <link rel="stylesheet" href="/ds/components.css">
 <link rel="stylesheet" href="/ds/shell.css">
+<link rel="stylesheet" href="/ds/views.css">
 <link rel="stylesheet" href="/kestrel.css">
 <link rel="stylesheet" href="/ds/motion.css">
 </head>
@@ -1807,17 +1808,64 @@
         <button type="button" id="syncSetupItem">Watch setup</button>
       </div>
     </div>
+    <button type="button" class="rec-btn" id="kRecBtn" aria-label="Record a run"><i aria-hidden="true"></i><span>Record</span></button>
     <button type="button" class="k-who" id="kWho"></button>
     <nav class="k-switch" aria-label="Product"><a href="/" aria-current="page">Run</a><a href="/lab">Lab</a></nav>
     </div>
   </header>
 
   <div class="page-tabs" role="tablist" aria-label="Sections">
-    <button type="button" class="page-tab active" id="pageTabSchedule" role="tab" aria-selected="true" aria-controls="pageSchedule"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle class="fill" cx="8.5" cy="14.5" r="1.1"/><circle class="fill" cx="12" cy="14.5" r="1.1"/><circle class="fill" cx="15.5" cy="14.5" r="1.1"/></svg><span>Schedule</span></button>
-    <button type="button" class="page-tab" id="pageTabTraining" role="tab" aria-selected="false" aria-controls="pageTraining"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.500c0-1.7.5-3 1.8-3.400l3.2-1 1.4 1.800c.7.9 1.7 1.4 2.8 1.400H17c2.2 0 4 1.4 4 3.200V17H3z"/><path d="M8 11.100V8.500M3.5 19.500h17M12.7 13.300l.8-1.300M15 13.600l.8-1.3"/></svg><span>Train</span></button>
-    <button type="button" class="page-tab" id="pageTabRecord" role="tab" aria-selected="false" aria-controls="pageRecord"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle class="fill" cx="12" cy="12" r="3.6"/></svg><span>Record</span><i class="rec-dot" aria-hidden="true"></i></button>
-    <button type="button" class="page-tab" id="pageTabTeam" role="tab" aria-selected="false" aria-controls="pageTeam"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8" r="2.6"/><circle cx="16.5" cy="9" r="2.2"/><path d="M3.5 19c.4-3 2.5-4.8 5-4.8s4.6 1.8 5 4.8M13.6 14.6c.8-.6 1.8-.9 2.9-.9 2.2 0 3.7 1.5 4 4.3"/></svg><span>Team</span></button>
-    <button type="button" class="page-tab" id="pageTabYou" role="tab" aria-selected="false" aria-controls="pageYou"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c.7-3.700 3.5-5.800 7-5.800s6.300 2.100 7 5.800"/></svg><span>You</span></button>
+    <button type="button" class="page-tab" data-nav="today" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg><span>Today</span></button>
+    <button type="button" class="page-tab" data-nav="run" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15.500c0-1.7.5-3 1.8-3.400l3.2-1 1.4 1.800c.7.9 1.7 1.4 2.8 1.400H17c2.2 0 4 1.4 4 3.200V17H3z"/><path d="M8 11.100V8.500M3.5 19.500h17M12.7 13.300l.8-1.300M15 13.600l.8-1.3"/></svg><span>Run</span></button>
+    <button type="button" class="page-tab" data-nav="calendar" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle class="fill" cx="8.5" cy="14.5" r="1.1"/><circle class="fill" cx="12" cy="14.5" r="1.1"/><circle class="fill" cx="15.5" cy="14.5" r="1.1"/></svg><span>Calendar</span></button>
+    <button type="button" class="page-tab" data-nav="body" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.3-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.7-7 10-7 10z"/><path d="M7.5 12h2.5l1.2-2.2 1.8 4.2 1.2-2h2.3"/></svg><span>Body</span></button>
+    <button type="button" class="page-tab" data-nav="team" role="tab" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8.5" cy="8" r="2.6"/><circle cx="16.5" cy="9" r="2.2"/><path d="M3.5 19c.4-3 2.5-4.8 5-4.8s4.6 1.8 5 4.8M13.6 14.6c.8-.6 1.8-.9 2.9-.9 2.2 0 3.7 1.5 4 4.3"/></svg><span>Team</span></button>
+  </div>
+
+  <!-- One heading row for every page: what you're looking at, and its views. -->
+  <div class="nav-head" id="navHead">
+    <div class="nav-titles"><button type="button" class="nav-back" id="navBack" hidden>‹ Back</button><h2 class="page-title" id="navTitle"></h2><div class="nav-sub" id="navSub"></div></div>
+    <div class="seg" id="navSegs" role="tablist" aria-label="Views"></div>
+  </div>
+
+  <!-- The redesigned screens draw here (views.js, views2.js). -->
+  <div id="pageV" style="display:none;"></div>
+
+  <div id="pageToday" style="display:none;">
+    <div class="td-grid" id="tdGrid">
+      <div class="td-main">
+        <div class="td-sec"><h3 class="td-h">Your run</h3><div id="tdRunSlot">
+        <section class="card today-card" id="todayCard" style="display:none;">
+          <div class="section-head" style="margin-bottom:var(--sp-2);">
+            <div>
+              <div class="eyebrow" id="tmEyebrow">Today</div>
+              <div class="tm-main"><span class="tm-type" id="tmType"></span><span class="tm-miles num" id="tmMiles"></span></div>
+            </div>
+            <span id="tmBadge"></span>
+          </div>
+          <div class="tm-detail" id="tmDetail"></div>
+          <div class="tm-reason" id="tmReason" style="display:none;"></div>
+          <div class="tm-done" id="tmDone" style="display:none;"></div>
+          <div class="tm-today" id="tmNext"></div>
+          <div class="cluster" style="margin-top:var(--sp-3);">
+            <button type="button" class="ghost sm-btn" id="tmCant">Can't do this</button>
+            <button type="button" class="ghost sm-btn" id="tmReset" style="display:none;">Back to the plan</button>
+            <button type="button" class="ghost sm-btn" id="tmAsk">Ask Kestrel AI</button>
+          </div>
+        </section>
+        </div><div class="card td-noplan" id="tdNoPlan" style="display:none;"></div></div>
+        <div class="td-sec"><h3 class="td-h">This week <small id="tdWeekSum"></small></h3><div class="td-week" id="tdWeek"></div></div>
+        <div class="td-sec"><h3 class="td-h">Off the run</h3><div class="td-off" id="tdOff"></div></div>
+      </div>
+      <div class="td-side">
+        <div class="td-sec"><h3 class="td-h">How you feel</h3><div class="card" id="tdFeel"></div></div>
+        <div class="td-sec"><h3 class="td-h">Team today</h3><div id="tdTeam"></div></div>
+        <div class="td-sec"><h3 class="td-h">Kestrel AI</h3><div class="card td-ask">
+          <div class="hint">Tell it how a run felt, what hurts, or what you can't make, and it adjusts your plan.</div>
+          <div class="kai-compose"><textarea id="tdAskInput" rows="2" maxlength="1000" placeholder="Tell Kestrel AI how it went"></textarea><button id="tdAskBtn" type="button">Send</button></div>
+        </div></div>
+      </div>
+    </div>
   </div>
 
   <div id="pageSchedule">
@@ -1967,24 +2015,6 @@
     <div id="tpPlanView" class="split split-plan">
       <div class="stack-cards">
         <div id="kPersonalPlan"></div>
-        <section class="card today-card" id="todayCard" style="display:none;">
-          <div class="section-head" style="margin-bottom:var(--sp-2);">
-            <div>
-              <div class="eyebrow" id="tmEyebrow">Today</div>
-              <div class="tm-main"><span class="tm-type" id="tmType"></span><span class="tm-miles num" id="tmMiles"></span></div>
-            </div>
-            <span id="tmBadge"></span>
-          </div>
-          <div class="tm-detail" id="tmDetail"></div>
-          <div class="tm-reason" id="tmReason" style="display:none;"></div>
-          <div class="tm-done" id="tmDone" style="display:none;"></div>
-          <div class="tm-today" id="tmNext"></div>
-          <div class="cluster" style="margin-top:var(--sp-3);">
-            <button type="button" class="ghost sm-btn" id="tmCant">Can't do this</button>
-            <button type="button" class="ghost sm-btn" id="tmReset" style="display:none;">Back to the plan</button>
-            <button type="button" class="ghost sm-btn" id="tmAsk">Ask Kestrel AI</button>
-          </div>
-        </section>
         <section class="card">
           <div class="section-head">
             <div>
@@ -2091,6 +2121,7 @@
               <div class="card-title" id="tlDayTitle"></div>
             </div>
             <div class="cluster tl-day-actions">
+              <button type="button" class="ghost sm-btn tl-full-btn" id="tlFull" aria-pressed="false">Full screen</button>
               <button type="button" class="ghost sm-btn" id="tlEdit">Edit</button>
               <button type="button" class="ghost sm-btn" id="tlCancel">Cancel</button>
               <button type="button" class="ghost tl-close" id="tlClose" aria-label="Close day">✕</button>
@@ -2317,6 +2348,7 @@
         <h2 class="page-title">Record a run</h2>
       </div>
     </div>
+    <div class="rec-top"><button type="button" class="rec-close" id="recClose">‹ Back</button><span class="rec-top-t">Record a run</span></div>
     <div id="recRoot"></div>
   </div>
 
@@ -2388,6 +2420,7 @@
       </section>
       </div>
     </div>
+    <div id="teamFeedActs" class="you-stack team-feed-acts" hidden></div>
     <div id="teamActivitiesView" class="you-stack" hidden></div>
     <div id="teamRosterView" class="you-stack" hidden></div>
     <div id="teamTrainView" class="you-stack" hidden></div>
@@ -2806,7 +2839,7 @@ let selectedDate = null;
 let editMode = false;
 let showPastEvents = false;
 let currentPage = 'schedule';
-const PAGES = ['schedule','training','record','team','you'];
+const PAGES = ['v','today','schedule','training','record','team','you'];
 let scheduleView = 'calendar';
 let youView = 'profile';
 try{ const v = localStorage.getItem('kestrel.scheduleView'); scheduleView = ['meets','places'].includes(v) ? v : 'calendar'; }catch(e){}
@@ -3165,7 +3198,7 @@ async function cycleRsvp(eventId){
   if(currentPage === 'schedule' && scheduleView === 'meets') renderMeets();
 }
 
-const rsvpLabel = {unknown:'Unknown', available:'Coming', unavailable:'Not coming'};
+const rsvpLabel = {unknown:'RSVP', available:'Coming', unavailable:'Not coming'};
 
 function renderEvents(){
   const list = events[selectedDate] || [];
@@ -3858,22 +3891,184 @@ async function submitPost(){
 
 function setPage(page){
   if(!PAGES.includes(page)) page = 'schedule';
+  if(page !== 'v') window.KV?.park?.();
   document.body.classList.remove('tl-sheet');
   currentPage = page;
   PAGES.forEach(name=>{
     const cap = name[0].toUpperCase() + name.slice(1);
-    const on = page === name;
-    $('pageTab' + cap).classList.toggle('active', on);
-    $('pageTab' + cap).setAttribute('aria-selected', String(on));
-    $('page' + cap).style.display = on ? '' : 'none';
+    $('page' + cap).style.display = page === name ? '' : 'none';
   });
   try{ localStorage.setItem('kestrel.page', page); }catch(e){}
+  if(page === 'today') renderTodayPage();
   if(page === 'schedule') renderSchedule();
   if(page === 'you') renderYou();
   if(page === 'training') renderTraining();
   if(page === 'team') renderTeam();
   if(page === 'record') window.kRecord?.show(); else window.kRecord?.leave();
+  renderNav();
 }
+
+// --- Navigation: five tabs, each with its own views ------------------------------
+// The tabs regroup the app's existing pages: a tab and view map onto a page and that page's view.
+// Run: Plan, Workouts, Fitness, Goals, Coach. Calendar: your training log and the team schedule.
+// Body: how you feel (with the body map), cross-training and fuel. Team: feed, plan, meets, roster.
+// You (profile and settings) opens from your avatar; Record from the header.
+const NAV = {
+  today:{ segs:[] },
+  run:{ segs:[['plan','Plan'],['library','Workouts'],['fitness','Fitness'],['goals','Goals'],['kai','Coach']] },
+  calendar:{ segs:[['log','Training'],['team','Team']] },
+  body:{ segs:[['recovery','Recovery'],['xtrain','Cross-train'],['food','Fuel']] },
+  team:{ segs:[['feed','Feed'],['training','Plan'],['meets','Meets & places'],['roster','Roster']] },
+  you:{ segs:[['profile','Profile'],['records','Records'],['integrations','Integrate'],['settings','Settings']] },
+  record:{ segs:[] },
+};
+let navLastTab = 'today';
+const navLastView = {};
+// Which tab and view the page on screen belongs to.
+function navState(){
+  if(currentPage === 'v'){ const k = window.KV.key(); return k === 'today' ? ['today', null] : k.split('/'); }
+  if(currentPage === 'today') return ['today', null];
+  if(currentPage === 'training'){
+    if(trainingView === 'log') return ['calendar', 'log'];
+    if(trainingView === 'xtrain' || trainingView === 'food') return ['body', trainingView];
+    return ['run', trainingView];
+  }
+  if(currentPage === 'schedule') return scheduleView === 'calendar' ? ['calendar', 'team'] : ['team', 'meets'];
+  if(currentPage === 'team') return ['team', ['miles','activities'].includes(teamView) ? 'feed' : teamView];
+  if(currentPage === 'you') return youView === 'body' ? ['body', 'recovery'] : ['you', youView];
+  return [currentPage, null];
+}
+function navGo(tab, view){
+  view = view || navLastView[tab] || (NAV[tab]?.segs[0] || [])[0];
+  // Views that have a redesigned screen draw in #pageV; the rest (Coach, You, Record) keep their pages.
+  const kv = tab === 'today' ? 'today' : `${tab}/${view}`;
+  if(window.KV?.has(kv)){ window.KV.show(kv); return setPage('v'); }
+  if(tab === 'today') return setPage('today');
+  const train = (v)=>{ trainingView = v; try{ localStorage.setItem('kestrel.trainingView', v); }catch(e){} document.body.classList.remove('tl-sheet'); setPage('training'); };
+  if(tab === 'run') return train(view);
+  if(tab === 'calendar'){ if(view === 'log') return train('log'); scheduleView = 'calendar'; return setPage('schedule'); }
+  if(tab === 'body'){ if(view === 'recovery'){ youView = 'body'; return setPage('you'); } return train(view); }
+  if(tab === 'team'){ if(view === 'meets'){ scheduleView = 'meets'; return setPage('schedule'); } teamView = view === 'feed' ? 'miles' : view; return setPage('team'); }
+  if(tab === 'you'){ youView = view || 'profile'; return setPage('you'); }
+  if(tab === 'record') return setPage('record');
+}
+function navTitle(tab, view){
+  const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
+  if(tab === 'today') return new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
+  if(tab === 'run') return $('trTitle').textContent;
+  if(tab === 'calendar') return view === 'log' ? 'Your training' : 'Team schedule';
+  if(tab === 'body') return { recovery:'How you feel', xtrain:'Cross-training', food:'Fuel' }[view];
+  if(tab === 'team') return (window.KESTREL?.teams || []).find(t=> t.id === window.KESTREL?.teamId)?.name || 'Team';
+  if(tab === 'you') return p ? (p.first_name || p.name) : 'You';
+  if(tab === 'record') return 'Record a run';
+  return '';
+}
+function renderNav(){
+  const [tab, view] = navState();
+  if(!['you','record'].includes(tab)){ navLastTab = tab; try{ localStorage.setItem('kestrel.nav', tab); }catch(e){} }
+  if(view) navLastView[tab] = view;
+  document.querySelectorAll('.page-tabs [data-nav]').forEach(b=>{
+    const on = b.dataset.nav === tab;
+    b.classList.toggle('active', on); b.setAttribute('aria-selected', String(on));
+  });
+  document.body.dataset.nav = tab;
+  $('navTitle').textContent = currentPage === 'v' ? window.KV.title() : navTitle(tab, view);
+  $('navSub').textContent = currentPage === 'v' ? window.KV.sub() : tab === 'today' ? todaySubtitle() : '';
+  document.body.classList.toggle('kv-spoke', currentPage === 'v' && !!window.KV.spoke());
+  $('navBack').hidden = !['you','record'].includes(tab);
+  // Run's views follow the runner's choice (Customize); the view on screen always shows.
+  const custom = tab === 'run' && isRealPerson() && window.kTrack;
+  const keep = custom ? window.kTrack.visibleTabs() : null;
+  const segs = (NAV[tab]?.segs || []).filter(([v])=> !keep || keep.includes(v) || v === view)
+    .sort((a, b)=> keep ? keep.indexOf(a[0]) - keep.indexOf(b[0]) : 0);
+  $('navSegs').hidden = !segs.length;
+  $('navSegs').innerHTML = segs.map(([v, l])=> `<button type="button" class="seg-btn ${v === view ? 'active' : ''}" role="tab" aria-selected="${v === view}" data-navv="${v}">${l}</button>`).join('')
+    + (custom ? `<button type="button" class="seg-btn tk-gear" id="navCustomize" aria-label="Customize Run views" title="Customize Run views"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>` : '');
+  $('navCustomize')?.addEventListener('click', ()=> window.kTrack.customizeTabs());
+  $('navSegs').querySelectorAll('[data-navv]').forEach(b=> b.addEventListener('click', ()=> navGo(tab, b.dataset.navv)));
+  $('navSegs').querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
+}
+function todaySubtitle(){
+  const ev = (events[todayKey()] || [])[0];
+  return ev ? `${ev.title}${formatEventTimeRange(ev) ? ' · ' + formatEventTimeRange(ev) : ''}` : '';
+}
+
+// --- Today: the run, the week, off-the-run, how you feel, the team and the coach ---
+async function renderTodayPage(){
+  const own = isRealPerson();
+  renderTodayFeel(); renderTodayTeam(); renderTodayOff();
+  if(!own){
+    $('todayCard').style.display = 'none'; $('tdWeek').innerHTML = ''; $('tdWeekSum').textContent = ''; $('tdWeek').parentElement.hidden = true;
+    $('tdNoPlan').style.display = '';
+    $('tdNoPlan').innerHTML = '<div class="hint">Pick your name to see your run for today.</div>';
+    return;
+  }
+  const h = await loadKai();
+  if(currentPage !== 'today') return;
+  if(!h?.week){
+    $('todayCard').style.display = 'none'; $('tdWeek').innerHTML = ''; $('tdWeekSum').textContent = ''; $('tdWeek').parentElement.hidden = true;
+    $('tdNoPlan').style.display = '';
+    $('tdNoPlan').innerHTML = '<div class="card-title">No plan yet</div><div class="hint" style="margin:4px 0 12px;">Tell Kestrel AI your goals and it builds your plan with you.</div><button type="button" id="tdPlanBtn">Set up your plan</button>';
+    $('tdPlanBtn').onclick = ()=> navGo('run', 'plan');
+    return;
+  }
+  $('tdNoPlan').style.display = 'none'; $('tdWeek').parentElement.hidden = false;
+  renderToday(h);
+  const today = todayKey();
+  const planned = h.week.days.reduce((a, d)=> a + (Number(d.miles) || 0), 0);
+  $('tdWeekSum').textContent = `${Math.round(planned * 10) / 10} mi planned`;
+  $('tdWeek').innerHTML = h.week.days.map(d=>{
+    const off = d.type === 'Off';
+    return `<button type="button" class="td-day ${off ? 'off' : ''} ${d.date === today ? 'is-today' : ''} ${d.date < today ? 'past' : ''}" data-date="${d.date}">
+      <span class="td-dn">${escapeHtml(d.day.slice(0,3))}</span><b>${escapeHtml(off ? 'Rest' : d.type)}</b><span class="td-mi num">${off ? '–' : `${escapeHtml(String(d.miles))} mi`}</span></button>`;
+  }).join('');
+  $('tdWeek').querySelectorAll('[data-date]').forEach(b=> b.addEventListener('click', ()=> openLogDay(b.dataset.date)));
+}
+function renderTodayFeel(){
+  const own = isRealPerson();
+  const status = own ? currentHealthStatus() : 'healthy';
+  const marks = own ? Object.keys(bodyMarks[activePersonId] || {}) : [];
+  $('tdFeel').innerHTML = `<div class="td-health">${HEALTH_KEYS.map(k=> `<button type="button" class="chip ${k === status ? 'on' : ''}" data-health="${k}" ${own ? '' : 'disabled'}>${HEALTH_STATES[k].label}</button>`).join('')}</div>
+    <button type="button" class="td-link" id="tdBodyLink"><span>${marks.length ? `${marks.length} sore ${marks.length === 1 ? 'spot' : 'spots'} on your body map` : 'Nothing marked on your body map'}</span><span aria-hidden="true">›</span></button>`;
+  $('tdFeel').querySelectorAll('[data-health]').forEach(b=> b.addEventListener('click', async ()=>{ await setHealth(b.dataset.health); renderTodayFeel(); }));
+  $('tdBodyLink').onclick = ()=> navGo('body', 'recovery');
+}
+function renderTodayTeam(){
+  const list = events[todayKey()] || [];
+  if(!window.KESTREL?.teamId){ $('tdTeam').innerHTML = '<div class="card"><div class="hint">Join a team to see practices and meets here.</div></div>'; return; }
+  $('tdTeam').innerHTML = list.length ? list.map(ev=>{
+    const st = getRsvp(ev.id);
+    return `<div class="card td-ev"><div class="td-ev-main"><div class="card-title">${escapeHtml(ev.title)}</div><div class="hint">${escapeHtml([formatEventTimeRange(ev), ev.location].filter(Boolean).join(' · '))}</div></div>
+      ${isRealPerson() ? `<button type="button" class="rsvp-btn tap44 ${st}" data-tdrsvp="${ev.id}">${rsvpLabel[st]}</button>` : ''}</div>`;
+  }).join('') : '<div class="card"><div class="hint">Nothing on the team calendar today.</div><button type="button" class="td-link" data-tdcal="1"><span>Open the team calendar</span><span aria-hidden="true">›</span></button></div>';
+  $('tdTeam').querySelectorAll('[data-tdrsvp]').forEach(b=> b.addEventListener('click', async ()=>{ await cycleRsvp(b.dataset.tdrsvp); renderTodayTeam(); }));
+  $('tdTeam').querySelector('[data-tdcal]')?.addEventListener('click', ()=> navGo('calendar', 'team'));
+}
+function renderTodayOff(){
+  const tile = (go, icon, title, sub)=> `<button type="button" class="card td-tile" data-tdgo="${go}">${icon}<span><b>${title}</b><small>${sub}</small></span></button>`;
+  const BIKE = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l2 7M13.5 6H16"/></svg>';
+  const FUEL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7c-1.5-2.5-6-2-6 2.5 0 5 3.5 10.5 6 10.5s6-5.5 6-10.5C18 5 13.5 4.5 12 7z"/><path d="M12 7c0-2 1-3.5 2.5-4"/></svg>';
+  const draw = (x, f)=>{
+    const wk = x?.this_week || {};
+    const xtSub = x ? (wk.sessions ? `${wk.sessions} ${wk.sessions === 1 ? 'session' : 'sessions'} · ${Math.round(wk.xt_min || 0)} min this week` : 'Nothing yet this week') : 'Bike, pool, strength';
+    const carbs = f?.targets?.carbs_g;
+    const fuelSub = f ? `${Math.round(f.totals?.kcal || 0).toLocaleString()} kcal · ${Math.round(f.totals?.carbs_g || 0)} g carbs${Array.isArray(carbs) ? ` of ${carbs[0]}–${carbs[1]}` : carbs ? ` of ${carbs}` : ''} today` : 'Log what you eat';
+    $('tdOff').innerHTML = tile('xtrain', BIKE, 'Cross-train', escapeHtml(xtSub)) + tile('food', FUEL, 'Fuel', escapeHtml(fuelSub));
+    $('tdOff').querySelectorAll('[data-tdgo]').forEach(b=> b.addEventListener('click', ()=> navGo('body', b.dataset.tdgo)));
+  };
+  draw(null, null);
+  if(!isRealPerson()) return;
+  const get = (u)=> fetch(u, { cache:'no-store' }).then(r=> r.ok ? r.json() : null).catch(()=> null);
+  Promise.all([get('/api/xtrain'), get('/api/food')]).then(([x, f])=>{ if(currentPage === 'today') draw(x, f); });
+}
+// Today's coach box hands the message to the Coach view and sends it there.
+async function askFromToday(){
+  const q = $('tdAskInput').value.trim(); if(!q) return;
+  $('tdAskInput').value = '';
+  kaiPending = q;
+  navGo('run', 'kai');
+}
+let kaiPending = '';
 
 function paintSeg(segId, attr, value){
   $(segId).querySelectorAll(`[data-${attr}]`).forEach(b=>{
@@ -3886,16 +4081,18 @@ function paintSeg(segId, attr, value){
 function renderSchedule(){
   paintSeg('schViews', 'sview', scheduleView);
   $('schCalView').style.display = scheduleView === 'calendar' ? '' : 'none';
-  $('schMeetsView').style.display = scheduleView === 'meets' ? '' : 'none';
-  $('schPlacesView').style.display = scheduleView === 'places' ? '' : 'none';
-  if(scheduleView === 'meets') renderMeets();
-  if(scheduleView === 'places') renderTravelList();
+  // Meets and places share one view under Team.
+  $('schMeetsView').style.display = scheduleView !== 'calendar' ? '' : 'none';
+  $('schPlacesView').style.display = scheduleView !== 'calendar' ? '' : 'none';
+  if(scheduleView !== 'calendar'){ renderMeets(); renderTravelList(); }
+  else{ renderCalendar(); renderDayDetail(); }
 }
 
 function setScheduleView(v){
   scheduleView = ['meets','places'].includes(v) ? v : 'calendar';
   try{ localStorage.setItem('kestrel.scheduleView', scheduleView); }catch(e){}
   renderSchedule();
+  renderNav();
 }
 
 function renderYou(){
@@ -3912,6 +4109,7 @@ function renderYou(){
 function setYouView(v){
   youView = ['profile','records','body','integrations','settings'].includes(v) ? v : 'profile';
   renderYou();
+  renderNav();
 }
 
 function goToPrs(){
@@ -4807,6 +5005,10 @@ function renderAll(){
   if(currentPage === 'schedule' && scheduleView === 'meets') renderMeets();
   if(currentPage === 'training' && !tlDirty) renderTraining();
   if(currentPage === 'team') renderTeam();
+  if(currentPage === 'today' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) renderTodayPage();
+  // The redesigned screens redraw with fresh data unless someone is typing in one.
+  if(currentPage === 'v' && !tlDirty && !document.activeElement?.closest?.('#pageV form, #pageV input, #pageV textarea, #pageV select')) window.KV?.redraw();
+  renderNav();
 }
 
 function wireUI(){
@@ -4936,7 +5138,13 @@ function wireUI(){
     btn.addEventListener('click', ()=> setEventKind(btn.dataset.kind));
   });
 
-  PAGES.forEach(name=> $('pageTab' + name[0].toUpperCase() + name.slice(1)).addEventListener('click', ()=> setPage(name)));
+  document.querySelectorAll('.page-tabs [data-nav]').forEach(b=> b.addEventListener('click', ()=> navGo(b.dataset.nav)));
+  $('kRecBtn').addEventListener('click', ()=> setPage('record'));
+  $('navBack').addEventListener('click', ()=> navGo(navLastTab));
+  $('recClose').addEventListener('click', ()=> navGo(navLastTab));
+  $('tdAskBtn').addEventListener('click', askFromToday);
+  $('tdAskInput').addEventListener('keydown', e=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); askFromToday(); } });
+  $('tlFull').addEventListener('click', ()=>{ const on = $('tpLogView').classList.toggle('tl-full'); $('tlFull').textContent = on ? 'Exit full screen' : 'Full screen'; $('tlFull').setAttribute('aria-pressed', String(on)); });
   $('schViews').querySelectorAll('[data-sview]').forEach(b=> b.addEventListener('click', ()=> setScheduleView(b.dataset.sview)));
   $('youViews').querySelectorAll('[data-yview]').forEach(b=> b.addEventListener('click', ()=> setYouView(b.dataset.yview)));
   $('savePersonalBtn').addEventListener('click', savePersonal);
@@ -5202,6 +5410,7 @@ function setTrainingView(v){
   document.body.classList.remove('tl-sheet');
   try{ localStorage.setItem('kestrel.trainingView', v); }catch(e){}
   renderTraining();
+  renderNav();
 }
 
 function dateKeyOf(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -5249,6 +5458,8 @@ async function renderWeekSummary(){
 }
 
 async function renderTrainingLog(){
+  // On a redesigned page the day card is borrowed: whatever asks for a fresh log redraws that page instead.
+  if(currentPage === 'v'){ window.KV?.redraw(); return; }
   if(!isRealPerson()){
     $('tlMonth').textContent = 'Training log';
     $('tlHint').textContent = 'Reload and pick your name to keep a training log.';
@@ -5585,7 +5796,7 @@ async function renderTrainingDay(){
   $('tlPlanNote').style.display = day.plan ? '' : 'none';
   if(day.plan) $('tlPlanNote').textContent = `Plan: ${day.plan.planned}`;
   // Phones: the day opens as a sheet over the log.
-  document.body.classList.toggle('tl-sheet', window.innerWidth < 960);
+  document.body.classList.toggle('tl-sheet', window.innerWidth < 960 && currentPage === 'training');
   $('tlDayLine').style.display = day.day_line ? '' : 'none';
   if(day.day_line) $('tlDayLine').innerHTML = `<b>Kestrel AI:</b> ${escapeHtml(day.day_line)}`;
   $('tlDayStats').innerHTML = statTile(day.miles != null ? Math.round(day.miles*100)/100 : '–', 'miles')
@@ -5760,14 +5971,27 @@ const WO_ICON = {
   fartlek: '<svg viewBox="0 0 24 24"><path d="M3 14l3-4 3 6 3-8 3 6 3-3 3 3"/><path d="M3 21h18"/></svg>',
   all: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>',
   kai: '<svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.3L20 9l-4.4 3.8L17 19l-5-3-5 3 1.4-6.2L4 9l5.8-.7z"/></svg>',
+  hills: '<svg viewBox="0 0 24 24"><path d="M3 18l6-9 4 5 3-3 5 7z"/></svg>',
+  race: '<svg viewBox="0 0 24 24"><path d="M6 21V4M6 4h11l-2 4 2 4H6"/></svg>',
+  easy: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>',
 };
+// One box per kind of workout (the library's types), plus All and Ask Kestrel AI.
 const WO_TILES = [
-  { key:'tempo', label:'Tempo', sub:'Threshold, cruise reps, progressions' },
-  { key:'short', label:'Short intervals', sub:'200-600m reps and hills' },
-  { key:'long', label:'Long intervals', sub:'800m to 2 mile reps' },
-  { key:'fartlek', label:'Fartlek', sub:'Timed surges, on/off' },
-  { key:'all', label:'All workouts', sub:'Every session in the library' },
-  { key:'kai', label:'Ask Kestrel AI', sub:'Build one for today' },
+  { key:'easy', icon:'easy', label:'Easy & recovery', sub:'Most of your miles' },
+  { key:'steady', icon:'long', label:'Steady', sub:'Aerobic running' },
+  { key:'long', icon:'long', label:'Long runs', sub:'Endurance' },
+  { key:'progression', icon:'tempo', label:'Progressions', sub:'Finish faster' },
+  { key:'tempo', icon:'tempo', label:'Tempo', sub:'Comfortably hard' },
+  { key:'threshold', icon:'tempo', label:'Threshold', sub:'Cruise intervals' },
+  { key:'vo2', icon:'short', label:'VO2max', sub:'800m to mile reps' },
+  { key:'track', icon:'short', label:'Track reps', sub:'200 to 600m speed' },
+  { key:'fartlek', icon:'fartlek', label:'Fartlek', sub:'Timed surges' },
+  { key:'hills', icon:'hills', label:'Hills', sub:'Strength and form' },
+  { key:'strides', icon:'short', label:'Strides', sub:'Speed development' },
+  { key:'race_specific', icon:'race', label:'Race-specific', sub:'Goal-pace work' },
+  { key:'time_trial', icon:'race', label:'Time trials', sub:'Race simulations' },
+  { key:'all', icon:'all', label:'All workouts', sub:'Every session' },
+  { key:'kai', icon:'kai', label:'Ask Kestrel AI', sub:'Build one for today' },
 ];
 const PACE_SHORT = { recovery:'Recovery', easy:'Easy', steady:'Steady', tempo:'Tempo', threshold:'Threshold', cv:'CV', '10k':'10K', '5k':'5K', '3200':'3200', mile:'Mile', '800':'800', '400':'400' };
 
@@ -5782,7 +6006,7 @@ function setWoGroup(g){
     openKai(`Build me ${kind ? 'a ' + kind : 'a'} workout for tomorrow${filt ? ' ' + filt : ''}, with my rep targets.`, false);
     return;
   }
-  woGroup = g; libType = '';
+  woGroup = WO_TILES.some(t=> t.key === g) ? g : 'all'; libType = '';
   try{ localStorage.setItem('kestrel.woGroup', g); }catch(e){}
   renderLibrary();
 }
@@ -5790,14 +6014,19 @@ function setWoGroup(g){
 async function renderLibrary(){
   const lib = await loadLibrary();
   if(currentPage !== 'training' || trainingView !== 'library') return;
-  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'kai' ? 'kai' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.key]}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
+  if(!WO_TILES.some(t=> t.key === woGroup)) woGroup = 'all';
+  // How many workouts in each box pass the other filters.
+  const fRace = $('libRace').value, fPhase = $('libPhase').value, fLen = Number($('libLen').value || 0), fLevel = Number($('libLevel').value || 0);
+  const passes = (w)=> (!fRace || w.races.includes(fRace)) && (!fPhase || w.phase.includes(fPhase)) && (!fLevel || w.level === fLevel) && (!fLen || (fLen === 999 ? w.total_min > 65 : w.total_min <= fLen));
+  const count = (k)=> lib ? lib.workouts.filter(w=> passes(w) && (k === 'all' || w.type === k)).length : 0;
+  $('woTiles').innerHTML = WO_TILES.map(t=>`<button type="button" class="wo-tile ${t.key === 'kai' ? 'kai' : ''} ${t.key === woGroup ? 'on' : ''}" data-g="${t.key}" role="tab" aria-selected="${t.key === woGroup}">${WO_ICON[t.icon]}${t.key === 'kai' ? '' : `<i class="wo-n">${count(t.key)}</i>`}<span><b>${t.label}</b><small>${t.sub}</small></span></button>`).join('');
   $('woTiles').querySelectorAll('[data-g]').forEach(b=> b.addEventListener('click', ()=> setWoGroup(b.dataset.g)));
   if(!lib){ $('libList').innerHTML = '<div class="hint">Couldn’t load the library.</div>'; return; }
   const me = isRealPerson();
   const f = lib.fitness;
 
-  // "Also show" type chips only make sense on All.
-  $('libMoreWrap').style.display = woGroup === 'all' ? '' : 'none';
+  // The boxes are the types now, so the old "Also show" type chips stay hidden.
+  $('libMoreWrap').style.display = 'none';
   $('libTypes').innerHTML = [['', 'All types'], ...Object.entries(lib.types)].map(([v,l])=>`<button type="button" class="chip ${v===libType?'on':''}" data-ltype="${v}">${escapeHtml(l.split(' /')[0])}</button>`).join('');
   $('libTypes').querySelectorAll('[data-ltype]').forEach(b=> b.addEventListener('click', ()=>{ libType = b.dataset.ltype; renderLibrary(); }));
   const fill = (id, entries)=>{ const el = $(id); if(el.options.length <= 1) el.insertAdjacentHTML('beforeend', entries.map(([v,l])=>`<option value="${v}">${escapeHtml(l)}</option>`).join('')); };
@@ -5805,7 +6034,7 @@ async function renderLibrary(){
   fill('libPhase', lib.phases.map(p=>[p, cap(p)]));
 
   const race = $('libRace').value, phase = $('libPhase').value, len = Number($('libLen').value || 0), level = Number($('libLevel').value || 0);
-  const list = lib.workouts.filter(w=> (woGroup === 'all' || w.group === woGroup) && (!libType || w.type === libType)
+  const list = lib.workouts.filter(w=> (woGroup === 'all' || w.type === woGroup)
     && (!race || w.races.includes(race)) && (!phase || w.phase.includes(phase))
     && (!level || w.level === level) && (!len || (len === 999 ? w.total_min > 65 : w.total_min <= len)));
   const tile = WO_TILES.find(t=>t.key === woGroup);
@@ -6005,13 +6234,15 @@ async function renderPredictor(){
 // --- Team mileage -----------------------------------------------------------------
 let teamSort = 'this_week';
 let teamView = 'miles';
-function setTeamView(v){ teamView = ['miles','activities','roster','training'].includes(v) ? v : 'miles'; renderTeam(); }
+function setTeamView(v){ teamView = ['miles','activities','roster','training'].includes(v) ? v : 'miles'; renderTeam(); renderNav(); }
 async function renderTeam(){
   const hasTeam = !!(window.KESTREL && window.KESTREL.teamId);
   $('teamEmpty').hidden = hasTeam;
   $('teamViews').style.display = hasTeam ? '' : 'none';
   $('teamBody').hidden = !hasTeam || teamView !== 'miles';
   $('teamActivitiesView').hidden = !hasTeam || teamView !== 'activities';
+  $('teamFeedActs').hidden = !hasTeam || teamView !== 'miles';
+  if(hasTeam && teamView === 'miles') window.kestrelRenderActivities?.($('teamFeedActs'));
   $('teamRosterView').hidden = !hasTeam || teamView !== 'roster';
   $('teamTrainView').hidden = !hasTeam || teamView !== 'training';
   paintSeg('teamViews', 'tmview', teamView);
@@ -6019,7 +6250,7 @@ async function renderTeam(){
   if(!hasTeam) return;
   if(teamView === 'activities'){ window.kestrelRenderActivities?.($('teamActivitiesView')); return; }
   if(teamView === 'roster'){ window.kestrelRenderRoster?.($('teamRosterView')); return; }
-  if(teamView === 'training'){ window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
+  if(teamView === 'training'){ if(isRealPerson()) await loadKai(); window.kestrelRenderTeamTraining?.($('teamTrainView')); return; }
   renderPosts();
   let data = null;
   try{ const res = await fetch('/api/team', { cache:'no-store' }); if(res.ok) data = await res.json(); }catch(e){}
@@ -6198,7 +6429,7 @@ async function renderTraining(){
   // The runner picks which Train tabs show and in what order (Customize); a hidden tab falls back to the plan.
   const own = isRealPerson();
   const tabs = own && window.kTrack ? window.kTrack.visibleTabs() : TRAIN_VIEWS.filter(v=> !['goals','xtrain','food'].includes(v));
-  if(!tabs.includes(trainingView)) trainingView = 'plan';
+  if(!(own ? TRAIN_VIEWS : tabs).includes(trainingView)) trainingView = 'plan';
   if(window.kTrack && own) window.kTrack.paintTabs();
   else $('tpViews').innerHTML = tabs.map(v=> `<button type="button" class="seg-btn ${v === trainingView ? 'active' : ''}" role="tab" aria-selected="${v === trainingView}" data-tview="${v}">${TRAIN_VIEW_LABEL[v]}</button>`).join('');
   TRAIN_VIEWS.forEach(v=> $('tp' + TRAIN_VIEW_ID[v] + 'View').style.display = trainingView === v ? '' : 'none');
@@ -6212,7 +6443,6 @@ async function renderTraining(){
   if(trainingView === 'fitness') return renderFitness();
   if(trainingView === 'kai') return renderKaiTab();
   if(own && window.kestrelRenderPersonalPlan) window.kestrelRenderPersonalPlan($('kPersonalPlan'));
-  $('todayCard').style.display = 'none';
   ['healthCard','levelCard'].forEach(id=> $(id).style.display = own ? $(id).style.display : 'none');
   renderWeekCard();
   if(own){
@@ -6273,6 +6503,7 @@ async function renderKaiTab(){
   }
   if(off){ kaiChat = { personId: null, turns: [] }; $('kaiThread').innerHTML = ''; }
   else await startKaiChat();
+  if(kaiPending && !off){ $('askInput').value = kaiPending; kaiPending = ''; askCoachNow(); }
   renderPlanSide();
 }
 
@@ -6318,9 +6549,9 @@ async function init(){
   wireUI();
   setAvailabilityVisible(showAvailability);
   renderEventTypePicker();
-  let startPage = 'schedule';
-  try{ startPage = localStorage.getItem('kestrel.page') || 'schedule'; }catch(e){}
-  setPage(startPage);
+  let startTab = 'today';
+  try{ startTab = localStorage.getItem('kestrel.nav') || 'today'; }catch(e){}
+  navGo(NAV[startTab] && !['you','record'].includes(startTab) ? startTab : 'today');
   activePersonId = window.KESTREL?.me?.user?.id || null;
   await loadState();
   renderAll();
@@ -6342,13 +6573,18 @@ async function init(){
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
 window.kestrelInit = init;
 window.kestrelReload = async ()=>{ planCache = {}; kaiData = null; fitnessData = null; library = null; await loadState(); renderAll(); if(currentPage === 'schedule') renderSchedule(); };
-window.kestrelSetPage = (p, sub)=>{ setPage(p); if(p === 'team' && sub) setTeamView(sub); if(p === 'you' && sub) setYouView(sub); if(p === 'training' && sub) setTrainingView(sub); };
+// The view is set before the page so the tab bar and Back follow the view being opened.
+window.kestrelSetPage = (p, sub)=>{ if(sub){ if(p === 'team') teamView = sub; if(p === 'you') youView = sub; if(p === 'training'){ trainingView = sub; try{ localStorage.setItem('kestrel.trainingView', sub); }catch(e){} } } setPage(p); };
+window.kestrelMyLevelMiles = ()=> kaiData && kaiData._for === activePersonId ? kaiData.level?.weekly_miles : null;
 window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('adminModalOverlay').classList.add('show'); };
 </script>
 <script src="/records.js"></script>
 <script src="/track.js"></script>
 <script src="/record.js"></script>
 <script src="/shoes.js"></script>
+<script src="/views.js"></script>
+<script src="/dayview.js"></script>
+<script src="/views2.js"></script>
 <script type="module" src="/kestrel.js"></script>
 </body>
 </html>
