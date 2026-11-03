@@ -100,6 +100,7 @@
     if(r){
       document.getElementById('kdMap2d').innerHTML = routeSvg(r, true);
       wireMap(r);
+      mapUnder(document.getElementById('kdMap2d'), r);
       const chart = document.getElementById('kdChart');
       chart.innerHTML = chartHtml(r); chart.hidden = false; wireChart(chart, r);
     } else document.getElementById('kdMap').hidden = true;
@@ -177,6 +178,46 @@
     return `<svg viewBox="0 0 ${W} ${H}" class="kd-route" role="img" aria-label="Route of this run, ${(r.ds[r.ds.length - 1] / MI).toFixed(2)} miles"><path d="${line}" class="kd-case"/><path d="${line}" class="kd-line"/>${marks}<circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="5" class="kd-start"/><circle cx="${z[0].toFixed(1)}" cy="${z[1].toFixed(1)}" r="5" class="kd-end"/><circle r="6" class="kd-dot" id="kdDot" cx="-20" cy="-20"/></svg>`;
   }
 
+  // The 2D route on a plain street map: streets, water and parks from OpenFreeMap (free, no key), with the
+  // buildings, shops and house numbers taken out. Dark at night.
+  // The drawn route stays until the map is ready, and stays for good if the tiles can't load.
+  let map2d = null;
+  async function mapUnder(host, r){
+    let gl;
+    try{ gl = await window.kRecords?.loadMapLibre?.(); }catch(e){ return; }
+    if(!gl || !host.isConnected) return;
+    if(map2d){ map2d.remove(); map2d = null; }
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const box = document.createElement('div'); box.className = 'kd-map-gl'; host.appendChild(box);
+    const coords = r.pts.map((p)=> [p[1], p[0]]), b = r.stats.bounds;
+    const m = new gl.Map({
+      container: box, bounds: [[b.w, b.s], [b.e, b.n]], fitBoundsOptions: { padding: 40 }, cooperativeGestures: true, attributionControl: { compact: true },
+      style: `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'liberty'}`,
+    });
+    map2d = m;
+    m.on('load', ()=>{
+      const css = getComputedStyle(document.documentElement), accent = css.getPropertyValue('--accent').trim() || '#e1371a';
+      m.getStyle().layers.filter((l)=> /poi|building|housenumber|aeroway|transit/.test(l.id)).forEach((l)=> m.removeLayer(l.id));
+      const miles = [];
+      for(let k = 1; k * MI < r.ds[r.ds.length - 1]; k++){ const i = r.ds.findIndex((d)=> d >= k * MI); miles.push({ type:'Feature', properties:{ n: k }, geometry:{ type:'Point', coordinates: coords[i] } }); }
+      m.addSource('route', { type:'geojson', data:{ type:'Feature', geometry:{ type:'LineString', coordinates: coords } } });
+      m.addSource('ends', { type:'geojson', data:{ type:'FeatureCollection', features:[{ type:'Feature', properties:{ c:'#1f8a52' }, geometry:{ type:'Point', coordinates: coords[0] } }, { type:'Feature', properties:{ c:'#17171a' }, geometry:{ type:'Point', coordinates: coords[coords.length - 1] } }] } });
+      m.addSource('spot', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      m.addLayer({ id:'route-casing', type:'line', source:'route', layout:{ 'line-join':'round', 'line-cap':'round' }, paint:{ 'line-color':'#fff', 'line-width':7 } });
+      m.addLayer({ id:'route-line', type:'line', source:'route', layout:{ 'line-join':'round', 'line-cap':'round' }, paint:{ 'line-color': accent, 'line-width':4 } });
+      m.addLayer({ id:'ends', type:'circle', source:'ends', paint:{ 'circle-radius':6, 'circle-color':['get', 'c'], 'circle-stroke-color':'#fff', 'circle-stroke-width':2 } });
+      m.addLayer({ id:'spot', type:'circle', source:'spot', paint:{ 'circle-radius':7, 'circle-color': accent, 'circle-stroke-color':'#fff', 'circle-stroke-width':2.5 } });
+      miles.forEach((f)=>{ const el = document.createElement('span'); el.className = 'kd-mile'; el.textContent = f.properties.n; new gl.Marker({ element: el }).setLngLat(f.geometry.coordinates).addTo(m); });
+      host.classList.add('gl');
+    });
+  }
+  // The spot the chart points at, on whichever map is showing.
+  function showSpot(r, i){
+    if(map2d?.getSource?.('spot')) map2d.getSource('spot').setData({ type:'Point', coordinates:[r.pts[i][1], r.pts[i][0]] });
+    const dot = document.getElementById('kdDot'), svg = dot?.ownerSVGElement;
+    if(dot && svg){ const ln = svg.querySelector('.kd-line'), len = ln.getTotalLength(); const pt = ln.getPointAtLength(len * (i / (r.pts.length - 1))); dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y); }
+  }
+
   function wireMap(r){
     const box = document.getElementById('kdMap'), m2 = document.getElementById('kdMap2d'), m3 = document.getElementById('kdMap3d');
     box.querySelectorAll('[data-kdv]').forEach((btn)=> btn.addEventListener('click', ()=>{
@@ -223,8 +264,7 @@
       cur.setAttribute('d', `M${(f * CW).toFixed(1)} 0V${CH}`);
       read.innerHTML = [`mi ${(d / MI).toFixed(1)}`, dt > 0 && dd > 20 ? clock(dt / (dd / MI)) + '/mi' : null, p[4] ? p[4] + ' bpm' : null, p[2] != null ? Math.round(p[2] * FT) + ' ft' : null].filter(Boolean).map((s)=> `<span>${s}</span>`).join('');
       read.classList.add('on');
-      const dot = document.getElementById('kdDot'), svg = dot?.ownerSVGElement;
-      if(dot && svg){ const ln = svg.querySelector('.kd-line'), len = ln.getTotalLength(); const pt = ln.getPointAtLength(len * (i / (r.pts.length - 1))); dot.setAttribute('cx', pt.x); dot.setAttribute('cy', pt.y); }
+      showSpot(r, i);
     };
     plot.addEventListener('pointermove', at);
     plot.addEventListener('pointerdown', at);
