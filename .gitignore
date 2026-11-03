@@ -1,3 +1,11 @@
 node_modules/
 .wrangler/
 .dev.vars
+
+# Fine-tuning artifacts (large, regenerable, or not ours to publish)
+llm/data/
+llm/runs/
+llm/models/
+*.gguf
+*.safetensors
+*.bin

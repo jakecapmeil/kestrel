@@ -61,6 +61,9 @@ export const courseSlot = (slot) => { const m = COURSE_SLOT.exec(slot); return m
 export const KINDS = {
   'lite-trees': ['race'], 'short-pairs': ['short'], 'marathon-trees': ['marathon'], riegel: ['race', 'short'],
   vdot: ['race'], tanda: ['marathon'], 'course-transfer': ['course'],
+  // An open-weight language model card for the coach. Not a predictor: it points at weights hosted elsewhere and can
+  // never be picked for a prediction purpose (`coach` is not in TASKS).
+  llm: ['coach'],
 };
 export const LITE_FEATS = LITE.weights.feats;
 export const MARATHON_FEATS = MARATHON.weights.feats;
@@ -456,6 +459,45 @@ function checkTrees(w, feats) {
   }
 }
 
+// ---------- open-weight language model cards (kind `llm`, task `coach`)
+// A Lab upload is at most 1 MB, so an llm entry is a card that points at weights hosted on Hugging Face or Ollama.
+// Anyone can publish one, so every link and tag is checked here: https links on huggingface.co only, and an Ollama
+// tag that cannot carry a space or shell character into the command the Lab shows people to copy.
+export const LLM_TIERS = ['lite', 'standard', 'pro'];
+const HF_URL = /^https:\/\/huggingface\.co\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/;
+export const OLLAMA_TAG = /^[a-z0-9][a-z0-9._-]{0,60}(\/[a-z0-9][a-z0-9._-]{0,60})?(:[A-Za-z0-9][A-Za-z0-9._-]{0,40})?$/;
+const QUANT = /^[a-z0-9][a-z0-9_.-]{1,19}$/;
+const rate = (x) => num(x) && x >= 0 && x <= 1;
+
+function checkLlm(w) {
+  if (!LLM_TIERS.includes(w.tier)) throw new ModelError(`weights.tier must be one of: ${LLM_TIERS.join(', ')}`);
+  if (!num(w.params_b) || w.params_b < 0.1 || w.params_b > 5000) throw new ModelError('weights.params_b: billions of parameters, 0.1-5000');
+  if (w.active_params_b !== undefined && (!num(w.active_params_b) || w.active_params_b <= 0 || w.active_params_b > w.params_b)) throw new ModelError('weights.active_params_b: billions active per token (mixture of experts), above 0 and at most params_b');
+  if (!text(w.base_model, 120) || !w.base_model.trim()) throw new ModelError('weights.base_model: the open-weight model this was fine-tuned from, up to 120 characters');
+  if (!num(w.ram_gb) || w.ram_gb < 0.5 || w.ram_gb > 4096) throw new ModelError('weights.ram_gb: memory needed to run the default download, 0.5-4096 GB');
+  if (w.context_k !== undefined && !int(w.context_k, 1, 4097)) throw new ModelError('weights.context_k: context length in thousands of tokens, 1-4096');
+  if (w.quants !== undefined && (!Array.isArray(w.quants) || w.quants.length > 12 || w.quants.some((q) => typeof q !== 'string' || !QUANT.test(q)))) throw new ModelError('weights.quants: up to 12 short names such as q4_k_m or mlx-4bit');
+  if (w.hf_url !== undefined && !(typeof w.hf_url === 'string' && HF_URL.test(w.hf_url))) throw new ModelError('weights.hf_url must look like https://huggingface.co/owner/repo');
+  if (w.ollama_tag !== undefined && !(typeof w.ollama_tag === 'string' && OLLAMA_TAG.test(w.ollama_tag))) throw new ModelError('weights.ollama_tag must be an Ollama model name such as kestrel-coach-lite:q4 (lowercase letters, digits, . _ - and one : tag)');
+  if (!w.hf_url && !w.ollama_tag) throw new ModelError('weights needs hf_url or ollama_tag so people can get the model');
+  for (const [k, max] of [['prompt_contract', 40], ['safety_notes', 1000]]) if (w[k] !== undefined && !text(w[k], max)) throw new ModelError(`weights.${k}: up to ${max} characters`);
+  let evalOut;
+  if (w.eval !== undefined) {
+    const e = w.eval;
+    if (!e || typeof e !== 'object') throw new ModelError('weights.eval must be an object');
+    if (e.suite !== undefined && !text(e.suite, 60)) throw new ModelError('weights.eval.suite: up to 60 characters');
+    if (e.n !== undefined && !int(e.n, 1, 1_000_001)) throw new ModelError('weights.eval.n: number of cases, 1-1000000');
+    for (const k of ['pass_rate', 'safety_pass_rate', 'tool_valid_rate']) if (e[k] !== undefined && !rate(e[k])) throw new ModelError(`weights.eval.${k} must be between 0 and 1`);
+    if (e.date !== undefined && !(typeof e.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date))) throw new ModelError('weights.eval.date must be YYYY-MM-DD');
+    evalOut = Object.fromEntries(['suite', 'n', 'pass_rate', 'safety_pass_rate', 'tool_valid_rate', 'date'].filter((k) => e[k] !== undefined).map((k) => [k, e[k]]));
+  }
+  // Only known fields are kept.
+  const out = { tier: w.tier, params_b: w.params_b, base_model: w.base_model.trim(), ram_gb: w.ram_gb };
+  for (const k of ['active_params_b', 'context_k', 'quants', 'hf_url', 'ollama_tag', 'prompt_contract', 'safety_notes']) if (w[k] !== undefined) out[k] = w[k];
+  if (evalOut) out.eval = evalOut;
+  return out;
+}
+
 // Returns the cleaned model (only known fields kept) or throws ModelError.
 export function validateModel(m) {
   if (!m || typeof m !== 'object' || m.kestrel !== 1) throw new ModelError('Not a Kestrel model file (needs "kestrel": 1)');
@@ -467,6 +509,12 @@ export function validateModel(m) {
   for (const k of ['description', 'trained_on']) if (m[k] !== undefined && !text(m[k], 2000)) throw new ModelError(`${k}: up to 2000 characters`);
   const w = m.weights;
   if (!w || typeof w !== 'object') throw new ModelError('weights is required');
+  let weights = w;
+  if (m.kind === 'llm') {
+    if (!text(m.license, 60) || !m.license.trim()) throw new ModelError('license is required for a language model (the licence of the weights, e.g. Apache-2.0)');
+    if (!text(m.trained_on, 2000) || !m.trained_on.trim()) throw new ModelError('trained_on is required for a language model: say what data it was fine-tuned on and under which licence');
+    weights = checkLlm(w);
+  }
   if (m.kind === 'lite-trees') checkTrees(w, LITE_FEATS);
   if (m.kind === 'marathon-trees') checkTrees(w, MARATHON_FEATS);
   if (m.kind === 'vdot') {
@@ -503,7 +551,7 @@ export function validateModel(m) {
   }
   return {
     kestrel: 1, name: m.name.trim(), version: m.version || '', kind: m.kind, task: m.task,
-    license: m.license || '', description: m.description || '', trained_on: m.trained_on || '', weights: w,
+    license: m.license || '', description: m.description || '', trained_on: m.trained_on || '', weights,
     ...(m.course ? { course: m.course } : {}),
   };
 }

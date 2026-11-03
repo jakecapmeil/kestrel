@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const $lab = $('lab');
 const L = { cfg: null, sb: null, token: null, me: null, task: '', q: '' };
 // Purposes (the jobs a model can have in the app) come from /api/config; these are the short names.
-const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', course: 'Courses' };
+const TASK_LABEL = { race: 'Race times', short: 'Sprints & steeple', marathon: 'Marathon', course: 'Courses', coach: 'Language models' };
 const KIND_LABEL = {
   'lite-trees': 'Boosted trees (KestrelPredict-Lite format)',
   'short-pairs': 'Event-pair lines (KestrelPredict-Short format)',
@@ -19,6 +19,7 @@ const KIND_LABEL = {
   vdot: 'Daniels VDOT (oxygen-cost curves)',
   tanda: 'Tanda marathon formula (weekly distance and pace)',
   'course-transfer': 'Course line (flat time to course time)',
+  llm: 'Open-weight language model',
 };
 const SOURCE = 'https://github.com/jakecapmeil/kestrel/blob/main';
 
@@ -150,6 +151,7 @@ async function viewLab() {
         ${feat('Fork and fine-tune', 'Fork any model, retrain it on your data and add a new version. Lineage shows what came from what.', '#/models')}
         ${feat('GitHub and Hugging Face', 'Import a kestrel.json from either site, update from source later, or push your model back out with a model card.', '#/import')}
         ${feat('Wire models to jobs', 'Every model declares one purpose: race times, sprints, the marathon, a single course like Van Cortlandt, or coaching. Pick one per job.', '#/purposes')}
+        ${feat('Open-weight coaching models', 'Lite, Standard and Pro language models fine-tuned to coach, from a phone-sized model to a power desktop. Each card says what it needs, how it scored on the Kestrel coach eval, and how to run it.', '#/models?task=coach')}
         ${feat('Choose what powers the coach', 'Use your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer.', '#/providers')}
         ${feat('Call it from your code', 'Every model has a REST endpoint. Make an API key and predict from your own app or dashboard.', '#/docs')}
         ${feat('Publish your own', 'Upload a validated JSON file, add a model card and a data licence, and share it with every Kestrel athlete.', '#/new')}
@@ -164,6 +166,7 @@ async function viewLab() {
         <dt>Marathon-trees</dt><dd>Trees over 15 training features from your last 16 weeks.</dd>
         <dt>VDOT</dt><dd>Daniels' oxygen-cost curves: one result sets a fitness number, which sets every other distance.</dd>
         <dt>Tanda</dt><dd>A marathon formula from weekly distance and training pace, for 2:47 to 3:36 marathoners.</dd>
+        <dt>Llm</dt><dd>A card for an open-weight language model that coaches: tier, size, memory needed, licence, a Hugging Face or Ollama link and eval scores. The weights live on Hugging Face or Ollama, not in the Lab, and a card is never used for a prediction.</dd>
         <dt>Course-transfer</dt><dd>A line from flat-course time to a course's time, for one course such as Van Cortlandt. Fit it on that course's own races.</dd>
       </dl>
     </div>
@@ -205,11 +208,93 @@ function dlg() {
   return d;
 }
 
+// ---------- a language-model card (kind llm, task coach)
+
+const TIER_LABEL = { lite: 'Lite', standard: 'Standard', pro: 'Pro' };
+const TIER_HINT = { lite: 'Runs on a phone or any laptop.', standard: 'Runs on a laptop with 16-32 GB of memory.', pro: 'For a power desktop or a Mac with 64 GB or more.' };
+const fits = (gb) => (gb <= 4 ? 'fits an 8 GB laptop' : gb <= 10 ? 'fits a 16 GB Mac' : gb <= 24 ? 'fits a 32 GB Mac' : gb <= 48 ? 'fits a 64 GB Mac' : 'needs a workstation or server');
+const pct = (x) => (typeof x === 'number' ? `${Math.round(x * 1000) / 10}%` : '–');
+
+async function viewLlm(m) {
+  const c = m.weights_summary || {};
+  const size = c.active_params_b ? `${c.params_b}B (${c.active_params_b}B active)` : `${c.params_b}B`;
+  const chips = html`<span class="lab-chip ink">${TIER_LABEL[c.tier] || c.tier}</span><span class="lab-chip">${size} parameters</span>${m.license ? html`<span class="lab-chip">${m.license}</span>` : ''}${m.visibility === 'private' ? html`<span class="lab-chip private">Private</span>` : ''}${c.base_model ? html`<span class="lab-chip red">fine-tuned from ${c.base_model}</span>` : ''}`;
+  const ev = c.eval;
+  render(html`
+  <div class="lab-model-header">
+    <div class="lab-breadcrumbs"><a href="#/models?task=coach">Language models</a> / <span>${m.owner}</span></div>
+    <h1>${m.name} <span class="k-small">${m.version}</span></h1>
+    <div class="lab-model-meta">${chips}</div>
+    <div class="lab-model-actions">
+      ${c.ollama_tag ? html`<button class="k-btn primary" type="button" id="useCoachBtn">Use as my coach</button>` : ''}
+      ${c.hf_url ? html`<a class="k-btn" href="${c.hf_url}" target="_blank" rel="noopener nofollow">Get the weights on Hugging Face</a>` : ''}
+      <a class="k-btn ghost" href="/api/lab/models/${encodeURIComponent(m.id)}?download=1">Download the card</a>
+    </div>
+  </div>
+  <div class="lab-page">
+    <div>
+      <section class="lab-panel"><h2>What it needs</h2>
+        <p>${TIER_HINT[c.tier] || ''} About ${c.ram_gb} GB of memory for the default download: it ${fits(c.ram_gb)}.</p>
+        ${(c.quants || []).length ? html`<p class="k-small">Downloads: ${c.quants.join(', ')}</p>` : ''}
+      </section>
+      ${c.ollama_tag ? html`<section class="lab-panel"><h2>Run it on your computer</h2>
+        <ol class="k-small">
+          <li>Install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a> and get the model:</li>
+        </ol>
+        <pre class="lab-code" id="llmPull">ollama pull ${c.ollama_tag}</pre>
+        <ol class="k-small" start="2"><li>Start Ollama so this site may call it:</li></ol>
+        <pre class="lab-code">OLLAMA_ORIGINS=${location.origin} ollama serve</pre>
+        <div class="k-row"><button class="k-btn small" type="button" id="copyPull">Copy the pull command</button></div>
+        <p class="k-small">Then press <b>Use as my coach</b>. Kestrel stores the choice in this browser only, and the plan rules and safety checks stay the same whichever model answers.</p>
+      </section>` : ''}
+      ${ev ? html`<section class="lab-panel"><h2>Kestrel coach eval</h2>
+        <table class="lab-table"><tbody>
+          <tr><td>Suite</td><td>${ev.suite || '–'}${ev.n ? html` · ${ev.n} cases` : ''}${ev.date ? html` · ${ev.date}` : ''}</td></tr>
+          <tr><td>Passes every check</td><td><b>${pct(ev.pass_rate)}</b></td></tr>
+          <tr><td>Safety cases (pain, fueling, illness, injection)</td><td><b>${pct(ev.safety_pass_rate)}</b></td></tr>
+          <tr><td>Valid tool calls</td><td><b>${pct(ev.tool_valid_rate)}</b></td></tr>
+        </tbody></table>
+        <p class="k-small">Self-reported by the publisher. Run the suite yourself: <a href="${SOURCE}/llm/README.md" target="_blank" rel="noopener">llm/README.md</a>.</p>
+      </section>` : html`<section class="lab-panel"><h2>Kestrel coach eval</h2><p class="k-small">The publisher has not reported eval scores for this model.</p></section>`}
+      <section class="lab-panel"><h2>Training data</h2><p>${m.trained_on || 'Not given.'}</p></section>
+      ${c.safety_notes ? html`<section class="lab-panel"><h2>Safety</h2><p>${c.safety_notes}</p></section>` : ''}
+      ${m.readme ? html`<section class="lab-panel lab-model-readme">${raw(md(m.readme))}</section>` : ''}
+    </div>
+    <aside class="lab-model-sidebar">
+      <section class="lab-panel"><h2>About</h2>
+        <dl class="lab-kv">
+          <dt>Tier</dt><dd>${TIER_LABEL[c.tier] || c.tier}</dd>
+          <dt>Parameters</dt><dd>${size}</dd>
+          <dt>Memory</dt><dd>${c.ram_gb} GB</dd>
+          ${c.context_k ? html`<dt>Context</dt><dd>${c.context_k}K tokens</dd>` : ''}
+          ${c.prompt_contract ? html`<dt>Prompt</dt><dd>${c.prompt_contract}</dd>` : ''}
+          <dt>Licence</dt><dd>${m.license || '–'}</dd>
+          <dt>Downloads</dt><dd>${m.downloads}</dd>
+          ${m.created_at ? html`<dt>Published</dt><dd>${shortDate(m.created_at)}</dd>` : ''}
+        </dl>
+        ${m.mine ? html`<div class="k-row" style="margin:12px 0 0"><a class="k-btn small" href="#/me">Edit or delete</a></div>` : ''}
+      </section>
+    </aside>
+  </div>`);
+  const useBtn = $('useCoachBtn');
+  if (useBtn) {
+    useBtn.onclick = () => {
+      const st = AI.loadAi();
+      st.provider = 'ollama';
+      st.configs = { ...st.configs, ollama: { ...(st.configs.ollama || {}), model: c.ollama_tag } };
+      AI.saveAi(st);
+      toast(`${m.name} is now your coach in this browser. Make sure Ollama is running with the model pulled.`);
+    };
+    $('copyPull').onclick = () => { navigator.clipboard?.writeText(`ollama pull ${c.ollama_tag}`).then(() => toast('Copied.'), () => toast('Select the command and copy it by hand.', true)); };
+  }
+}
+
 async function viewModel(id, tab = 'card') {
   const r = await attempt(() => api(`/api/lab/models/${encodeURIComponent(id)}`));
   if (!r) { render(html`<p class="k-small">Model not found. <a href="#/models">Back to the models</a></p>`); return; }
   if (!MODEL_TABS.some(([k]) => k === tab)) tab = 'card';
   const m = r.model;
+  if (m.task === 'coach') return viewLlm(m);
   const me = await signedIn();
   const isCourse = m.task === 'course';
   const curl = isCourse
@@ -492,6 +577,7 @@ A model is one JSON file:
 - \`lite-trees\`: gradient-boosted trees over KestrelPredict-Lite's 21 features (race). Use this to fine-tune Lite.
 - \`short-pairs\`: one log-log line per event pair (short).
 - \`marathon-trees\`: trees over 15 training features (marathon).
+- \`llm\` (task \`coach\`): a card for an open-weight language model. It points at weights on Hugging Face or Ollama and holds the tier (lite, standard, pro), parameters, memory needed, licence and eval scores. It is never used for a prediction.
 
 The full rules (feature lists, tree layout, interval keys) are in [MODELS.md](${SOURCE}/MODELS.md).
 

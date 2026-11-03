@@ -761,14 +761,15 @@ async function usedBy(db, id, task) {
 async function listModels(db, viewerId, { task = '', q = '' } = {}) {
   const where = ["(m.visibility = 'public' OR m.owner_id = ?)"];
   const vals = [viewerId || ''];
-  if (TASKS[task]) { where.push('m.task = ?'); vals.push(task); }
+  // Language-model cards (task `coach`) stay out of the predictor directory unless asked for.
+  if (TASKS[task] || task === 'coach') { where.push('m.task = ?'); vals.push(task); } else where.push("m.task != 'coach'");
   if (q) { where.push('(m.name LIKE ? OR m.description LIKE ?)'); vals.push(`%${q}%`, `%${q}%`); }
   const { results } = await db.prepare(
     `SELECT m.id, m.slug, m.name, m.version, m.kind, m.task, m.license, m.description, m.base_model, m.visibility, m.size, m.downloads, m.owner_id, m.created_at, m.source_url, p.name AS owner
      FROM models m JOIN people p ON p.id = m.owner_id WHERE ${where.join(' AND ')} ORDER BY m.downloads DESC, m.created_at DESC LIMIT 200`
   ).bind(...vals).all();
   const ql = q.toLowerCase();
-  const built = BUILTIN.filter((m) => (!TASKS[task] || m.task === task) && (!ql || `${m.name} ${m.description}`.toLowerCase().includes(ql)));
+  const built = task === 'coach' ? [] : BUILTIN.filter((m) => (!TASKS[task] || m.task === task) && (!ql || `${m.name} ${m.description}`.toLowerCase().includes(ql)));
   const out = [...built.map(pub), ...results.map((r) => ({ ...pub(r), mine: r.owner_id === viewerId }))];
   for (const m of out) m.used_by = await usedBy(db, m.id, m.task);
   return out;
@@ -839,6 +840,7 @@ async function workbench(db, me, ids) {
   for (const id of ids.slice(0, 4)) {
     const model = await findModel(db, me.id, id);
     if (!model) throw new NotFound('Model not found.');
+    if (model.task === 'coach') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Language models coach you; they do not predict race times, so the Workbench cannot test them. Use one as your coach in Providers.' }); continue; }
     if (model.task === 'marathon') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Marathon models read training logs, not PRs, so the Workbench cannot test them here.' }); continue; }
     if (model.task === 'course') { out.push({ id: model.id, name: model.name, version: model.version, task: model.task, rows: [], note: 'Course models convert a flat-course time into a course time, so the Workbench cannot score them on PRs. Pick one for a course on the Purposes page to see it in Fitness.' }); continue; }
     const rows = [];
@@ -874,6 +876,7 @@ async function apiKeyUser(db, request) {
 async function apiPredict(db, viewerId, b) {
   const model = await findModel(db, viewerId, str(b.model, 80) || DEFAULTS.race);
   if (!model) throw new NotFound('Model not found.');
+  if (model.task === 'coach') throw new BadRequest('That is a language model, not a predictor. Run it with Ollama or LM Studio and choose it as your coach in the Lab under Providers.');
   if (model.task === 'marathon') {
     const days = (Array.isArray(b.training) ? b.training : []).slice(0, 400).map((d) => ({ date: str(d?.date, 10), miles: Number(d?.miles) || 0, minutes: Number(d?.minutes) || 0 }));
     const today = isDate(b.today) ? b.today : todayInTz();
@@ -1750,6 +1753,8 @@ function weightsSummary(m) {
   if (m.kind === 'lite-trees' || m.kind === 'marathon-trees') return { trees: w.trees?.length || 0, nodes: (w.trees || []).reduce((a, t) => a + t.f.length, 0), features: w.feats?.length || 0 };
   if (m.kind === 'short-pairs') return { pairs: w.pairs?.length || 0, events: Object.keys(w.events || {}).length };
   if (m.kind === 'riegel') return { exponent: w.exponent, sd: w.sd };
+  // A language-model card is small and already validated, so the page gets all of it.
+  if (m.kind === 'llm') return w;
   return {};
 }
 

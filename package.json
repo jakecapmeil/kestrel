@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev --port 8788",
     "deploy": "wrangler deploy",
-    "check": "node scripts/check-models.mjs",
+    "check": "node scripts/check-models.mjs && node llm/eval/check-gold.mjs",
     "auth-stub": "node scripts/auth-stub.mjs",
     "migrate:local": "wrangler d1 migrations apply kestrel_db --local",
     "migrate:remote": "wrangler d1 migrations apply kestrel_db --remote"

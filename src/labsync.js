@@ -154,7 +154,10 @@ export function hfLicense(license) {
 
 export function buildReadme(m, readme, { huggingface = false, origin = '' } = {}) {
   const body = (readme || '').trim() || `# ${m.name}\n\n${m.description || 'A Kestrel running model.'}`;
-  const tail = `\n\n---\nA [Kestrel Lab](${origin || 'https://kestrel.jakecapmeil.workers.dev'}/lab) model: ${m.kind}, for ${m.task}. The weights are numbers, never code. Import it into Kestrel from this repository.\n`;
+  const lab = `${origin || 'https://kestrel.jakecapmeil.workers.dev'}/lab`;
+  const tail = m.kind === 'llm'
+    ? `\n\n---\nAn open-weight language model card from [Kestrel Lab](${lab}): a coach for Kestrel AI. The weights are hosted where this card links; this repository holds only the card.\n`
+    : `\n\n---\nA [Kestrel Lab](${lab}) model: ${m.kind}, for ${m.task}. The weights are numbers, never code. Import it into Kestrel from this repository.\n`;
   if (!huggingface) return body + tail;
   const lic = hfLicense(m.license);
   const lines = ['---'];

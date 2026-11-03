@@ -88,6 +88,38 @@ The KestrelPredict-Short format: one line per ordered event pair, `ln t_target =
 
 The KestrelPredict-Marathon format. The tree rules are the same as `lite-trees`, with these 15 features in this order: `wk_mean, wk_max, wk_last6, longest, long_n, long16_n, runs_wk, weeks_active, pace_med, pace_p10, pace_long, best_riegel, n_eff, best_recent, vol_trend`. Trees predict log seconds directly; there's no baseline. `interval` keys are `g0` (no steady effort found), then `g1`, `g2` and `g3` for under 40, 40-70 and 70+ km a week.
 
+### `llm` (task `coach`)
+
+A card for an open-weight **language model** that can power the coach. It is not a predictor and is never used for a race, sprint, marathon or course time: the weights live on Hugging Face or Ollama, and the Lab keeps only the card (a Lab file is at most 1 MB). It cannot be picked on the Purposes page, tried, tested in the Workbench or called through the prediction API. An athlete uses one by running it with Ollama or LM Studio and pressing **Use as my coach**, which sets the provider in that browser only.
+
+`license` and `trained_on` are required: say what the weights are licensed under, and what data the model was fine-tuned on and under which licence. `weights` is the card:
+
+```json
+"weights": {
+  "tier": "lite",
+  "params_b": 4,
+  "base_model": "Qwen/Qwen3-4B-Instruct",
+  "ram_gb": 4,
+  "context_k": 32,
+  "quants": ["q4_k_m", "q8_0"],
+  "hf_url": "https://huggingface.co/owner/kestrel-coach-lite",
+  "ollama_tag": "kestrel-coach-lite:q4",
+  "prompt_contract": "coachChat-v1",
+  "safety_notes": "Never diagnoses; sends lasting pain to a coach, parent or doctor.",
+  "eval": { "suite": "kestrel-coach-gold-v1", "n": 100, "pass_rate": 0.9, "safety_pass_rate": 1, "tool_valid_rate": 0.97, "date": "2026-11-03" }
+}
+```
+
+- `tier`: `lite` (a phone or any laptop), `standard` (a laptop with 16-32 GB) or `pro` (a power desktop or a 64 GB+ Mac).
+- `params_b`: billions of parameters (0.1-5000); `active_params_b` (optional): billions active per token for a mixture of experts, at most `params_b`.
+- `base_model`: the open-weight model it was fine-tuned from, up to 120 characters.
+- `ram_gb`: memory to run the default download (0.5-4096).
+- `hf_url`: `https://huggingface.co/owner/repo` and nothing else (no other host, query string or path). `ollama_tag`: an Ollama model name such as `kestrel-coach-lite:q4` (lowercase letters, digits, `.`, `_`, `-`, one `/` and one `:` tag). At least one of the two is required. Anyone can publish a card and the Lab shows a command to copy, so the tag is checked strictly and nothing else is accepted.
+- Optional: `context_k` (1-4096), `quants` (up to 12 short names such as `q4_k_m`, `mlx-4bit`), `prompt_contract` (which prompt version the model was tuned against), `safety_notes` (up to 1,000 characters) and `eval`.
+- `eval` is self-reported by the publisher. Its rates are between 0 and 1. The suite behind `kestrel-coach-gold-v1` is in [`llm/eval/`](llm/eval/), so anyone can check a claim by running it.
+
+[`models/llm-card.example.json`](models/llm-card.example.json) is an example. Its link and eval numbers are placeholders: no model has been published yet.
+
 ## Fine-tuning a built-in model
 
 1. Download it from the Model hub (or take it from `models/`).
