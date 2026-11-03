@@ -4,10 +4,10 @@
 // locations, bodyMarks, loadKai, loadFitness, loadLibrary, openKai, navGo and friends.
 (function(){
   const esc = (s)=> escapeHtml(String(s ?? ''));
-  const V = { key:null, stack:[], month:null, sel:null, teamMonth:null, teamSel:null, wtime:0, wopen:null, fitEdit:false, fitTab:'prs', foodDate:null, xtSport:null, bmView:'front', edit:null, cache:{} };
+  const V = { key:null, stack:[], month:null, sel:null, wtime:0, wopen:null, fitEdit:false, fitTab:'prs', foodDate:null, xtSport:null, bmView:'front', edit:null, cache:{} };
   const SCREENS = {}, ACT = {};
   // Tab/view (from the heading row) to the screen that draws it.
-  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log', 'calendar/team':'teamcal',
+  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log',
     'body/recovery':'recovery', 'body/xtrain':'xtrain', 'body/food':'food', 'team/feed':'feed', 'team/meets':'meets', 'team/training':'teamplan', 'team/roster':'roster' };
   const host = ()=> document.getElementById('pageV');
   const own = ()=> isRealPerson();
@@ -92,7 +92,6 @@
     if(k === 'run/fitness') return V.cache.fitTitle || 'Fitness';
     if(k === 'run/goals') return V.cache.goalsTitle || 'Goals';
     if(k === 'calendar/log') return V.cache.monthTitle || 'Your training';
-    if(k === 'calendar/team') return V.cache.teamCalTitle || 'Team schedule';
     if(k === 'body/recovery') return V.cache.feelTitle || 'How you feel';
     if(k === 'body/xtrain') return V.cache.xtTitle || 'Cross-training';
     if(k === 'body/food') return V.cache.foodTitle || 'Fuel';

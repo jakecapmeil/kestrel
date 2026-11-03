@@ -4085,6 +4085,7 @@ function renderSchedule(){
   $('schMeetsView').style.display = scheduleView !== 'calendar' ? '' : 'none';
   $('schPlacesView').style.display = scheduleView !== 'calendar' ? '' : 'none';
   if(scheduleView !== 'calendar'){ renderMeets(); renderTravelList(); }
+  else{ renderCalendar(); renderDayDetail(); }
 }
 
 function setScheduleView(v){

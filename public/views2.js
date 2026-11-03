@@ -116,27 +116,6 @@
   };
   SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(V.days[d]?.miles) window.KDay.mountFull(V.days[d], own()); };
 
-  // ---------------------------------------------------------------- Calendar › Team
-  SCREENS.teamcal = async ()=>{
-    if(!window.KESTREL?.teamId) return need('Join a team to see its practices and meets.');
-    const today = todayKey();
-    if(!V.teamMonth){ const d = new Date(today + 'T12:00:00'); V.teamMonth = [d.getFullYear(), d.getMonth()]; }
-    if(!V.teamSel) V.teamSel = today;
-    const [y, m] = V.teamMonth;
-    const next = Object.keys(events).filter(d=> d >= today).sort().map(d=> (events[d] || []).find(e=> e.type === 'meet') && d).find(Boolean);
-    V.cache.teamCalTitle = next ? `Next meet: ${events[next].find(e=> e.type === 'meet').title}` : 'Team schedule';
-    setSub(next ? nice(next, { weekday:'long', month:'long', day:'numeric' }) : '');
-    const cell = (d)=>{ const ev = events[d] || [], meet = ev.some(e=> e.type === 'meet');
-      return `<button type="button" class="kv-cday ${meet ? 'meet' : ''} ${d === V.teamSel ? 'sel' : ''} ${d === today ? 'now' : ''}" data-a="teamSel" data-v="${d}"><b>${+d.slice(8)}</b>${meet ? '<em>Meet</em>' : `<i class="kv-dots">${ev.slice(0, 3).map(e=> `<i style="background:${eventStyle(e).color}"></i>`).join('')}</i>`}</button>`; };
-    const ev = events[V.teamSel] || [];
-    return `<div class="kv-row" style="--c:1.15fr 1fr"><div class="kv-stack">${monthGrid(y, m, cell, null, 'teamMonth')}</div>
-      <div class="kv-stack"><div class="kv-ch kv-dayttl"><div class="kv-ct">${esc(nice(V.teamSel, { weekday:'long', month:'short', day:'numeric' }))}${V.teamSel === today ? ' · today' : ''}</div><button type="button" data-a="oldCal">Add or change events</button></div>
-      ${ev.length ? ev.map(e=> eventCard(e, V.teamSel)).join('') : need('Nothing on the team calendar this day.')}</div></div>`;
-  };
-  ACT.teamMonth = (s)=>{ let [y, m] = V.teamMonth; m += +s; if(m < 0){ m = 11; y--; } if(m > 11){ m = 0; y++; } V.teamMonth = [y, m]; redraw(); };
-  ACT.teamSel = (d)=>{ V.teamSel = d; selectedDate = d; redraw(); };
-  ACT.oldCal = ()=>{ selectedDate = V.teamSel; const d = new Date(V.teamSel + 'T12:00:00'); viewYear = d.getFullYear(); viewMonth = d.getMonth(); scheduleView = 'calendar'; setPage('schedule'); renderCalendar?.(); renderDayDetail?.(); };
-
   // ---------------------------------------------------------------- Body › Recovery
   SCREENS.recovery = async ()=>{
     if(!own()) return need('Pick your name to check in.');
