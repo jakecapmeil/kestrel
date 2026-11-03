@@ -47,6 +47,7 @@
     const top = window.scrollY;
     const html = await fn(arg);
     if(V.token !== token || currentPage !== 'v') return;
+    window.KV.park?.();
     el.className = 'kv kvs-' + name;
     el.innerHTML = html;
     fn.after?.(el, arg);
@@ -154,13 +155,13 @@
     const st = own() ? getRsvp(e.id) : null;
     const et = eventStyle(e);
     return `<div class="card kv-card kv-ev"><div class="kv-ch"><div><div class="kv-eb" style="color:${et.text}">${esc([formatEventTimeRange(e), et.label].filter(Boolean).join(' · '))}</div><div class="kv-ct">${esc(e.title)}</div>${e.location ? `<div class="kv-hint">${esc(e.location)}</div>` : ''}</div>
-      ${st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(rsvpLabel[st])}</button>` : ''}</div>${e.desc ? `<div class="kv-hint" style="margin-top:8px">${esc(e.desc)}</div>` : ''}</div>`;
+      ${st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(st === 'unknown' ? 'RSVP' : rsvpLabel[st])}</button>` : ''}</div>${e.desc ? `<div class="kv-hint" style="margin-top:8px">${esc(e.desc)}</div>` : ''}</div>`;
   }
   // Feel 1-10 and sleep save to today's training log; health and sore spots are the app's statuses.
   function feelCard(day, compact){
     const feel = day?.feel, sleep = day?.sleep_hours ?? null, health = currentHealthStatus(), marks = Object.keys(bodyMarks[activePersonId] || {});
     return card('', '', `<div class="kv-eb">How do you feel today?</div><div class="kv-feel">${[1,2,3,4,5,6,7,8,9,10].map(n=> `<button type="button" class="${feel === n ? 'on' : ''}" data-a="feel" data-v="${n}">${n}</button>`).join('')}</div>
-      <div class="kv-line"><div><b>Sleep</b><span>last night</span></div><div class="kv-step"><button type="button" data-a="sleep" data-v="-0.5" aria-label="Less sleep">−</button><b>${sleep == null ? '–' : sleep + ' h'}</b><button type="button" data-a="sleep" data-v="0.5" aria-label="More sleep">+</button></div></div>
+      <div class="kv-line"><div><b>Sleep</b><span>last night</span></div><div class="kv-step"><button type="button" data-a="sleep" data-v="-0.5" aria-label="Less sleep">−</button><b>${sleep == null ? 'Not set' : sleep + ' h'}</b><button type="button" data-a="sleep" data-v="0.5" aria-label="More sleep">+</button></div></div>
       <div class="kv-line"><b>Status</b><div class="kv-chips">${HEALTH_KEYS.map(k=> `<button type="button" class="kv-chip ${k === health ? 'on' : ''}" data-a="health" data-v="${k}">${HEALTH_STATES[k].label}</button>`).join('')}</div></div>
       ${compact ? '' : `<div class="kv-line"><b>Training</b><div class="kv-chips">${TRAINING_KEYS.map(k=> `<button type="button" class="kv-chip ${k === currentTrainingStatus() ? 'on' : ''}" data-a="trainStatus" data-v="${k}">${TRAINING_STATES[k].label}</button>`).join('')}</div></div>`}
       ${compact ? `<button type="button" class="kv-link" data-a="go" data-v="body/recovery"><span>${marks.length ? `${marks.length} sore ${marks.length === 1 ? 'spot' : 'spots'} on your body map` : 'Body map: nothing marked'}</span><i>›</i></button>` : ''}`);
@@ -175,7 +176,7 @@
   ACT.go = (v)=>{ const [t, s] = v.split('/'); navGo(t, s); };
   ACT.rsvp = async (id)=>{ await cycleRsvp(id); redraw(); };
   ACT.askToday = (_, f)=>{ const q = f.elements.q.value.trim(); if(!q) return; kaiPending = q; navGo('run', 'kai'); };
-  ACT.day = (d)=>{ if(V.key !== 'calendar/log'){ V.month = null; V.sel = d; navGo('calendar', 'log'); } V.sel = d; push('day|' + d); };
+  ACT.day = (d)=>{ V.sel = d; push('day|' + d); };
 
   // ---------------------------------------------------------------- Run › Plan
   SCREENS.plan = async ()=>{

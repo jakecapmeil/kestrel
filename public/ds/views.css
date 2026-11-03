@@ -29,7 +29,7 @@
 .kv-btns button,.kv-ch-r button,.kv-dayttl button{height:38px;padding:0 16px;border-radius:999px;border:0;background:var(--surface-2);color:var(--text);box-shadow:none;}
 .kv-btns button.pri,.kv-ch-r button.pri{background:var(--accent);color:var(--on-accent);}
 .kv-ch-r button svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-right:6px;vertical-align:-2px;}
-.kv-link{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:12px;padding:12px 0 0;border:0;border-top:1px solid var(--line);background:none;color:var(--text);text-align:left;height:auto;}
+.kv-link{display:flex;justify-content:space-between;align-items:center;width:100%;margin-top:12px;padding:12px 0 0;border:0;border-radius:0;border-top:1px solid var(--line);background:none;color:var(--text);text-align:left;height:auto;}
 .kv-link i{font-style:normal;color:var(--text-2);font-size:18px;}
 .kv-link-sm{font:600 13px var(--font-ui);color:var(--accent-ink);text-decoration:none;flex:none;}
 .kv-back{border:0;background:none;padding:0;margin:0 0 12px;color:var(--text-2);font:600 14px var(--font-ui);height:auto;}
@@ -91,7 +91,7 @@
 .kv-run .kv-eb{color:inherit;opacity:.6;}
 .kv-runh{display:block;border:0;background:none;color:inherit;padding:0;text-align:left;font:800 38px/1.05 var(--font-display) !important;letter-spacing:-.025em;margin:2px 0 6px;height:auto;}
 .kv-runh span{font:600 26px var(--font-mono);letter-spacing:0;}
-.kv-runh i{font-style:normal;opacity:.45;font-weight:600;}
+.kv-runh i{font-style:normal;opacity:.4;font-weight:600;font-size:.7em;margin-left:6px;}
 .kv-run .kv-on{color:inherit;opacity:.72;}
 .kv-run .kv-next{margin-top:10px;}
 .kv-run .kv-btns button:not(.pri){background:rgba(245,242,234,.14);color:inherit;}
@@ -127,7 +127,7 @@
 
 /* Run › Plan */
 .kv-days{padding:8px 20px;}
-.kv-day{display:flex;gap:14px;width:100%;padding:12px 0;border:0;border-top:1px solid var(--line);background:none;text-align:left;color:var(--text);height:auto;}
+.kv-day{display:flex;gap:14px;width:100%;padding:12px 0;border:0;border-radius:0;border-top:1px solid var(--line);background:none;text-align:left;color:var(--text);height:auto;}
 .kv-day:first-child{border-top:0;}
 .kv-dn{width:40px;flex:none;text-align:center;display:flex;flex-direction:column;}
 .kv-dn b{font:700 18px var(--font-mono);}
@@ -290,4 +290,52 @@ body.kv-spoke #navSegs{display:none;}
 @media (min-width:1024px){
   #kvActivities .k-acts{max-height:calc(100vh - 580px);}
   #kvBodyMount svg{max-height:min(440px,calc(100vh - 470px)) !important;}
+}
+
+/* ---------- Calendar › Training: the day card, borrowed from the training log */
+#pageV #tlDayCard{margin:0;}
+#pageV #tlDayCard .tl-close{display:none;}
+@media (min-width:1024px){
+  /* On desktop the page heading already names the day. */
+  #pageV #tlDayCard.kv-full #tlDayEyebrow,#pageV #tlDayCard.kv-full #tlDayTitle{display:none;}
+  #pageV #tlDayCard.kv-full .section-head{justify-content:flex-end;}
+  #pageV #tlDayCard.kv-full.viewing{display:grid !important;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);column-gap:var(--s-5,24px);align-items:start;}
+  #pageV #tlDayCard.kv-full.viewing > .section-head{grid-column:1 / -1;}
+  #pageV #tlDayCard.kv-full.viewing > .plan-note,
+  #pageV #tlDayCard.kv-full.viewing > .kai-line,
+  #pageV #tlDayCard.kv-full.viewing > #tlDayStats,
+  #pageV #tlDayCard.kv-full.viewing > #tlReadout,
+  #pageV #tlDayCard.kv-full.viewing > #tlEvents{grid-column:1;}
+  #pageV #tlDayCard.kv-full.viewing > #tlSessions,
+  #pageV #tlDayCard.kv-full.viewing > #tlDaySplits{grid-column:2;}
+  #pageV #tlDayCard.kv-full.viewing > #tlSessions{grid-row:2 / span 6;}
+  /* Editing is a form: keep it a readable width instead of stretching it across the screen. */
+  #pageV #tlDayCard.kv-full.editing{max-width:820px;}
+}
+
+/* ---------- Team › Plan: on desktop the levels table and who is on each level sit side by side, and the table is tighter */
+@media (min-width:1024px){
+  #kvTeamPlan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start;}
+  #kvTeamPlan > section.card{margin:0;}
+  #kvTeamPlan .seg{overflow-x:auto;max-width:100%;flex-wrap:nowrap;}
+  #kvTeamPlan .seg .seg-btn{flex:none;white-space:nowrap;}
+  #kvTeamPlan .k-lvl{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);}
+  #kvTeamPlan > section.card:first-child{grid-row:1 / span 2;}
+  #kvTeamPlan > section.card:only-child{grid-column:1 / -1;}
+  #kvTeamPlan .k-pgrid{gap:2px;margin-top:10px;}
+  #kvTeamPlan .k-pr{gap:2px;}
+  #kvTeamPlan .k-pc{height:30px;min-height:0;padding:0;font-size:13px;border-radius:8px;}
+  #kvTeamPlan .k-plvl{height:30px;min-height:0;padding:0 2px;font-size:14px;align-items:center;}
+  #kvTeamPlan .k-pwk{padding-left:14px;}
+  #kvTeamPlan .k-small{margin:6px 0;}
+  #kvTeamPlan .k-lvl{padding:6px 0;}
+}
+
+/* ---------- Today: even gaps between its sections */
+.kv-today > .kv-sec{margin-bottom:var(--kv-gap);}
+.kv-today > .kv-sec:last-child,.kv-today > .kv-row:last-child{margin-bottom:0;}
+@media (min-width:1024px){ .kv-today{--kv-gap:26px;} }
+.kv-step b{white-space:nowrap;}
+@media (min-width:1024px) and (max-width:1279px){
+  #kvTeamPlan .k-lvl{grid-template-columns:minmax(0,1fr);gap:4px;}
 }

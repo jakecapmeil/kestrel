@@ -2,7 +2,7 @@
 // Body (recovery, cross-training, fuel) and Team. Shares views.js's helpers through window.KV.
 (function(){
   const SCREENS = window.KV.screens, ACT = window.KV.act, V = window.KV.state;
-  const { esc, sec, card, tiles, need, toast, getJson, post, logRange, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost } = window.KV._h;
+  const { esc, sec, card, tiles, need, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost } = window.KV._h;
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   // ---------------------------------------------------------------- month grid (your training, or the team's events)
@@ -21,100 +21,91 @@
   }
 
   // ---------------------------------------------------------------- Calendar › Training
+  // The day is the app's own day card (sessions with their splits, Kestrel AI's note, what happened, recovery, the editor),
+  // moved in beside the month. Phones get a short summary under the month; a tap opens the card on its own page.
+  const wide = ()=> window.innerWidth >= 1024;
+  let tlHome = null;
+  // Put the day card back on its own page before this page's HTML is replaced, or the redraw would delete it.
+  function parkDay(){
+    const c = document.getElementById('tlDayCard');
+    if(c && tlHome && document.getElementById('pageV')?.contains(c)) tlHome.appendChild(c);
+  }
+  async function mountDay(d, days, full){
+    const c = document.getElementById('tlDayCard'), slot = document.getElementById('kvDayHost');
+    if(!c || !slot) return;
+    if(!tlHome) tlHome = c.parentNode;
+    slot.appendChild(c);
+    c.classList.toggle('kv-full', !!full);
+    const t = new Date(d + 'T12:00:00');
+    tlDays = days; tlSelected = d; tlYear = t.getFullYear(); tlMonthIdx = t.getMonth();
+    if(V.openEdit){ V.openEdit = false; tlEditDate = d; tlEditing = true; }
+    await renderTrainingDay();
+    document.body.classList.remove('tl-sheet');
+    const fb = document.getElementById('tlFull');
+    if(fb){ fb.textContent = full ? 'Exit full screen' : 'Full screen'; fb.setAttribute('aria-pressed', String(!!full)); }
+  }
+  window.KV.park = parkDay;
+  // The card's own Full screen button opens (and leaves) the day's page.
+  document.addEventListener('click', (e)=>{
+    const b = e.target.closest('#pageV #tlFull'); if(!b) return;
+    e.stopPropagation();
+    if(V.stack.length) ACT.back(); else push('day|' + tlSelected);
+  }, true);
+
   SCREENS.log = async ()=>{
     if(!own()) return need('Pick your name to see your training.');
     const today = todayKey();
     if(!V.month){ const d = new Date((V.sel || today) + 'T12:00:00'); V.month = [d.getFullYear(), d.getMonth()]; }
     if(!V.sel) V.sel = today;
     const [y, m] = V.month, first = iso(new Date(y, m, 1)), last = iso(new Date(y, m + 1, 0));
-    const [lg, h] = await Promise.all([logRange(first, last), loadKai()]);
+    // The week totals count whole weeks, so the log runs from the Monday before the 1st to the Sunday after the last.
+    const gridFrom = iso(weekStart(new Date(y, m, 1))), gridTo = iso(new Date(weekStart(new Date(y, m + 1, 0)).getTime() + 6 * 864e5));
+    const [lg, h] = await Promise.all([logRange(gridFrom, gridTo), loadKai()]);
     const byDate = {}; (lg?.days || []).forEach(d=> byDate[d.date] = d);
     const plan = {}; (h?.week?.days || []).forEach(d=> { if(d.date >= today) plan[d.date] = d; });
-    const done = (lg?.days || []).filter(d=> d.miles > 0);
+    const done = (lg?.days || []).filter(d=> d.miles > 0 && d.date >= first && d.date <= last);
     const tot = done.reduce((a, d)=> a + d.miles, 0);
     V.cache.monthTitle = `${Math.round(tot)} miles in ${MONTHS[m]}`;
-    setSub(`${done.length} runs · longest ${done.reduce((a, d)=> Math.max(a, d.miles), 0)} mi · hard days ${done.filter(d=> d.difficulty >= 6).length}`);
+    setSub(`${done.length} ${done.length === 1 ? 'run' : 'runs'} · longest ${Math.round(done.reduce((a, d)=> Math.max(a, d.miles), 0) * 10) / 10} mi · ${done.filter(d=> d.difficulty >= 6).length} hard ${done.filter(d=> d.difficulty >= 6).length === 1 ? 'day' : 'days'}`);
     const cell = (d)=>{ const x = byDate[d], p = plan[d], day = +d.slice(8);
       const cls = x?.miles ? intensity(x.difficulty) : p && p.type !== 'Off' ? 'plan' : 'rest';
-      return `<button type="button" class="kv-cday ${cls} ${d === V.sel ? 'sel' : ''} ${d === today ? 'now' : ''}" data-a="logSel" data-v="${d}"><b>${day}</b><span>${x?.miles ? x.miles : p && p.type !== 'Off' ? p.miles : ''}</span></button>`; };
-    const side = (wk)=>{ const s = wk.reduce((a, d)=> a + (d && byDate[d]?.miles || 0), 0); return s ? Math.round(s) : ''; };
+      return `<button type="button" class="kv-cday ${cls} ${d === V.sel ? 'sel' : ''} ${d === today ? 'now' : ''}" data-a="logSel" data-v="${d}"><b>${day}</b><span>${x?.miles ? Math.round(x.miles * 10) / 10 : p && p.type !== 'Off' ? p.miles : ''}</span></button>`; };
+    const side = (wk)=>{ const mon = weekStart(new Date(wk.find(Boolean) + 'T12:00:00')).getTime(); let s = 0; for(let i = 0; i < 7; i++) s += byDate[iso(new Date(mon + i * 864e5))]?.miles || 0; return s ? Math.round(s) : ''; };
     V.cache['day:' + V.sel] = byDate[V.sel];
+    V.days = byDate;
     return `<div class="kv-row" style="--c:1.15fr 1fr"><div class="kv-stack">${monthGrid(y, m, cell, side, 'logMonth')}
         <div class="kv-legend"><span><i class="i1"></i>Easy 1-3</span><span><i class="i2"></i>Moderate 4-5</span><span><i class="i3"></i>Hard 6-7</span><span><i class="i4"></i>Very hard 8-10</span><span><i class="pl"></i>Planned</span></div></div>
-      <div class="kv-stack">${dayPanel(V.sel, byDate[V.sel], plan[V.sel], false)}</div></div>`;
+      <div class="kv-stack">${wide() ? '<div id="kvDayHost"></div>' : dayPanel(V.sel, byDate[V.sel], plan[V.sel])}</div></div>`;
   };
-  ACT.logMonth = (s)=>{ let [y, m] = V.month; m += +s; if(m < 0){ m = 11; y--; } if(m > 11){ m = 0; y++; } V.month = [y, m]; redraw(); };
-  ACT.logSel = (d)=>{ if(V.sel === d && window.innerWidth < 1024) return push('day|' + d); V.sel = d; redraw(); };
+  SCREENS.log.after = ()=>{ if(wide()) mountDay(V.sel, V.days, false); };
+  ACT.logMonth = (s)=>{ let [y, m] = V.month; m += +s; if(m < 0){ m = 11; y--; } if(m > 11){ m = 0; y++; } V.month = [y, m];
+    // The day beside the month must belong to it: keep the same day number, or the 1st.
+    const t = todayKey(), inMonth = (k)=> k && +k.slice(0, 4) === y && +k.slice(5, 7) === m + 1;
+    V.sel = inMonth(t) ? t : iso(new Date(y, m, Math.min(+(V.sel || t).slice(8), new Date(y, m + 1, 0).getDate())));
+    redraw(); };
+  ACT.logSel = (d)=>{ if(tlDirty && wide() && !confirm('Discard your changes to this day?')) return; tlDirty = tlSplitDirty = false; if(V.sel === d && !wide()) return push('day|' + d); V.sel = d; redraw(); };
 
-  // A day: what was planned, what you ran, the reps, how it went. Compact beside the calendar; full on its own page.
-  function dayPanel(d, x, p, full){
-    // On its own page the heading already names the day, so only the actions show.
-    const fullHead = `<div class="kv-ch kv-dayttl" style="margin-bottom:14px"><div class="kv-hint" style="margin:0">${p && !x?.miles ? `Planned: ${esc(p.type === 'Off' ? 'rest' : `${p.type} ${p.miles} mi`)}` : x?.plan ? `Plan: ${esc(x.plan.label || '')}` : ''}</div>${d <= todayKey() ? `<button type="button" class="pri" data-a="dayEdit" data-v="${d}">${x?.miles ? 'Edit run' : 'Add a run'}</button>` : ''}</div>`;
-    const head = full ? fullHead : `<div class="card kv-card kv-dayhead"><div class="kv-ch"><div><div class="kv-eb">${esc(nice(d, { weekday:'long', month:'short', day:'numeric' }))}${d === todayKey() ? ' · today' : ''}</div><div class="kv-ct big">${esc(x?.miles ? runTitle(x) : p ? (p.type === 'Off' ? 'Rest day' : p.type) : 'Rest day')}</div></div>
-      <div class="kv-ch-r">${full ? '' : `<button type="button" data-a="dayFull" data-v="${d}">${ICON.full}Full screen</button>`}${d <= todayKey() ? `<button type="button" class="pri" data-a="dayEdit" data-v="${d}">${x?.miles ? 'Edit' : 'Add a run'}</button>` : ''}</div></div>
+  // Phones: what was planned or run, in a few lines. The card opens from it.
+  function dayPanel(d, x, p){
+    const isToday = d === todayKey();
+    const ttl = x?.miles ? runTitle(x) : p ? (p.type === 'Off' ? 'Rest day' : p.type) : 'Rest day';
+    const head = `<div class="card kv-card kv-dayhead"><div class="kv-ch"><div><div class="kv-eb">${esc(nice(d, { weekday:'long', month:'short', day:'numeric' }))}${isToday ? ' · today' : ''}</div><div class="kv-ct big">${esc(ttl)}</div></div>
+      <div class="kv-ch-r"><button type="button" class="pri" data-a="dayFull" data-v="${d}">${x?.miles || x?.notes || x?.summary ? 'Open' : d <= todayKey() ? 'Add a run' : 'Details'}</button></div></div>
       ${p && !x?.miles ? `<div class="kv-hint">Planned: ${esc(p.type === 'Off' ? 'rest' : `${p.type} ${p.miles} mi`)}${sessionText(p) || p.base?.notes ? ' · ' + esc(sessionText(p) || p.base.notes) : ''}</div>` : ''}
-      ${x?.plan ? `<div class="kv-hint">Plan: ${esc(x.plan.label || '')}</div>` : ''}</div>`;
-    if(!x?.miles && !x?.notes && !x?.summary) return head + (d > todayKey() && p ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
-    const stats = tiles([['Miles', x.miles ?? '–'], ['Time', x.minutes ? clock(x.minutes * 60) : '–'], ['Pace', paceOf(x.miles, x.minutes) + (x.miles && x.minutes ? '/mi' : '')], ['Effort', x.difficulty ? x.difficulty + '/10' : '–'], ['Feel', x.feel ? x.feel + '/10' : '–'], ['Sleep', x.sleep_hours != null ? x.sleep_hours + ' h' : '–']], 3);
-    const reps = x.split_reps?.length ? card(`Reps · ${x.split_reps.length} × ${x.split_reps[0].m} m`, `avg ${clock(x.split_reps.reduce((a, r)=> a + r.s, 0) / x.split_reps.length)}`, `<div class="kv-reps">${x.split_reps.map((r, i)=> `<span><small>${i + 1}${r.m !== x.split_reps[0].m ? ' · ' + r.m + 'm' : ''}</small>${clock(r.s)}</span>`).join('')}</div>`) : '';
-    const sessions = (x.sessions || []).length ? card('Sessions', 'From your watch.', `<div class="kv-list">${x.sessions.map(s=> `<div class="kv-li"><div><b>${esc(SESSION_LABEL[s.category] || 'Run')} · ${esc(s.miles)} mi</b><span>${esc([s.start, s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm', s.elev_ft && s.elev_ft + ' ft up'].filter(Boolean).join(' · '))}</span></div></div>`).join('')}</div>`) : '';
-    const notes = card('How it went', '', `${x.coach_note ? `<div class="kv-note"><b>Kestrel AI:</b> ${esc(x.coach_note)}</div>` : ''}${x.notes ? `<div class="kv-hint" style="color:var(--text)">${esc(x.notes)}</div>` : '<div class="kv-hint">No notes.</div>'}${x.strength ? '<div class="kv-hint">Did strength / core.</div>' : ''}${x.track ? '<div class="kv-hint">On the track.</div>' : ''}
-      <div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Ask Kestrel AI about it</button></div>`);
-    return head + (full ? `<div class="kv-row" style="--c:1fr 1fr 1fr"><div class="kv-stack">${card('', '', stats)}${sessions}</div><div class="kv-stack">${reps || card('', '', '<div class="kv-hint">No reps logged.</div>')}</div><div class="kv-stack">${notes}</div></div>` : card('', '', stats) + reps + notes);
+      ${x?.plan ? `<div class="kv-hint">Plan: ${esc(x.plan.planned || x.plan.label || '')}</div>` : ''}
+      ${x?.day_line ? `<div class="kv-note"><b>Kestrel AI:</b> ${esc(x.day_line)}</div>` : ''}</div>`;
+    if(!x?.miles) return head + (d > todayKey() && p ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
+    return head + tiles([['Miles', Math.round(x.miles * 100) / 100], ['Time', x.minutes ? clock(x.minutes * 60) : '–'], ['Pace', paceOf(x.miles, x.minutes) + (x.miles && x.minutes ? '/mi' : '')], ['Effort', x.difficulty ? x.difficulty + '/10' : '–']], 4);
   }
-  ACT.dayFull = (d)=> push('day|' + d);
-  ACT.dayEdit = (d)=> push('edit|' + d);
+  ACT.dayFull = (d)=>{ V.sel = d; push('day|' + d); };
   ACT.dayKai = (d)=> openKai(`About ${nice(d, { weekday:'long', month:'short', day:'numeric' })}: `, false);
   SCREENS.day = async (d)=>{
-    const [lg, h] = await Promise.all([logRange(d, d), loadKai()]);
+    const [lg] = await Promise.all([logRange(d, d)]);
     const x = lg?.days?.[0]; V.cache['day:' + d] = x;
-    const p = (h?.week?.days || []).find(z=> z.date === d);
-    return `<button type="button" class="kv-back" data-a="back">‹ Back</button>${dayPanel(d, x, p, true)}`;
+    V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
+    return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
   };
-
-  // ---------------------------------------------------------------- editing a run
-  SCREENS.edit = async (d)=>{
-    const x = (await logRange(d, d))?.days?.[0] || {};
-    if(!V.edit || V.edit.date !== d) V.edit = { date:d, reps:(x.split_reps || []).map(r=> ({ m:r.m, s:r.s, rest:r.rest || '' })), repM:x.split_reps?.[0]?.m || 800 };
-    const E = V.edit, lock = x.locked;
-    const f = (label, name, val, attrs = '')=> `<label><span>${label}</span><input name="${name}" value="${esc(val ?? '')}" ${attrs} ${lock && ['manual_miles','minutes','runs','difficulty'].includes(name) ? 'disabled' : ''}></label>`;
-    return `<button type="button" class="kv-back" data-a="back">‹ Back</button>
-      <form class="card kv-card kv-form kv-edit" data-f="saveRun" data-v="${d}">
-        ${lock ? '<div class="kv-note">Miles, time and effort come from your watch for this day.</div>' : ''}
-        <div class="kv-grid3">${f('Miles', 'manual_miles', x.miles, 'inputmode="decimal"')}${f('Minutes', 'minutes', x.minutes, 'inputmode="numeric"')}${f('Effort 1-10', 'difficulty', x.difficulty, 'inputmode="numeric"')}</div>
-        <div class="kv-grid3">${f('Feel 1-10', 'feel', x.feel, 'inputmode="numeric"')}${f('Sleep (h)', 'sleep_hours', x.sleep_hours, 'inputmode="decimal"')}${f('Runs', 'runs', x.runs, 'inputmode="numeric"')}</div>
-        <label><span>What it was</span><input name="summary" value="${esc(x.summary || '')}" placeholder="Tempo, easy, 6 × 800…"></label>
-        <label class="kv-check"><input type="checkbox" name="track" ${x.track ? 'checked' : ''}> On the track <small>reps round to the nearest 100 m</small></label>
-        <label class="kv-check"><input type="checkbox" name="strength" ${x.strength ? 'checked' : ''}> Did strength / core</label>
-        <div class="kv-eb">Splits · ${E.reps.length} reps</div>
-        <div class="kv-repedit">${E.reps.map((r, i)=> `<span><small>${i + 1} · ${r.m}m</small><input name="rep${i}" value="${r.s ? clock(r.s) : ''}" aria-label="Rep ${i + 1} time"><button type="button" class="kv-x" data-a="repDel" data-v="${i}" aria-label="Remove rep ${i + 1}">×</button></span>`).join('') || '<span class="kv-hint">No reps. Add a set, or leave empty for a steady run.</span>'}</div>
-        <div class="kv-line"><div class="kv-chips"><input class="kv-mini" name="setN" value="4" aria-label="Reps"> × <input class="kv-mini" name="setM" value="${E.repM}" aria-label="Metres"> m <button type="button" data-a="repSet">Add set</button></div></div>
-        <div class="kv-chips">${['6x200','8x400','5x800','4x1000','3x1600'].map(q=> `<button type="button" class="kv-chip" data-a="repQuick" data-v="${q}">${q.replace('x', '×')}</button>`).join('')}</div>
-        <label><span>Paste times</span><textarea name="paste" rows="2" placeholder="1:12 1:11 1:10.5, or one per line"></textarea></label>
-        <div class="kv-btns"><button type="button" data-a="repPaste">Fill reps from pasted times</button></div>
-        <label><span>Notes</span><textarea name="notes" rows="3">${esc(x.notes || '')}</textarea></label>
-        <div class="kv-btns"><button type="submit" class="pri">Save run</button><button type="button" data-a="back">Cancel</button>${(x.sessions || []).length ? `<button type="button" data-a="oldEdit" data-v="${d}">Watch sessions and splits</button>` : ''}</div>
-      </form>`;
-  };
-  const form = ()=> document.querySelector('#pageV form[data-f="saveRun"]');
-  function harvest(){ const f = form(); if(!f) return; V.edit.reps = V.edit.reps.map((r, i)=>{ const s = secs(f.elements['rep' + i]?.value || ''); return isNaN(s) ? r : { ...r, s }; }); V.edit.repM = +f.elements.setM.value || V.edit.repM; }
-  ACT.repDel = (i)=>{ harvest(); V.edit.reps.splice(+i, 1); redraw(); };
-  const addSet = (n, m)=>{ for(let i = 0; i < n; i++) V.edit.reps.push({ m, s:0, rest:'' }); V.edit.repM = m; redraw(); };
-  ACT.repSet = ()=>{ harvest(); const f = form(); addSet(Math.min(40, +f.elements.setN.value || 1), +f.elements.setM.value || 400); };
-  ACT.repQuick = (v)=>{ harvest(); const [n, m] = v.split('x').map(Number); addSet(n, m); };
-  ACT.repPaste = ()=>{ harvest(); const t = form().elements.paste.value.split(/[\s,]+/).filter(Boolean).map(x=> x.includes(':') ? secs(x) : +x >= 100 ? Math.floor(+x / 100) * 60 + (+x % 100) : +x).filter(x=> x > 0);
-    if(!t.length) return toast('No times found');
-    const m = V.edit.repM; V.edit.reps = t.map((s, i)=> ({ m:V.edit.reps[i]?.m || m, s, rest:'' })); redraw(); toast(`Filled ${t.length} reps`); };
-  ACT.oldEdit = (d)=> openLogDay(d);
-  ACT.saveRun = async (d, f)=>{
-    harvest();
-    const num = (n)=>{ const v = f.elements[n]?.value?.trim(); return v === '' || v == null ? null : Number(v); };
-    const fields = { summary:f.elements.summary.value, notes:f.elements.notes.value, feel:num('feel'), sleep_hours:num('sleep_hours'), strength:f.elements.strength.checked, surface:f.elements.track.checked ? 'track' : '',
-      split_reps:V.edit.reps.filter(r=> r.m > 0 && r.s > 0) };
-    if(!f.elements.manual_miles.disabled) Object.assign(fields, { manual_miles:num('manual_miles'), minutes:num('minutes'), runs:num('runs'), difficulty:num('difficulty') });
-    const r = await saveDayFields(d, fields);
-    if(r && !r.error){ V.edit = null; V.stack.pop(); toast('Run saved'); redraw(); }
-  };
+  SCREENS.day.after = (el, d)=> mountDay(d, V.days, true);
 
   // ---------------------------------------------------------------- Calendar › Team
   SCREENS.teamcal = async ()=>{
@@ -152,7 +143,7 @@
     const week = Array.from({ length:7 }, (_, i)=> iso(new Date(Date.now() - (6 - i) * 864e5)));
     const trend = card('Last 7 days', 'How you felt and slept.', `<div class="kv-trendbars">${week.map(d=>{ const x = byDate[d]; return `<div><div class="tb"><i class="f" style="height:${(x?.feel || 0) * 10}%"></i><i class="s" style="height:${Math.min(100, (x?.sleep_hours || 0) * 10)}%"></i></div><span>${new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday:'short' })}</span></div>`; }).join('')}</div>
       <div class="kv-legend"><span><i style="background:var(--accent)"></i>Feel</span><span><i style="background:var(--info)"></i>Sleep</span></div>`);
-    const health = card('Health', 'From your log and your watch.', tiles([['Readiness', rd ? rd.score : '–', rd?.label || ''], ['Resting HR', h?.health?.resting_hr ?? '–'], ['HRV', h?.health?.hrv ?? '–'], ['Sleep', h?.health?.sleep?.last7 != null ? h.health.sleep.last7 + ' h' : '–', '7-day average']], 4)
+    const health = card('Health', 'From your log and your watch.', tiles([['Readiness', rd ? rd.score : '–', rd?.label || ''], ['Resting HR', h?.health?.resting_hr?.last7 ?? '–', h?.health?.resting_hr?.normal ? 'norm ' + h.health.resting_hr.normal : ''], ['HRV', h?.health?.hrv?.last7 ?? '–', h?.health?.hrv?.normal ? 'norm ' + h.health.hrv.normal : ''], ['Sleep', h?.health?.sleep?.last7 != null ? h.health.sleep.last7 + ' h' : '–', '7-day average']], 4)
       + (rd?.factors?.length ? `<div class="kv-list" style="margin-top:8px">${rd.factors.map(x=> `<div class="kv-li"><div><span style="color:var(--text)">${esc(x.why)}</span></div><i>${x.pts > 0 ? '+' : ''}${x.pts}</i></div>`).join('')}</div>` : ''));
     const marks = bodyMarks[activePersonId] || {};
     const map = card('Body map', 'Tap anything that hurts: sore, then pain, then clear. Kestrel AI keeps hard runs off it.', `<div class="kv-bodymap"><div id="kvBodyMount"></div>
@@ -255,7 +246,7 @@
   ACT.oldPlaces = ()=>{ scheduleView = 'places'; setPage('schedule'); };
 
   // ---------------------------------------------------------------- Team › Plan and Roster (the team's own editors)
-  SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its plan.'); if(own()) await loadKai(); setSub('Each row is a level, by weekly miles. Tap a day for the workout.'); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
+  SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its plan.'); if(own()) await loadKai(); setSub(''); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
   SCREENS.teamplan.after = ()=> window.kestrelRenderTeamTraining?.($('kvTeamPlan'));
   SCREENS.roster = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its roster.'); setSub(''); return '<div id="kvRoster" class="kv-stack"></div>'; };
   SCREENS.roster.after = ()=> window.kestrelRenderRoster?.($('kvRoster'));

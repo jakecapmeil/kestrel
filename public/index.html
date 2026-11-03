@@ -3198,7 +3198,7 @@ async function cycleRsvp(eventId){
   if(currentPage === 'schedule' && scheduleView === 'meets') renderMeets();
 }
 
-const rsvpLabel = {unknown:'Unknown', available:'Coming', unavailable:'Not coming'};
+const rsvpLabel = {unknown:'RSVP', available:'Coming', unavailable:'Not coming'};
 
 function renderEvents(){
   const list = events[selectedDate] || [];
@@ -3891,6 +3891,7 @@ async function submitPost(){
 
 function setPage(page){
   if(!PAGES.includes(page)) page = 'schedule';
+  if(page !== 'v') window.KV?.park?.();
   document.body.classList.remove('tl-sheet');
   currentPage = page;
   PAGES.forEach(name=>{
@@ -5005,7 +5006,7 @@ function renderAll(){
   if(currentPage === 'team') renderTeam();
   if(currentPage === 'today' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) renderTodayPage();
   // The redesigned screens redraw with fresh data unless someone is typing in one.
-  if(currentPage === 'v' && !document.activeElement?.closest?.('#pageV form, #pageV input, #pageV textarea, #pageV select')) window.KV?.redraw();
+  if(currentPage === 'v' && !tlDirty && !document.activeElement?.closest?.('#pageV form, #pageV input, #pageV textarea, #pageV select')) window.KV?.redraw();
   renderNav();
 }
 
@@ -5456,6 +5457,8 @@ async function renderWeekSummary(){
 }
 
 async function renderTrainingLog(){
+  // On a redesigned page the day card is borrowed: whatever asks for a fresh log redraws that page instead.
+  if(currentPage === 'v'){ window.KV?.redraw(); return; }
   if(!isRealPerson()){
     $('tlMonth').textContent = 'Training log';
     $('tlHint').textContent = 'Reload and pick your name to keep a training log.';
@@ -5792,7 +5795,7 @@ async function renderTrainingDay(){
   $('tlPlanNote').style.display = day.plan ? '' : 'none';
   if(day.plan) $('tlPlanNote').textContent = `Plan: ${day.plan.planned}`;
   // Phones: the day opens as a sheet over the log.
-  document.body.classList.toggle('tl-sheet', window.innerWidth < 960);
+  document.body.classList.toggle('tl-sheet', window.innerWidth < 960 && currentPage === 'training');
   $('tlDayLine').style.display = day.day_line ? '' : 'none';
   if(day.day_line) $('tlDayLine').innerHTML = `<b>Kestrel AI:</b> ${escapeHtml(day.day_line)}`;
   $('tlDayStats').innerHTML = statTile(day.miles != null ? Math.round(day.miles*100)/100 : '–', 'miles')
