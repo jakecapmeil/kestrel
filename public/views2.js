@@ -145,6 +145,30 @@
   ACT.sessReport = (key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.writeReport(x, key); };
   ACT.sessGo = (key)=>{ V.stack[V.stack.length - 1] = 'sess|' + key; V.sessSel = key; window.scrollTo(0, 0); redraw(); };
 
+  // ---------------------------------------------------------------- Run › The Kestrel ethos
+  // What every Kestrel AI follows, whichever model runs it, and the runner's own ethos on top.
+  SCREENS.ethos = async ()=>{
+    const e = await getJson('/api/ethos');
+    if(!e) return need('Couldn’t load the ethos. Check your connection.');
+    setSub('How Kestrel coaches. Every AI in Kestrel follows it, whichever model you pick.');
+    const cards = e.sections.map((x, i)=> `<section class="card kv-card kv-ethos"><div class="kv-eb">${String(i + 1).padStart(2, '0')}</div><h2 class="kv-ct">${esc(x.title)}</h2><ul>${x.points.map((p)=> `<li>${esc(p)}</li>`).join('')}</ul></section>`).join('');
+    const mine = own() ? `<form class="card kv-card kv-ethos mine" data-f="ethosSave">
+        <div class="kv-eb">Yours</div><h2 class="kv-ct">Your ethos</h2>
+        <p class="kv-hint">Add how you like to train, and Kestrel AI follows it on top of the ethos above: “I race the 800, keep one speed day all year”, “No running on Sundays”, “Vegetarian, so suggest plant protein”. Safety always comes first: if yours clashes with a health rule or the plan’s limits, Kestrel AI tells you why.</p>
+        <textarea class="kv-input" name="mine" rows="5" maxlength="2000" placeholder="Write a few lines in your own words.">${esc(e.mine || '')}</textarea>
+        <div class="kv-btns"><button type="submit" class="pri">Save my ethos</button><span class="kv-hint" id="kvEthosMsg"></span></div></form>` : '';
+    return `<div class="kv-ethos-grid">${mine}${cards}</div>
+      <p class="kv-hint kv-ethos-src">The research behind each point, with sources: <a href="https://github.com/jakecapmeil/kestrel/blob/main/docs/ethos.md" target="_blank" rel="noopener">docs/ethos.md</a>. Version ${esc(e.version)}.</p>`;
+  };
+  ACT.ethosSave = async (v, f)=>{
+    const msg = document.getElementById('kvEthosMsg');
+    try{
+      const r = await fetch('/api/ethos', { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ mine: f.mine.value }) });
+      if(!r.ok) throw new Error();
+      msg.textContent = f.mine.value.trim() ? 'Saved. Kestrel AI follows it from your next message.' : 'Cleared.';
+    }catch(e){ msg.textContent = 'That didn’t save. Try again.'; }
+  };
+
   // ---------------------------------------------------------------- Body › Recovery
   SCREENS.recovery = async ()=>{
     if(!own()) return need('Pick your name to check in.');

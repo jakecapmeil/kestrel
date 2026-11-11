@@ -7,7 +7,7 @@
   const V = { key:null, stack:[], month:null, sel:null, wtime:0, wopen:null, fitEdit:false, fitTab:'prs', foodDate:null, xtSport:null, bmView:'front', edit:null, cache:{} };
   const SCREENS = {}, ACT = {};
   // Tab/view (from the heading row) to the screen that draws it.
-  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log',
+  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/ethos':'ethos', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log',
     'body/recovery':'recovery', 'body/xtrain':'xtrain', 'body/food':'food', 'team/feed':'feed', 'team/meets':'meets', 'team/training':'teamplan', 'team/roster':'roster' };
   const host = ()=> document.getElementById('pageV');
   const own = ()=> isRealPerson();
@@ -90,6 +90,7 @@
     if(k === 'today') return new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
     if(k === 'run/plan') return V.cache.weekTitle || 'This week';
     if(k === 'run/library') return `${V.cache.libCount || ''} workouts`.trim();
+    if(k === 'run/ethos') return 'The Kestrel ethos';
     if(k === 'run/fitness') return V.cache.fitTitle || 'Fitness';
     if(k === 'run/goals') return V.cache.goalsTitle || 'Goals';
     if(k === 'calendar/log') return V.cache.monthTitle || 'Your training';
@@ -229,7 +230,7 @@
     setSub('run/library', lib.fitness?.vo2r ? 'Written for you: your level, with goal splits from your fitness.' : 'Add PRs or connect your watch to get goal splits written for you.');
     const tilesHtml = WO_TILES.map(t=>{ const n = t.key === 'kai' ? null : lib.workouts.filter(w=> fits(w) && (t.key === 'all' || w.type === t.key)).length;
       return `<button type="button" class="card kv-card kv-wo ${t.key === 'kai' ? 'kai' : ''} ${n === 0 ? 'none' : ''}" data-a="${t.key === 'kai' ? 'woKai' : 'wo'}" data-v="${t.key}">${WO_ICON[t.icon] || ''}${n !== null ? `<i>${n}</i>` : ''}<b>${t.label}</b><small>${t.sub}</small></button>`; }).join('');
-    return `<div class="kv-chips kv-filter">${LIB_LEN.map(([v, l])=> `<button type="button" class="kv-chip ${V.wtime === v ? 'on' : ''}" data-a="wtime" data-v="${v}">${l}</button>`).join('')}</div><div class="kv-wogrid">${tilesHtml}</div>`;
+    return `<button type="button" class="card kv-card kv-ethos-link" data-a="go" data-v="run/ethos"><span><b>The Kestrel ethos</b><small>How Kestrel thinks you should train: easy days, mileage, recovery, food, race day. Every workout here and every AI answer follows it.</small></span><i aria-hidden="true">›</i></button><div class="kv-chips kv-filter">${LIB_LEN.map(([v, l])=> `<button type="button" class="kv-chip ${V.wtime === v ? 'on' : ''}" data-a="wtime" data-v="${v}">${l}</button>`).join('')}</div><div class="kv-wogrid">${tilesHtml}</div>`;
   };
   ACT.wtime = (v)=>{ V.wtime = +v; redraw(); };
   ACT.wo = (k)=> push('wk|' + k);

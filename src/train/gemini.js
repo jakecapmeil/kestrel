@@ -12,8 +12,12 @@
 // Each person gets AI_DAILY_CAP calls a day so nobody burns the shared free quota.
 
 import { PLAN_SPEC_SCHEMA } from './plans.js';
+import { withEthos } from './ethos.js';
 
 export class AiError extends Error {}
+
+// The runner's own ethos, from a people row.
+export const ethosOf = (person) => { try { return JSON.parse(person?.settings || '{}').ethos || ''; } catch { return ''; } };
 
 // Free-tier quota is per model, so when one is used up (429) or down (5xx) the
 // next one answers. Best first. Override with GEMINI_MODELS (comma-separated,
@@ -255,7 +259,7 @@ export async function reportSessions(env, db, person, sessions, { rubric, maxHr,
   await spend(db, person.id, today);
   const acts = sessions.reduce((n, x) => n + x.activities.length, 0);
   const out = await generate(env, {
-    system: `You are Kestrel AI, the AI running coach in Kestrel, reviewing a runner's synced training. Follow this rubric exactly; only the CATEGORY and the session REPORT are your job.\n\n${rubric}`,
+    system: withEthos(`You are Kestrel AI, the AI running coach in Kestrel, reviewing a runner's synced training. Follow this rubric exactly; only the CATEGORY and the session REPORT are your job. Judge each session against the Kestrel ethos below.\n\n${rubric}`, ethosOf(person)),
     prompt: `Runner: ${person.first_name || person.name}. Max HR used: ${maxHr}.${body ? `\nBody right now: ${JSON.stringify(body)} (mention it if a session ran on something marked sore or pain).` : ''}
 Activities are already grouped into sessions (warm-up, workout and cool-down saved separately are ONE session). For each session return:
 - main_id: the main activity (the workout, race or longest run)
@@ -336,7 +340,12 @@ export const SITE_GUIDE = `- Five tabs along the bottom. Schedule: the team cale
 
 // The coach chat as a prompt: the same for the free default and for any model the athlete brings.
 // history: [{ role: 'user' | 'kai', text }], oldest first, ending with the athlete's new message.
+// Every chat carries the Kestrel ethos and the runner's own (context.my_ethos).
 export function coachChat(history, context, today, bodyParts) {
+  const o = coachChatBase(history, context, today, bodyParts);
+  return { ...o, system: withEthos(o.system, context?.my_ethos) };
+}
+function coachChatBase(history, context, today, bodyParts) {
   const turns = (Array.isArray(history) ? history : []).slice(-12)
     .map((m) => ({ role: (m?.role === 'kai' || m?.role === 'hawky') ? 'Coach' : 'Athlete', text: String(m?.text || '').trim().slice(0, 1000) }))
     .filter((m) => m.text);
@@ -418,6 +427,10 @@ export async function parseProfileText(env, db, person, text, today) {
 // sees a preview before saving. The same prompt goes to whatever model the person chose in AI settings.
 // scope: { team: boolean, name, roster: { athletes, grades, weekly_miles: [..] }, current: plan spec | null }
 export function planChat(history, scope, today) {
+  const o = planChatBase(history, scope, today);
+  return { ...o, system: withEthos(o.system, scope?.my_ethos) };
+}
+function planChatBase(history, scope, today) {
   const turns = (Array.isArray(history) ? history : []).slice(-14)
     .map((m) => ({ role: m?.role === 'user' ? 'Person' : 'Coach', text: String(m?.text || '').trim().slice(0, 1500) }))
     .filter((m) => m.text);
@@ -513,7 +526,7 @@ export async function askSchedule(env, db, person, input, scope, today) {
 export function sessionReportChat(person, day, session, rubric) {
   const acts = (session.activities || []).map((a) => ({ role: a.role || undefined, name: a.name, category: a.category, start: a.start, miles: a.miles, minutes: a.minutes, pace: a.pace, avg_hr: a.avg_hr, max_hr: a.max_hr, elev_ft: a.elev_ft, temp_f: a.temp_f, laps: (a.laps || []).slice(0, 40) }));
   return {
-    system: `You are Kestrel AI, the AI running coach in Kestrel, reviewing one training session. Follow this rubric.\n\n${rubric}`,
+    system: withEthos(`You are Kestrel AI, the AI running coach in Kestrel, reviewing one training session. Follow this rubric, and judge the session against the Kestrel ethos below.\n\n${rubric}`, ethosOf(person)),
     prompt: `Runner: ${person.first_name || person.name || 'the runner'}. Date: ${day.date}. Plan for the day: ${day.plan?.planned || day.planned || 'none'}.
 Session (${session.category}${session.track ? ', on the track' : ''}): ${session.miles} mi in ${session.minutes} min, pace ${session.pace || '?'}/mi, avg HR ${session.avg_hr || '?'}.
 Its parts: ${JSON.stringify(acts)}

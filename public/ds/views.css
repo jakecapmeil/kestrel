@@ -587,3 +587,18 @@ body.kv-spoke #navSegs{display:none;}
   .kv-trendbars{gap:4px;}
   .kv-tiles > div{padding:10px;}
 }
+
+/* The Kestrel ethos */
+.kv-ethos-link{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-bottom:14px;text-align:left;color:var(--text);background:var(--accent-subtle);border-color:transparent;height:auto;}
+.kv-ethos-link b{display:block;font:700 17px var(--font-display);}
+.kv-ethos-link small{display:block;font-size:13.5px;color:var(--text-2);line-height:1.4;margin-top:2px;}
+.kv-ethos-link i{font:400 24px var(--font-ui);font-style:normal;color:var(--text-2);}
+.kv-ethos-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;}
+@media (min-width:900px){ .kv-ethos-grid{grid-template-columns:repeat(2,minmax(0,1fr));} .kv-ethos.mine{grid-column:1 / -1;} }
+.kv-ethos .kv-eb{color:var(--accent);margin-bottom:4px;}
+.kv-ethos ul{margin:10px 0 0;padding-left:18px;display:grid;gap:8px;}
+.kv-ethos li{font-size:15px;line-height:1.5;}
+.kv-ethos li::marker{color:var(--accent);}
+.kv-ethos.mine textarea{width:100%;box-sizing:border-box;margin-top:10px;min-height:110px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:15px/1.45 var(--font-ui);resize:vertical;}
+.kv-ethos.mine .kv-btns{align-items:center;}
+.kv-ethos-src{margin:16px 0 24px;}

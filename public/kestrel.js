@@ -1366,7 +1366,9 @@ window.kestrelRenderSettings = async () => {
         <li><b>Your own key</b> (Anthropic, OpenAI, Gemini paid, OpenRouter) keeps your data out of free-tier training and is usually a little sharper. You pay the provider directly; a month of chat is typically cents.</li>
         <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
         <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>
+      <div class="k-row spread"><span class="k-small" style="margin:0">Every model follows the Kestrel ethos, plus your own.</span><button type="button" class="k-btn small" id="kEthosLink">Ethos</button></div>
       <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
+    $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
     ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
       const t = sel.dataset.task, v = sel.value;
       K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), [t]: v === K.ai.provider ? undefined : v } };

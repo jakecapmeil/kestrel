@@ -457,7 +457,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
 
 async function loadPerson(env, personId) {
   const person = await withPlans(env.DB, await env.DB.prepare(
-    'SELECT id, name, class_year, plan_rank, coach_rank, health_status, health_updated_at, training_status, icu_athlete, icu_key_enc, icu_synced_at, icu_import_cursor, icu_import_done FROM people WHERE id = ?'
+    'SELECT id, name, class_year, plan_rank, coach_rank, health_status, health_updated_at, training_status, icu_athlete, icu_key_enc, icu_synced_at, icu_import_cursor, icu_import_done, settings FROM people WHERE id = ?'
   ).bind(personId).first());
   if (!person?.icu_key_enc) throw new IntervalsError('Not connected to intervals.icu');
   return person;

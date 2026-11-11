@@ -25,7 +25,8 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
-import { sessionReportChat } from './train/gemini.js';
+import { sessionReportChat, ethosOf } from './train/gemini.js';
+import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
@@ -498,7 +499,7 @@ async function planChatRoute(env, db, me, b, scope, promptOnly, today) {
   const history = Array.isArray(b.history) ? b.history : [];
   const documents = (Array.isArray(b.documents) ? b.documents : []).slice(0, 5)
     .map((d) => ({ name: str(d?.name, 80), text: String(d?.text || '').slice(0, 12000) })).filter((d) => d.text.trim());
-  const sc = { ...scope, documents, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
+  const sc = { ...scope, my_ethos: settingsOf(me).ethos || '', documents, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
   if (promptOnly) return planChat(history, sc, today);
   const out = await askPlan(env, db, me, history, sc, today);
   return checkedPlanReply(out);
@@ -632,7 +633,8 @@ const clockPace = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60
 // What the coach reads: the athlete's own data plus their teams' meets (coach.js), the workout library,
 // 16 weeks of totals, every workout session, and the plan as the Plan tab shows it.
 async function coachContext(db, person) {
-  const { rubric, already_logged, ...context } = await getCoachContext(db, person);
+  const { rubric, already_logged, ethos, ...context } = await getCoachContext(db, person);
+  context.my_ethos = person.settings !== undefined ? ethosOf(person) : ethosOf(await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first());
   context.workout_library = WORKOUTS.map((w) => ({ id: w.id, name: w.name, type: w.type, races: w.races, min: w.total_min, level: w.level, main: w.main }));
   const past = await getLog(db, person.id, todayInTz(new Date(Date.now() - 112 * 86400000)), todayInTz());
   context.weekly_totals_16_weeks = past.weeks;
@@ -1272,6 +1274,15 @@ async function route(request, env, url) {
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
 
+  // The Kestrel ethos every AI follows, and the runner's own on top of it.
+  if (path === '/api/ethos') {
+    if (method === 'GET') return json({ version: ETHOS_VERSION, sections: ETHOS_SECTIONS, mine: settingsOf(me).ethos || '' });
+    if (method === 'PUT') {
+      const st = settingsOf(me), ethos = cleanEthos((await readJson(request)).mine);
+      await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, ethos }), me.id).run();
+      return json({ mine: ethos });
+    }
+  }
   // Whether the runner shares anonymized training to improve Kestrel's models (off by default). See train/dataset.js.
   if (path === '/api/me/data-sharing' && method === 'PUT') {
     const st = settingsOf(me);
@@ -1774,7 +1785,7 @@ async function route(request, env, url) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
     const sess = day?.sessions?.find((x) => x.key === key);
     if (!sess) throw new NotFound('That session is gone.');
-    if (path.endsWith('prompt')) return json(sessionReportChat(await loadPerson(db, me.id), day, sess, COACH_RUBRIC));
+    if (path.endsWith('prompt')) return json(sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, COACH_RUBRIC));
     const report = str(b.report, 1200).trim();
     if (report.length < 20) throw new BadRequest('The model returned too little to keep.');
     await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
