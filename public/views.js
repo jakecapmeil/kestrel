@@ -125,7 +125,7 @@
         <button type="button" class="kv-runh" data-a="day" data-v="${today}">${esc(t?.type === 'Off' ? 'Rest day' : t?.type || 'Rest day')}${t?.miles ? ` <span>${esc(t.miles)} mi</span>` : ''} <i>›</i></button>
         ${detail ? `<div class="kv-hint kv-on">${esc(detail)}</div>` : ''}
         ${changed && t.reason ? `<div class="kv-hint kv-on"><b>Why:</b> ${esc(t.reason)}</div>` : ''}
-        ${done.length ? `<div class="kv-done">${done.map(s=> `<button type="button" data-a="day" data-v="${today}"><b>${esc(SESSION_LABEL[s.category] || 'Run')} ${esc(s.miles)} mi</b><span>${esc([s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
+        ${done.length ? `<div class="kv-done">${done.map(s=> `<button type="button" data-a="${s.key ? 'sess' : 'day'}" data-v="${esc(s.key || today)}"><b>${esc(SESSION_LABEL[s.category] || 'Run')} ${esc(s.miles)} mi</b><span>${esc([s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
         ${h.tomorrow ? `<div class="kv-hint kv-on kv-next">Tomorrow: ${esc(h.tomorrow.type === 'Off' ? 'Rest' : `${h.tomorrow.type}${h.tomorrow.miles ? ' ' + h.tomorrow.miles + ' mi' : ''}`)}</div>` : ''}
         <div class="kv-btns">${done.length ? `<button type="button" class="pri" data-a="day" data-v="${today}">View run</button>` : `<button type="button" class="pri" data-a="record">Start run</button><button type="button" data-a="cant">Can’t do this</button>`}<button type="button" data-a="ask">Ask Kestrel AI</button>${changed ? `<button type="button" data-a="unswap" data-v="${t.date}">Back to the plan</button>` : ''}</div>
       </div>`;
@@ -133,7 +133,8 @@
     const feel = own() ? feelCard(day, true) : need('Pick your name to check in.');
     const week = h?.week ? `<div class="kv-week">${h.week.days.map(d=>{ const lg = byDate[d.date], dt = new Date(d.date + 'T12:00:00'), off = d.type === 'Off';
         const did = lg?.miles > 0;
-        return `<button type="button" class="kv-wk ${d.date === today ? 'now' : ''} ${did ? 'did' : ''} ${off ? 'off' : ''}" data-a="day" data-v="${d.date}"><span>${dt.toLocaleDateString(undefined, { weekday:'short' })} ${dt.getDate()}</span><b>${esc(off ? 'Rest' : d.type)}</b><i>${did ? '✓ ' + lg.miles + ' mi' : off ? '–' : d.miles + ' mi'}</i>${(events[d.date] || []).some(e=> e.type === 'meet') ? '<em>Meet</em>' : ''}</button>`; }).join('')}</div>` : '';
+        const mi = did ? Math.round(lg.miles * 10) / 10 : off ? '–' : d.miles;
+        return `<button type="button" class="kv-wk ${d.date === today ? 'now' : ''} ${did ? 'did' : ''} ${off ? 'off' : ''}" data-a="day" data-v="${d.date}" aria-label="${esc(dt.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' }))}: ${did ? 'ran ' + mi + ' miles' : off ? 'rest' : esc(d.type) + ' ' + d.miles + ' miles planned'}"><span>${dt.toLocaleDateString(undefined, { weekday:'short' })}<u>${dt.getDate()}</u></span><b>${esc(off ? 'Rest' : d.type)}</b><i>${did ? '<s>✓</s>' : ''}${mi}${off ? '' : '<small> mi</small>'}</i>${(events[d.date] || []).some(e=> e.type === 'meet') ? '<em>Meet</em>' : ''}</button>`; }).join('')}</div>` : '';
     const planned = h?.week ? h.week.days.reduce((a, d)=> a + (Number(d.miles) || 0), 0) : 0;
     const doneMi = (wk?.days || []).reduce((a, d)=> a + (d.miles || 0), 0);
     const xw = x?.this_week || {};
@@ -184,6 +185,9 @@
   ACT.day = (d)=>{ V.sel = d; push('day|' + d); };
 
   // ---------------------------------------------------------------- Run › Plan
+  // Which Run views show, and in what order. Lives here (and beside the views on a laptop) so the phone's view bar stays one row.
+  const runViewsBtn = ()=> own() && window.kTrack ? `<button type="button" class="kv-linkbtn" data-a="runViews"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Choose which Run views show</button>` : '';
+  ACT.runViews = ()=> window.kTrack?.customizeTabs();
   SCREENS.plan = async ()=>{
     if(!own()) return need('Pick your name to see your plan.');
     const h = await loadKai();
@@ -199,11 +203,11 @@
         const changed = ['kai','hawky','auto'].includes(d.source);
         const lanes = [[off ? 'bl' : '', off ? 'Rest' : d.type], ...(changed ? [['', 'Kestrel AI']] : []), ...(events[d.date] || []).map(e=> ['g', `${e.title}${e.time ? ' ' + e.time : ''}`])];
         return `<button type="button" class="kv-day ${d.date === today ? 'now' : ''}" data-a="day" data-v="${d.date}"><div class="kv-dn"><b>${dt.getDate()}</b><span>${dt.toLocaleDateString(undefined, { weekday:'short' })}</span></div>
-          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc(runTitle(did))} · ${did.miles} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
+          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc((did.sessions || []).filter(z=> z.category !== 'crosstrain').length > 1 ? (did.sessions || []).filter(z=> z.category !== 'crosstrain').length + ' sessions' : runTitle(did))} · ${Math.round(did.miles * 10) / 10} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
     const side = card('This week', '', tiles([['Done', Math.round(done * 10) / 10, `of ${Math.round(planned * 10) / 10} mi`], ['Runs', days.filter(d=> byDate[d.date]?.miles).length, `of ${days.filter(d=> d.type !== 'Off').length}`]], 2))
       + card('Your level', '', levelHtml(h))
       + card('Kestrel AI’s changes', 'What moved in your plan and why.', `<div class="kv-changes">${changesHtml(h)}</div>`);
-    return `<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}</div></div>`;
+    return `<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}${runViewsBtn()}</div></div>`;
   };
   SCREENS.plan.after = (el)=>{
     el.querySelectorAll('[data-undo]').forEach(b=> b.addEventListener('click', async ()=>{ await resetPlanDay(b.dataset.undo, false); redraw(); }));

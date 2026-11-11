@@ -84,7 +84,7 @@ body .wrap > #whoCard{display:none;}
 body .wrap [id^="page"] > .page-head{display:none;}
 .nav-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s-3) var(--s-5);flex-wrap:wrap;margin:0 0 var(--s-4);}
 .nav-titles{min-width:0;}
-.nav-head .page-title{margin:0;}
+.nav-head .page-title{margin:0;text-wrap:balance;overflow-wrap:anywhere;}
 .nav-sub{color:var(--text-2);font-size:15px;margin-top:6px;}
 .nav-sub:empty{display:none;}
 .nav-back{border:0;background:none;padding:0;margin:0 0 6px;font:600 14px var(--font-ui);color:var(--text-2);cursor:pointer;}
@@ -103,7 +103,11 @@ body .wrap [id^="page"] > .page-head{display:none;}
   body[data-nav="today"] .nav-head .nav-titles,body[data-nav="you"] .nav-head .nav-titles,body[data-nav="record"] .nav-head .nav-titles{display:block;}
   .nav-head .seg{width:100%;}
   .nav-head .seg-btn{flex:1 0 auto;}
+  /* The view bar is one row on a phone: Customize lives on the Plan page instead. */
+  .nav-head .tk-gear{display:none;}
 }
+@media (max-width:420px){ .nav-head .seg-btn{padding-inline:10px;font-size:13.5px;} }
+@media (max-width:360px){ .nav-head .seg-btn{padding-inline:7px;font-size:12.5px;} }
 @media (min-width:1024px){
   body .wrap{grid-template-areas:"head head" "rail nav" "rail page";grid-template-rows:auto auto 1fr;}
   body .wrap > .nav-head{grid-area:nav;}
