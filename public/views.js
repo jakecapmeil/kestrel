@@ -84,7 +84,8 @@
   // Headings: what the page says, not the page's name.
   function title(){
     const sp = V.stack[V.stack.length - 1];
-    if(sp){ const [n, a] = sp.split('|'); if(n === 'day') return runTitle(V.cache['day:' + a]) || nice(a); if(n === 'edit') return 'Edit run'; if(n === 'wk') return (WO_TILES.find(t=> t.key === a) || {}).label || 'Workouts'; }
+    if(sp){ const [n, a] = sp.split('|'); if(n === 'day'){ const x = V.cache['day:' + a], ss = (x?.sessions || []).filter(z=> z.category !== 'crosstrain'); return ss.length > 1 ? `${ss.length} sessions · ${Math.round(x.miles * 10) / 10} mi` : runTitle(x) || nice(a); }
+      if(n === 'sess'){ const x = V.cache['day:' + a.split('#')[0]], s = window.KDay?.sessionOf(x, a); return s ? window.KDay.sessionName(s) : 'Session'; } if(n === 'edit') return 'Edit run'; if(n === 'wk') return (WO_TILES.find(t=> t.key === a) || {}).label || 'Workouts'; }
     const k = V.key;
     if(k === 'today') return new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
     if(k === 'run/plan') return V.cache.weekTitle || 'This week';
@@ -99,7 +100,7 @@
     return '';
   }
   function subtitle(){
-    if(V.stack.length){ const [n, a] = V.stack[V.stack.length - 1].split('|'); return n === 'day' || n === 'edit' ? nice(a, { weekday:'long', month:'long', day:'numeric' }) : ''; }
+    if(V.stack.length){ const [n, a] = V.stack[V.stack.length - 1].split('|'); return n === 'day' || n === 'edit' ? nice(a, { weekday:'long', month:'long', day:'numeric' }) : n === 'sess' ? nice(a.split('#')[0], { weekday:'long', month:'long', day:'numeric' }) : ''; }
     return V.cache['sub:' + V.key] || '';
   }
   const setSub = (k, s)=>{ V.cache['sub:' + k] = s; };

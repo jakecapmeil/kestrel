@@ -44,6 +44,7 @@
   --shadow-1:0 1px 2px rgba(13,13,15,.06),0 2px 10px rgba(13,13,15,.04);
   --shadow-2:0 10px 32px rgba(13,13,15,.16);
   --hawk-eye:var(--red-500);
+  --pick:#f0b13c; --pick-ink:var(--amber-600);
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
@@ -56,6 +57,7 @@
     --danger:#ff7a6b; --danger-subtle:#3d1b18;
     --shadow-1:none; --shadow-2:0 10px 32px rgba(0,0,0,.55);
     --hawk-eye:var(--red-400);
+    --pick-ink:#f0b850;
   }
 }
 :root[data-theme="dark"]{
@@ -68,6 +70,7 @@
   --danger:#ff7a6b; --danger-subtle:#3d1b18;
   --shadow-1:none; --shadow-2:0 10px 32px rgba(0,0,0,.55);
   --hawk-eye:var(--red-400);
+  --pick-ink:#f0b850;
 }
 
 /* ---- 3. legacy names (Kestrel app). Remove as screens move to the semantic layer. */

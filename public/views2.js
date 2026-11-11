@@ -88,7 +88,8 @@
   // What was planned or run. A run day shows its six numbers, difficulty and Kestrel AI's line (desktop adds the route).
   function dayPanel(d, x, p){
     const isToday = d === todayKey();
-    const ttl = x?.miles ? runTitle(x) : p ? (p.type === 'Off' ? 'Rest day' : p.type) : 'Rest day';
+    const many = (x?.sessions || []).filter((z)=> z.category !== 'crosstrain').length > 1;
+    const ttl = x?.miles ? (many ? `${(x.sessions || []).filter((z)=> z.category !== 'crosstrain').length} sessions · ${Math.round(x.miles * 10) / 10} mi` : runTitle(x)) : p ? (p.type === 'Off' ? 'Rest day' : p.type) : 'Rest day';
     if(x?.miles) return `<div class="card kv-card kd-peek"><div class="kv-ch"><div><div class="kv-eb">${esc(nice(d, { weekday:'long', month:'short', day:'numeric' }))}${isToday ? ' · today' : ''}</div><div class="kv-ct big">${esc(ttl)}</div></div>
       <div class="kv-ch-r"><button type="button" class="pri kd-open" data-a="dayFull" data-v="${d}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 2h4v4M6 14H2v-4M14 2 9 7M2 14l5-5"/></svg>${wide() ? 'Full screen' : 'Open'}</button></div></div>
       ${window.KDay.peekHtml(x, wide())}</div>`;
@@ -101,20 +102,47 @@
   }
   ACT.dayFull = (d)=>{ V.sel = d; push('day|' + d); };
   ACT.dayKai = (d)=> openKai(`About ${nice(d, { weekday:'long', month:'short', day:'numeric' })}: `, false);
-  SCREENS.day = async (d)=>{
+  // The day: one sentence, its numbers, then every session. A session opens on its own page (phone) or beside the list (laptop).
+  async function loadDay(d){
     const [lg] = await Promise.all([logRange(d, d)]);
     const x = lg?.days?.[0]; V.cache['day:' + d] = x;
     V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
+    return x;
+  }
+  SCREENS.day = async (d)=>{
+    const x = await loadDay(d);
     // A run gets the full layout, with the day card (the editor) kept out of sight until Edit. Other days show the card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
-    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button><button type="button" class="sm-btn" data-a="dayEdit">Edit</button></div>${window.KDay.fullHtml(x)}<div id="kvDayHost" hidden></div>`;
+    if(V.sessDay !== d){ V.sessDay = d; V.sessSel = null; }
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button><button type="button" class="sm-btn" data-a="dayEdit">Edit day</button></div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
   };
   ACT.dayEdit = ()=>{
     const h = document.getElementById('kvDayHost'); if(!h) return;
     h.hidden = false; document.getElementById('tlEdit')?.click();
     h.scrollIntoView({ behavior:'smooth', block:'start' });
   };
-  SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(V.days[d]?.miles) window.KDay.mountFull(V.days[d], own()); };
+  // Which session the page shows beside (or under) the day.
+  const shownSession = (x)=> V.sessSel || (wide() || (x?.sessions || []).length === 1 ? document.querySelector('#pageV .ks')?.dataset.key : null);
+  SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); const x = V.days[d], k = shownSession(x); if(x?.miles && k) window.KDay.mountSession(x, k, own()); };
+  // A session: on a laptop the day page swaps the one beside the list; on a phone it opens on its own page.
+  ACT.sess = (key)=>{
+    const d = String(key).split('#')[0];
+    const top = V.stack[V.stack.length - 1] || '';
+    if(wide() && top === 'day|' + d){ V.sessSel = key; return redraw(); }
+    V.sessDay = d; V.sessSel = key;
+    push('sess|' + key);
+  };
+  SCREENS.sess = async (key)=>{
+    const d = String(key).split('#')[0];
+    const x = V.cache['day:' + d]?.sessions ? V.cache['day:' + d] : await loadDay(d);
+    const s = window.KDay.sessionOf(x, key);
+    if(!s) return `<button type="button" class="kv-back" data-a="back">‹ Back</button>${need('That session is gone. It may have been merged or deleted on your watch.')}`;
+    const ss = x.sessions || [], i = ss.indexOf(s);
+    const step = ss.length > 1 ? `<div class="ks-step">${i > 0 ? `<button type="button" class="sm-btn" data-a="sessGo" data-v="${esc(ss[i - 1].key)}" aria-label="Previous session">‹</button>` : ''}<span>${i + 1} of ${ss.length}</span>${i < ss.length - 1 ? `<button type="button" class="sm-btn" data-a="sessGo" data-v="${esc(ss[i + 1].key)}" aria-label="Next session">›</button>` : ''}</div>` : '';
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ ${esc(nice(d, { weekday:'short', month:'short', day:'numeric' }))}</button>${step}</div>${window.KDay.sessionHtml(x, s)}`;
+  };
+  SCREENS.sess.after = (el, key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.mountSession(x, key, own()); };
+  ACT.sessGo = (key)=>{ V.stack[V.stack.length - 1] = 'sess|' + key; V.sessSel = key; window.scrollTo(0, 0); redraw(); };
 
   // ---------------------------------------------------------------- Body › Recovery
   SCREENS.recovery = async ()=>{
