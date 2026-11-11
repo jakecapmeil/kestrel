@@ -584,7 +584,10 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
     const key = await decrypt(env, person.icu_key_enc);
     const lastSyncDay = person.icu_synced_at ? todayInTz(new Date(person.icu_synced_at - 3 * 86400000)) : null;
     const oldest = days ? todayInTz(new Date(Date.now() - days * 86400000)) : (lastSyncDay || todayInTz(new Date(Date.now() - FIRST_SYNC_DAYS * 86400000)));
-    const res = await importRange(env, person, key, { oldest, newest: today, ai: true, lapBudget: MAX_LAP_FETCHES });
+    // A runner who writes run summaries with their own model gets the rule-based labels here; the app writes the reports.
+    let ownSummaries = false;
+    try { ownSummaries = JSON.parse(person.settings || '{}')?.ai_tasks?.summary === 'own'; } catch { /* bad settings: use Kestrel AI */ }
+    const res = await importRange(env, person, key, { oldest, newest: today, ai: !ownSummaries, lapBudget: MAX_LAP_FETCHES });
     res.wellness_days = await syncWellness(env, person, key, today);
     res.best_efforts = await syncBestEfforts(env, person, key);
     if (backfill) res.weather = await backfillConditions(db, person.id);

@@ -508,3 +508,15 @@ export async function askSchedule(env, db, person, input, scope, today) {
   await spend(db, person.id, today);
   return await generate(env, { ...chat, maxTokens: 4000 });
 }
+
+// One session's report written by the runner's own model, in their browser. Same rubric as reportSessions, plain text back.
+export function sessionReportChat(person, day, session, rubric) {
+  const acts = (session.activities || []).map((a) => ({ role: a.role || undefined, name: a.name, category: a.category, start: a.start, miles: a.miles, minutes: a.minutes, pace: a.pace, avg_hr: a.avg_hr, max_hr: a.max_hr, elev_ft: a.elev_ft, temp_f: a.temp_f, laps: (a.laps || []).slice(0, 40) }));
+  return {
+    system: `You are Kestrel AI, the AI running coach in Kestrel, reviewing one training session. Follow this rubric.\n\n${rubric}`,
+    prompt: `Runner: ${person.first_name || person.name || 'the runner'}. Date: ${day.date}. Plan for the day: ${day.plan?.planned || day.planned || 'none'}.
+Session (${session.category}${session.track ? ', on the track' : ''}): ${session.miles} mi in ${session.minutes} min, pace ${session.pace || '?'}/mi, avg HR ${session.avg_hr || '?'}.
+Its parts: ${JSON.stringify(acts)}
+Write 2-4 plain sentences on this session: what it was, the reps or pace against what it should have been, and one thing to focus on next. Watches lap every mile by themselves, so mile laps on an easy run are not reps. No headings, no lists, no medical advice. Reply with the report only.`,
+  };
+}

@@ -149,8 +149,13 @@
       <div class="kv-row" style="--c:1.55fr 1fr">${sec('Your run', run)}${sec('How you feel', feel)}</div>
       ${week ? sec('This week', week, `${Math.round(doneMi * 10) / 10} of ${Math.round(planned * 10) / 10} mi${h?.level ? ' · ' + h.level.weekly_miles + ' mi level' : ''}`) : ''}
       <div class="kv-row" style="--c:1fr 1fr 1.15fr">${sec('Off the run', off)}${sec('Team today', teamToday)}${sec('Kestrel AI', kai)}</div>
+      ${askShare() ? sec('Help improve Kestrel', `<div class="card kv-card kv-share"><div id="kvShareHost"></div><div class="kv-btns"><button type="button" data-a="shareLater">Ask me later</button></div></div>`) : ''}
     </div>`;
   };
+  // Asked once, after a runner has some training in: share anonymized runs for Kestrel's models, or not.
+  const askShare = ()=>{ const me = window.kestrelMe?.(); if(!own() || !me || me.data_share?.at) return false; try{ return !localStorage.getItem('kestrel.shareAsked'); }catch(e){ return false; } };
+  SCREENS.today.after = ()=>{ const h = document.getElementById('kvShareHost'); if(h) window.kestrelShareCard?.(h, ()=> setTimeout(redraw, 1200)); };
+  ACT.shareLater = ()=>{ try{ localStorage.setItem('kestrel.shareAsked', String(Date.now())); }catch(e){} redraw(); };
   function latestPost(){
     const p = [...(posts || [])].sort((a, b)=> b.createdAt - a.createdAt)[0];
     if(!p) return '';

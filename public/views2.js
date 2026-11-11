@@ -142,6 +142,7 @@
     return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ ${esc(nice(d, { weekday:'short', month:'short', day:'numeric' }))}</button>${step}</div>${window.KDay.sessionHtml(x, s)}`;
   };
   SCREENS.sess.after = (el, key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.mountSession(x, key, own()); };
+  ACT.sessReport = (key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.writeReport(x, key); };
   ACT.sessGo = (key)=>{ V.stack[V.stack.length - 1] = 'sess|' + key; V.sessSel = key; window.scrollTo(0, 0); redraw(); };
 
   // ---------------------------------------------------------------- Body › Recovery

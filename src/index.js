@@ -13,6 +13,7 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
+import { COACH_RUBRIC } from './train/coach.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
@@ -24,10 +25,13 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
+import { sessionReportChat } from './train/gemini.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
+import { shareOf, cleanShare, ShareError, exportDataset } from './train/dataset.js';
+import { getDays } from './train/log.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -85,6 +89,8 @@ async function meView(db, me) {
     prefs: prefsOf(settingsOf(me)),
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
+    data_share: shareOf(settingsOf(me)),
+    ai_tasks: settingsOf(me).ai_tasks || {},
     teams,
   };
 }
@@ -1175,6 +1181,12 @@ async function route(request, env, url) {
       const key = await apiKeyUser(db, request);
       return json(await apiPredict(db, key.person_id, await readJson(request)), 200, CORS);
     }
+    // The anonymized dataset, for Kestrel's maintainers (a Worker secret, DATASET_TOKEN). scope=open: open-dataset consent only.
+    if (path === '/api/v1/dataset' && method === 'GET') {
+      const tok = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!env.DATASET_TOKEN || tok.length < 20 || tok !== env.DATASET_TOKEN) throw new AuthError('A dataset token is needed.');
+      return new Response(await exportDataset(env, q.get('scope') === 'open' ? 'open' : 'all'), { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' } });
+    }
     throw new NotFound('No such API route. See /lab/docs.');
   }
   let viewer = null;
@@ -1259,6 +1271,22 @@ async function route(request, env, url) {
     return json(await planChatRoute(env, db, me, await readJson(request), { team: false, current: own, athlete }, path.endsWith('prompt'), today));
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
+
+  // Whether the runner shares anonymized training to improve Kestrel's models (off by default). See train/dataset.js.
+  if (path === '/api/me/data-sharing' && method === 'PUT') {
+    const st = settingsOf(me);
+    const data_share = cleanShare(str((await readJson(request)).choice, 10), st.profile);
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, data_share }), me.id).run();
+    return json({ data_share });
+  }
+  // Which AI writes run summaries: Kestrel's free default on the server, or the runner's own model in their browser
+  // (their key never leaves it, so the app writes those reports and the server's sync leaves them to it).
+  if (path === '/api/me/ai-tasks' && method === 'PUT') {
+    const b = await readJson(request), st = settingsOf(me);
+    const ai_tasks = { ...(st.ai_tasks || {}), summary: b.summary === 'own' ? 'own' : 'kestrel' };
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, ai_tasks }), me.id).run();
+    return json({ ai_tasks });
+  }
 
   // Which Train tabs to show and in what order, custom cross-training, fueling display and targets.
   if (path === '/api/me/prefs') {
@@ -1740,6 +1768,18 @@ async function route(request, env, url) {
     return json(coachChat(Array.isArray(b.history) ? b.history : [], await coachContext(db, person), today, BODY_PARTS));
   }
   if (path === '/api/coach/apply') return json(await applyCoachSaves(db, me.id, b.out || {}));
+  // A session's report from the runner's own model: the prompt to send, then the report to keep (on its main activity).
+  if (path === '/api/ai/session/prompt' || path === '/api/ai/session/save') {
+    const key = str(b.key, 20), date = key.split('#')[0];
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
+    const sess = day?.sessions?.find((x) => x.key === key);
+    if (!sess) throw new NotFound('That session is gone.');
+    if (path.endsWith('prompt')) return json(sessionReportChat(await loadPerson(db, me.id), day, sess, COACH_RUBRIC));
+    const report = str(b.report, 1200).trim();
+    if (report.length < 20) throw new BadRequest('The model returned too little to keep.');
+    await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
+    return json({ ok: true, report });
+  }
   if (path === '/api/coach/link') {
     const token = await issueCoachToken(db, me.id, b.regenerate === true);
     return json({ url: `${url.origin}/mcp/coach/${token}` });
@@ -1780,7 +1820,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

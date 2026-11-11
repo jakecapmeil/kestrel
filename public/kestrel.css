@@ -296,3 +296,20 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .rt-fill.down{background:var(--text-2);opacity:.45}
 .rt-pct{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}
 @media (max-width:480px){.rt-row{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 48px}.rt-bar{display:none}}
+
+/* Kestrel AI: one model per job */
+.k-tasks{display:grid;gap:10px;margin:10px 0;}
+.k-task{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:10px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--surface-2);}
+.k-task b{display:block;font-size:14.5px;}
+.k-task small{display:block;color:var(--text-2);font-size:12.5px;line-height:1.35;}
+.k-task select{width:100%;min-width:0;}
+@media (max-width:520px){ .k-task{grid-template-columns:minmax(0,1fr);} }
+
+/* Sharing training for Kestrel's models */
+.k-share{display:grid;gap:8px;margin:10px 0;}
+.k-shareopt{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border-radius:14px;border:1px solid var(--line);cursor:pointer;}
+.k-shareopt input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--accent);}
+.k-shareopt b{display:block;font-size:14.5px;}
+.k-shareopt small{display:block;color:var(--text-2);font-size:13px;line-height:1.4;margin-top:2px;}
+.k-shareopt.on{border-color:var(--accent);background:var(--accent-subtle);}
+.k-shareopt.dis{opacity:.55;cursor:default;}

@@ -237,6 +237,22 @@
       ${a.map((z)=> `<div class="ks-part"><span class="m">${esc(ampm(z.start))}</span><b>${esc(ROLE[z.role] || KIND[z.category] || 'Run')}</b><span>${r2(z.miles)} mi</span><span>${esc(z.pace || '–')}${z.pace ? '<i>/mi</i>' : ''}</span><span class="m">${z.avg_hr ? z.avg_hr + ' bpm' : ''}</span></div>`).join('')}</section>`;
   }
 
+  // Kestrel AI's report. With the runner's own model on run summaries, the app writes it (and can rewrite it).
+  function reportHtml(s, busy){
+    const t = window.kestrelAiTask?.('summary');
+    const btn = t?.own ? `<button type="button" class="sm-btn" data-a="sessReport" data-v="${esc(s.key)}"${busy ? ' disabled' : ''}>${busy ? 'Writing…' : s.report ? 'Rewrite' : 'Write it'} with ${esc(t.label)}</button>` : '';
+    return `<div class="kd-eb">${eye}Kestrel AI on this session</div>${s.report ? `<p>${esc(s.report)}</p>` : `<p class="kv-hint">${t?.own ? 'Not written yet.' : 'Kestrel AI writes this once the run syncs and it reviews your day.'}</p>`}${btn}`;
+  }
+  async function writeReport(x, key){
+    const s = sessionOf(x, key), el = document.getElementById('ksReport');
+    if(!s || !el) return;
+    el.innerHTML = reportHtml(s, true);
+    try{ s.report = await window.kestrelWriteReport(key); }
+    catch(e){ el.innerHTML = reportHtml(s) + `<p class="kv-hint">${esc(e.message)}</p>`; return; }
+    if(el.isConnected) el.innerHTML = reportHtml(s);
+  }
+  const autoTried = new Set();
+
   // inline: part of the day page (no own header row). Otherwise the session's own page.
   function sessionHtml(x, s, inline){
     const R = repsOf(s), more = (s.activities || []).flatMap((z)=> z.prs || []);
@@ -250,7 +266,7 @@
       </section>
       ${R ? repCard(s, R) : ''}
       ${partsHtml(s)}
-      <section class="card kv-card kd-aicard"><div class="kd-eb">${eye}Kestrel AI on this session</div>${s.report ? `<p>${esc(s.report)}</p>` : '<p class="kv-hint">Kestrel AI writes this once the run syncs and it reviews your day.</p>'}</section>
+      <section class="card kv-card kd-aicard" id="ksReport">${reportHtml(s)}</section>
       </div><div class="ks-b">
       <div class="kd-map card" id="kdMap"${s.main_id && !s.track ? '' : ' hidden'}>
         <div class="kd-map-in" id="kdMap2d"><div class="kv-hint">Loading the route…</div></div>
@@ -267,6 +283,8 @@
     const box = document.querySelector('.ks');
     if(!s || !box) return;
     wireReps(box, repsOf(s));
+    // Own model on summaries: write a missing report once, the first time the session opens.
+    if(own && !s.report && window.kestrelAiTask?.('summary').own && !autoTried.has(s.key)){ autoTried.add(s.key); writeReport(x, s.key); }
     const splitsEl = document.getElementById('kdSplits');
     let r = null;
     if(own && s.main_id && !s.track) r = await loadTrack(s.main_id);
@@ -474,5 +492,5 @@
     return rows.length ? splitsHtml(rows, 'Laps').replace('<span>Mile</span>', '<span>Lap</span>') : '';
   }
 
-  window.KDay = { peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
+  window.KDay = { writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
 })();

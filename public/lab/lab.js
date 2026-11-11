@@ -791,7 +791,7 @@ async function viewProviders() {
     const f = $('provForm');
     const collect = () => {
       const v = Object.fromEntries(new FormData(f).entries());
-      const next = { provider: v.provider, configs: { ...state.configs } };
+      const next = { provider: v.provider, configs: { ...state.configs }, tasks: { ...(state.tasks || {}) } };
       if (id !== 'kestrel') next.configs[id] = { base: (v.base || '').trim(), model: (v.model || '').trim(), key: (v.key || '').trim() };
       return next;
     };

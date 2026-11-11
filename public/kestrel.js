@@ -1007,7 +1007,7 @@ function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
   const d = dialog();
   d.classList.add('k-wide');
   d.innerHTML = html`<h2>${team ? 'Build the team training plan' : 'Build your training plan'}</h2>
-    <p class="k-small">${team ? 'Describe the season and refine it with Kestrel AI. The plan scales to every runner on the roster, so each athlete lands on the level that fits their fitness.' : 'Describe your goals and your week. Kestrel AI drafts a plan, you refine it, and your coach adapts it to how you feel.'} Powered by ${AI.describe(K.ai)}. <a href="/lab#/providers" target="_blank" rel="noopener">Change</a></p>
+    <p class="k-small">${team ? 'Describe the season and refine it with Kestrel AI. The plan scales to every runner on the roster, so each athlete lands on the level that fits their fitness.' : 'Describe your goals and your week. Kestrel AI drafts a plan, you refine it, and your coach adapts it to how you feel.'} Powered by ${AI.describe(AI.forTask(K.ai, 'chat'))}. <a href="/lab#/providers" target="_blank" rel="noopener">Change</a></p>
     <div class="k-builder">
       <div class="k-chat" id="kPbChat" aria-live="polite"></div>
       <div class="k-pbpreview" id="kPbPreview"></div>
@@ -1108,10 +1108,11 @@ function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
 // -> { answer, plan?, preview? }. Free Kestrel AI answers on the server; any other model is called from the browser.
 async function planAsk(base, turns, current, documents = []) {
   const history = turns.map((t) => ({ role: t.role === 'user' ? 'user' : 'kai', text: t.text }));
-  if (K.ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
+  const ai = AI.forTask(K.ai, 'chat');
+  if (ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
   const chat = await api(`${base}/prompt`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
   const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the person reads; include "plan" only when you are giving or changing the plan.\n${JSON.stringify(chat.schema)}`;
-  const text = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
   const out = parseLoose(text) || { answer: text };
   const res = { answer: typeof out.answer === 'string' && out.answer.trim() ? out.answer : String(text) };
   if (out.plan) {
@@ -1209,10 +1210,11 @@ window.kestrelPlaceForm = (place = null) => {
 // -> { answer, events, places }. The free Kestrel AI answers on the server; any other model is called from the browser.
 async function scheduleAsk(text, documents) {
   const body = JSON.stringify({ text, documents });
-  if (K.ai.provider === 'kestrel') return await api('/api/schedule/import', { method: 'POST', body });
+  const ai = AI.forTask(K.ai, 'chat');
+  if (ai.provider === 'kestrel') return await api('/api/schedule/import', { method: 'POST', body });
   const chat = await api('/api/schedule/import/prompt', { method: 'POST', body });
   const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema.\n${JSON.stringify(chat.schema)}`;
-  const out = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const out = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
   const obj = parseLoose(out) || {};
   return { answer: typeof obj.answer === 'string' ? obj.answer : '', events: Array.isArray(obj.events) ? obj.events : [], places: Array.isArray(obj.places) ? obj.places : [] };
 }
@@ -1297,15 +1299,86 @@ function dialog() {
   return d;
 }
 
+// ---------- Helping Kestrel's models: anonymized training, only with the runner's yes
+
+const SHARE_OPTS = [
+  ['none', 'Don’t share', 'Your training stays in your account and nowhere else.'],
+  ['kestrel', 'Share with Kestrel only', 'Kestrel uses your anonymized runs to test and improve its race models, plan levels and coach. Never published or sold.'],
+  ['open', 'Add to the Kestrel open dataset', 'The same anonymized runs may also be published in Kestrel’s open dataset (CC BY 4.0), so anyone can build better running models. 18 and over.'],
+];
+function renderShareCard(el, onDone) {
+  const cur = K.me?.data_share?.choice || 'none';
+  const age = K.me?.profile?.birth_year ? new Date().getFullYear() - K.me.profile.birth_year : null;
+  el.innerHTML = html`<p class="k-small">Kestrel’s models get better with more real training behind them. If you want to help, choose how. You can change this any time.</p>
+    <div class="k-share" role="radiogroup" aria-label="Share your training">${SHARE_OPTS.map(([v, l, d]) => {
+      const off = v === 'open' && (age == null || age < 18);
+      return html`<label class="k-shareopt ${v === cur ? 'on' : ''} ${off ? 'dis' : ''}"><input type="radio" name="kShare" value="${v}" ${v === cur ? 'checked' : ''} ${off ? 'disabled' : ''}><span><b>${l}</b><small>${off ? (age == null ? 'Add the year you were born in your runner profile to choose this. 18 and over.' : 'For runners 18 and over.') : d}</small></span></label>`; })}</div>
+    <details class="k-help"><summary>What “anonymized” means</summary><ul class="k-list">
+      <li><b>Shared:</b> each run’s type, distance, time, heart rate, cadence, laps, difficulty and load; your age band (like 16-17), sex if you gave it, and how long you’ve run.</li>
+      <li><b>Never shared:</b> your name, email, team or school, GPS routes, courses, start times, notes, health and body map, Kestrel AI’s messages, or anything you typed.</li>
+      <li>You get a random code instead of an id, and every date is moved by the same secret number of weeks, so runs can’t be matched to a calendar.</li>
+      <li>Turning sharing off stops anything new from being used. Kestrel-only data is removed from its working copies; records already published in an open dataset release can’t be recalled.</li>
+      <li>Full details: <a href="/legal#data" target="_blank" rel="noopener">Privacy → Data for Kestrel’s models</a>.</li></ul></details>
+    <p class="k-small" id="kShareMsg" role="status">${K.me?.data_share?.at ? `Chosen ${new Date(K.me.data_share.at).toLocaleDateString()}.` : ''}</p>`.s;
+  el.querySelectorAll('input[name=kShare]').forEach((r) => { r.onchange = () => attempt(async () => {
+    const out = await api('/api/me/data-sharing', { method: 'PUT', body: JSON.stringify({ choice: r.value }) }).catch((err) => { toast(err.message, true); return null; });
+    if (!out) { renderShareCard(el, onDone); return; }
+    K.me.data_share = out.data_share;
+    toast(r.value === 'none' ? 'Your training isn’t shared.' : r.value === 'kestrel' ? 'Thanks. Kestrel can learn from your anonymized runs.' : 'Thanks. Your anonymized runs can join the open dataset.');
+    renderShareCard(el, onDone);
+    onDone?.(r.value);
+  }); });
+}
+window.kestrelShareCard = renderShareCard;
+window.kestrelMe = () => K.me;
+
+// Own-model helpers for the screens: a session's report, and food estimates. Free Kestrel AI runs on the server.
+window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', label: a.provider === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe(a) }; };
+window.kestrelWriteReport = async (key) => {
+  const ai = AI.forTask(K.ai, 'summary');
+  if (ai.provider === 'kestrel') throw new Error('Run summaries are on Kestrel free: they are written when your runs sync.');
+  const chat = await api('/api/ai/session/prompt', { method: 'POST', body: JSON.stringify({ key }) });
+  const text = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  return (await api('/api/ai/session/save', { method: 'POST', body: JSON.stringify({ key, report: text }) })).report;
+};
+window.kestrelFoodEstimate = async ({ images = [], text = '', meal = '' }) => {
+  const ai = AI.forTask(K.ai, 'food');
+  if (ai.provider === 'kestrel') return await api('/api/ai/food', { method: 'POST', body: JSON.stringify({ images, text, meal }) });
+  const chat = await api('/api/ai/food/prompt', { method: 'POST', body: JSON.stringify({ text, meal, photos: images.length }) });
+  const out = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt, images }], { apiFetch: api });
+  return await api('/api/ai/food/check', { method: 'POST', body: JSON.stringify({ out: parseLoose(out) || {} }) });
+};
+
 // ---------- You > Settings: Kestrel AI, race models, account
 
 window.kestrelRenderSettings = async () => {
   const ai = $('kAiBody');
   if (ai) {
-    ai.innerHTML = html`<p class="k-small">Kestrel is the coach. It works out of the box on a free model. To use your own key, or a model on your own computer, set it up in Kestrel Lab. Your key stays in this browser.</p>
-      <div class="k-row spread"><span>Powered by <b>${AI.describe(K.ai)}</b></span><a class="k-btn small" href="/lab#/providers">Customise in Lab</a></div>
+    // One choice per job. The list is the free default plus every model set up in Kestrel Lab.
+    const ids = AI.usable(K.ai);
+    const nameOf = (id) => id === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe({ ...K.ai, provider: id });
+    ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up in Kestrel Lab (your own key, or a model on your own computer). Keys stay in this browser.</p>
+      <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><span><b>${info.label}</b><small>${info.hint}</small></span>
+        <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${nameOf(id)}</option>`)}</select></label>`)}</div>
+      <div class="k-row spread"><span class="k-small" style="margin:0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Set up in Lab</a></div>
+      <details class="k-help"><summary>Which should I pick?</summary><ul class="k-list">
+        <li><b>Kestrel free</b> costs nothing and needs no setup. It runs on Google Gemini’s free tier, which allows Google to use what is sent to improve its products, so Kestrel only sends your training numbers, never your name or email.</li>
+        <li><b>Your own key</b> (Anthropic, OpenAI, Gemini paid, OpenRouter) keeps your data out of free-tier training and is usually a little sharper. You pay the provider directly; a month of chat is typically cents.</li>
+        <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
+        <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>
       <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
+    ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
+      const t = sel.dataset.task, v = sel.value;
+      K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), [t]: v === K.ai.provider ? undefined : v } };
+      if (K.ai.tasks[t] === undefined) delete K.ai.tasks[t];
+      AI.saveAi(K.ai);
+      // Run summaries are written on the server unless they run on the runner's own model.
+      if (t === 'summary') await api('/api/me/ai-tasks', { method: 'PUT', body: JSON.stringify({ summary: v === 'kestrel' ? 'kestrel' : 'own' }) });
+      toast(`${AI.TASKS[t].label}: ${nameOf(v)}.`);
+    }); });
   }
+  const ds = $('kShareBody');
+  if (ds) renderShareCard(ds);
   const mb = $('kModelsBody');
   if (mb) {
     const labels = { race: 'Race times (800 m and up)', short: 'Sprints and steeple', marathon: 'Marathon' };
@@ -1348,7 +1421,7 @@ window.kestrelRenderSettings = async () => {
 
 window.kestrelRenderPower = (el) => {
   if (!el) return;
-  el.innerHTML = html`<span>Powered by <b>${AI.describe(K.ai)}</b></span> <a class="k-link" href="/lab#/providers">Customise in Lab</a>`.s;
+  el.innerHTML = html`<span>Powered by <b>${AI.describe(AI.forTask(K.ai, 'chat'))}</b></span> <a class="k-link" href="/lab#/providers">Customise in Lab</a>`.s;
 };
 
 // ---------- Kestrel AI: the coach chat with whatever model the athlete picked
@@ -1365,10 +1438,11 @@ function parseLoose(text) {
 // turns: [{ role: 'user' | 'kai', text }] -> { answer, saved, refused } or { error }
 window.kestrelAsk = async (turns) => {
   try {
-    if (K.ai.provider === 'kestrel') return await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: turns }) });
+    const ai = AI.forTask(K.ai, 'chat');
+    if (ai.provider === 'kestrel') return await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: turns }) });
     const chat = await api('/api/coach/prompt', { method: 'POST', body: JSON.stringify({ history: turns }) });
     const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the athlete reads; fill the other fields only when the rules above say to.\n${JSON.stringify(chat.schema)}`;
-    const text = await AI.complete(K.ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+    const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
     const out = parseLoose(text) || { answer: text };
     if (typeof out.answer !== 'string' || !out.answer.trim()) out.answer = typeof text === 'string' ? text : 'The model returned nothing.';
     const applied = await api('/api/coach/apply', { method: 'POST', body: JSON.stringify({ out }) });
