@@ -363,21 +363,36 @@ window.kestrelEditRunner = (step = 0) => { renderOnboarding(step, obFromProfile(
 const BRAND = { garmin: 'Garmin', coros: 'COROS', suunto: 'Suunto', polar: 'Polar', wahoo: 'Wahoo' };
 const ARROW = raw('<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" style="vertical-align:-2px"><path d="M7 17 17 7M9 7h8v8" fill="none" stroke="currentColor" stroke-width="2"/></svg>');
 
-// The steps for one kind of watch. intervals.icu is the bridge: the watch brand sends it runs officially, Kestrel reads
-// them with the runner's own API key (encrypted at rest), and writes the plan back as workouts named "Kestrel:".
+// How the pieces fit: the watch brand sends runs to intervals.icu officially, Kestrel reads them with the runner's own
+// API key (encrypted at rest), and writes the plan back as workouts named "Kestrel:" that the watch picks up.
+const FLOW = raw(`<div class="k-flow" aria-label="Your watch sends runs to intervals.icu; Kestrel reads them there and sends your plan back">
+  <div class="k-flow-n"><b>Your watch</b><span>records the run</span></div>
+  <div class="k-flow-a" aria-hidden="true"><i><em>runs →</em><u>↓ runs</u></i><i><em>← plan</em><u>↑ plan</u></i></div>
+  <div class="k-flow-n mid"><b>intervals.icu</b><span>free, official link</span></div>
+  <div class="k-flow-a" aria-hidden="true"><i><em>runs →</em><u>↓ runs</u></i><i><em>← plan</em><u>↑ plan</u></i></div>
+  <div class="k-flow-n k"><b>Kestrel</b><span>coach, log, fitness</span></div></div>`);
+
+// One step of the checklist. Ticking it is just for the runner (kept on this device) so they can leave and come back.
+function wstep(watch, n, title, body, link) {
+  const done = (store.get('kestrel.wsteps.' + watch) || []).includes(n);
+  return html`<li class="k-wstep ${done ? 'done' : ''}" data-step="${n}">
+    <button type="button" class="k-wtick" data-tick="${n}" aria-pressed="${done}" aria-label="${done ? 'Done' : 'Mark as done'}: ${title}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7"/></svg></button>
+    <div><b>${title}</b><div class="k-wbody">${body}</div>${link ? html`<a class="k-wlink" href="${link[0]}" target="_blank" rel="noopener">${link[1]} ${ARROW}</a>` : ''}</div></li>`;
+}
+
+// The steps for one kind of watch.
 function watchSteps(watch) {
   const brand = BRAND[watch];
-  const account = html`<li><b>Make a free intervals.icu account.</b> Sign up with your email or Google. It’s a free training site that most watches send runs to officially, and it’s how Kestrel gets yours. <a href="https://intervals.icu" target="_blank" rel="noopener">Open intervals.icu ${ARROW}</a></li>`;
-  const keys = html`<li><b>Copy two things from intervals.icu.</b> Go to <b>Settings</b>, scroll to the bottom to <b>Developer Settings</b>. Copy your <b>Athlete ID</b> (it starts with <b>i</b>, like i123456) and your <b>API key</b> (generate one if there isn’t one yet). Treat the key like a password: it only goes in the box below.</li>`;
-  const paste = html`<li><b>Paste them below and tap Connect.</b> Kestrel checks them straight away and pulls in your recent runs.</li>`;
-  if (brand) return html`<ol class="k-wsteps">${account}
-    <li><b>Link your ${brand} to intervals.icu.</b> In intervals.icu go to <b>Settings → Connections</b>, tap <b>${brand}</b> and log in with your ${brand} account. ${watch === 'garmin' ? html`When Garmin asks, allow <b>both</b> permissions (activities and training/workouts) so your Kestrel plan can be sent to your watch.` : 'Allow it to share your activities and workouts.'} Then use the option on that card to <b>download your older activities</b>, so your history comes across too.</li>
-    ${keys}${paste}</ol>`;
-  if (watch === 'apple') return html`<ol class="k-wsteps">${account}
-    <li><b>Send your Apple Watch runs to intervals.icu.</b> Apple Health doesn’t connect to intervals.icu by itself, so you need an iPhone app that does it. <b>HealthFit</b> and <b>RunGap</b> are the ones most runners use: install one, connect it to intervals.icu, and turn on automatic upload for runs (and any cross-training).</li>
-    ${keys}${paste}</ol>`;
-  if (watch === 'strava') return html`<div class="k-note"><b>Strava on its own won’t work.</b> Strava doesn’t let intervals.icu pass your runs on to other apps, so Kestrel would get nothing. But whatever watch or phone app sends your runs to Strava can almost always send them to intervals.icu too (Garmin, COROS, Suunto, Polar, Wahoo, or HealthFit for Apple Watch). Pick your watch above, or log runs by hand in Train → Log.</div>`;
-  return html`<div class="k-note">Most watches can send runs to intervals.icu (Settings → Connections there lists them). If yours can, the steps are: link it in intervals.icu, then paste your Athlete ID and API key below. If not, log runs by hand in Train → Log, or record them with your phone on the Record tab.</div><ol class="k-wsteps">${keys}${paste}</ol>`;
+  const account = (n) => wstep(watch, n, 'Make a free intervals.icu account', 'Sign up with your email or Google. Kestrel never sees your intervals.icu password.', ['https://intervals.icu', 'Open intervals.icu']);
+  const keys = (n) => wstep(watch, n, 'Copy your Athlete ID and API key', html`In intervals.icu open <b>Settings</b> and scroll to the very bottom, to <b>Developer Settings</b>. Copy the <b>Athlete ID</b> (like <code>i123456</code>) and the <b>API key</b>. No key yet? Tap <b>Generate</b>. The key works like a password: paste it only into the box below.`, ['https://intervals.icu/settings', 'Open Settings']);
+  if (brand) return html`<ol class="k-wsteps">${account(1)}
+    ${wstep(watch, 2, `Link your ${brand}`, html`In intervals.icu go to <b>Settings → Connections</b>, tap <b>${brand}</b> and sign in. ${watch === 'garmin' ? html`Allow <b>both</b> Garmin permissions (activities, and training/workouts) so your plan reaches your watch.` : 'Allow it to share activities and workouts.'} On the same card, choose to <b>download older activities</b> so your history comes across.`, ['https://intervals.icu/settings', 'Open Connections'])}
+    ${keys(3)}</ol>`;
+  if (watch === 'apple') return html`<ol class="k-wsteps">${account(1)}
+    ${wstep(watch, 2, 'Send Apple Watch runs to intervals.icu', html`Apple Health can’t talk to intervals.icu on its own, so an iPhone app does it. <b>HealthFit</b> or <b>RunGap</b>: install one, connect it to intervals.icu, and turn on automatic upload for runs and cross-training.`)}
+    ${keys(3)}</ol>`;
+  if (watch === 'strava') return html`<div class="k-note"><b>Strava on its own won’t work.</b> Strava doesn’t let intervals.icu pass your runs on to other apps, so Kestrel would get nothing. Whatever sends your runs to Strava (Garmin, COROS, Suunto, Polar, Wahoo, or HealthFit on Apple Watch) can almost always send them to intervals.icu too: pick it above. Or log runs by hand, or record with your phone on the Record button.</div>`;
+  return html`<div class="k-note">Most watches can send runs to intervals.icu (its Settings → Connections lists them). If yours can, link it there, then follow these steps. If not, log runs by hand or record them with your phone.</div><ol class="k-wsteps">${account(1)}${keys(2)}</ol>`;
 }
 
 function renderWatchSetup(watch, fromApp) {
@@ -386,29 +401,44 @@ function renderWatchSetup(watch, fromApp) {
   gate(html`<div class="k-auth narrow k-watch">
     <div class="k-kicker">${fromApp ? 'Watch sync' : 'Last step'}</div>
     <h2>Connect your watch</h2>
-    <p class="k-small">About 5 minutes, once. After that every run (and ride, swim or lift) lands in Kestrel on its own: your log, Fitness States, goals and cross-training fill themselves in.</p>
+    <p class="k-small">About 5 minutes, once. After that every run (and ride, swim or lift) lands in Kestrel by itself, and your plan shows up on your watch.</p>
+    ${FLOW}
+    <details class="k-help k-why"><summary>Why go through intervals.icu?</summary>
+      <p>Garmin, COROS and the other watch makers only open their data to approved companies, and approval costs money a free app doesn’t have. intervals.icu is a free training site that every major watch already sends runs to officially. Kestrel reads your runs from there with a key you give it, so Kestrel stays free and you stay in control: delete the key in intervals.icu, or tap Disconnect in Kestrel, and the link is gone.</p>
+      <p><b>What Kestrel reads:</b> your activities, laps, heart rate, GPS route (only shown to you) and wellness (sleep, resting HR, HRV). <b>What it writes:</b> only planned workouts named “Kestrel:”. Your key is stored encrypted.</p></details>
+    <div class="k-kicker k-wq">Which watch do you use?</div>
     <div class="k-chips" role="radiogroup" aria-label="Your watch">${brands.map(([v, l]) => html`<button type="button" class="k-chip ${v === watch ? 'on' : ''}" data-watch="${v}" role="radio" aria-checked="${v === watch}">${l}</button>`)}</div>
     ${watchSteps(watch)}
     ${canConnect ? html`<form id="kWForm" class="k-wform">
-      <label class="k-label" for="kWId">Athlete ID</label><input class="k-input mono" id="kWId" name="id" placeholder="i123456" autocomplete="off" autocapitalize="off" spellcheck="false" required>
+      <div class="k-wform-h"><b>Paste them here</b><span class="k-small">Kestrel checks them straight away.</span></div>
+      <label class="k-label" for="kWId">Athlete ID</label><input class="k-input mono" id="kWId" name="id" placeholder="i123456 (or paste your intervals.icu link)" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" required>
       <label class="k-label" for="kWKey">API key</label><input class="k-input mono" id="kWKey" name="key" type="password" placeholder="Paste key" autocomplete="off" required>
       <p class="k-small" id="kWMsg" role="status"></p>
       <button class="k-btn primary wide">Connect</button>
     </form>` : ''}
     <details class="k-help"><summary>Something not working?</summary><ul class="k-list">
-      <li><b>“Athlete id looks like i12345”</b>: copy it from Developer Settings in intervals.icu, including the i.</li>
+      <li><b>“Athlete ID looks like i123456”</b>: copy it from Developer Settings at the bottom of intervals.icu Settings. You can also paste the link to your intervals.icu page.</li>
+      <li><b>“Not authorised” or 403</b>: the key was copied short or regenerated since. Copy it again from Developer Settings.</li>
       <li><b>Connected but no runs?</b> Check intervals.icu shows your runs first. If it doesn’t, unlink and relink your watch there (for Garmin, also remove intervals.icu in Garmin Connect → Settings → Connected Apps, then connect again from intervals.icu).</li>
-      <li><b>Plan not showing on your watch?</b> In intervals.icu → Settings → Connections, turn on uploading planned workouts to your watch.</li>
-      <li><b>Is it safe?</b> Kestrel stores your key encrypted, only reads your activities and only writes workouts named “Kestrel:”. Disconnect any time in You → Watch and data.</li>
+      <li><b>Plan not on your watch?</b> In intervals.icu → Settings → Connections, turn on uploading planned workouts to your watch, then tap Sync in Kestrel.</li>
+      <li><b>How often does it sync?</b> Kestrel checks for new runs on its own through the day. Tap Sync at the top of the app to check now.</li>
     </ul></details>
     <div class="k-nav"><button class="k-btn ghost" type="button" id="kWSkip" style="flex:1">${fromApp ? 'Back to Kestrel' : 'I’ll do this later'}</button></div>
     ${fromApp ? '' : html`<p class="k-small">You can connect any time in You → Watch and data.</p>`}
   </div>`);
   document.querySelectorAll('[data-watch]').forEach((b) => { b.onclick = () => renderWatchSetup(b.dataset.watch, fromApp); });
+  document.querySelectorAll('[data-tick]').forEach((b) => { b.onclick = () => {
+    const k = 'kestrel.wsteps.' + watch, n = +b.dataset.tick, cur = store.get(k) || [];
+    const next = cur.includes(n) ? cur.filter((x) => x !== n) : [...cur, n];
+    store.set(k, next);
+    const li = b.closest('.k-wstep'), on = next.includes(n);
+    li.classList.toggle('done', on); b.setAttribute('aria-pressed', String(on));
+  }; });
   const done = async () => { if (fromApp) { openApp(); await window.kestrelReload(); } else await finishSetup(); };
   $('kWSkip').onclick = () => attempt(done);
   if (!canConnect) return;
-  $('kWId').oninput = (e) => { const v = e.target.value.trim(); if (/^\d+$/.test(v)) e.target.value = 'i' + v; };
+  // Digits only, or a pasted link: turn it into the ID intervals.icu means.
+  $('kWId').oninput = (e) => { const v = e.target.value.trim(), m = v.match(/athlete\/(i?\d{1,12})/i); if (m) e.target.value = /^i/i.test(m[1]) ? m[1] : 'i' + m[1]; else if (/^\d+$/.test(v)) e.target.value = 'i' + v; };
   $('kWForm').onsubmit = (e) => {
     e.preventDefault();
     const f = form(e.target);
@@ -422,6 +452,7 @@ function renderWatchSetup(watch, fromApp) {
         api('/api/intervals/import', { method: 'POST', body: '{}' }).catch(() => null);
         msg.className = 'k-small k-good';
         msg.textContent = `Connected.${s?.imported != null ? ` ${s.imported} recent ${s.imported === 1 ? 'activity' : 'activities'} in.` : ''} Your older history keeps importing in the background.${s?.note ? ' ' + s.note : ''}`;
+        store.del('kestrel.wsteps.' + watch);
         toast('Watch connected.');
         setTimeout(() => attempt(done), 1600);
       } catch (err) { msg.className = 'k-small k-bad'; msg.textContent = err.message; }
