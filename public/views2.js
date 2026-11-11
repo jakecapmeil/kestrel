@@ -157,7 +157,7 @@
         <p class="kv-hint">Add how you like to train, and Kestrel AI follows it on top of the ethos above: “I race the 800, keep one speed day all year”, “No running on Sundays”, “Vegetarian, so suggest plant protein”. Safety always comes first: if yours clashes with a health rule or the plan’s limits, Kestrel AI tells you why.</p>
         <textarea class="kv-input" name="mine" rows="5" maxlength="2000" placeholder="Write a few lines in your own words.">${esc(e.mine || '')}</textarea>
         <div class="kv-btns"><button type="submit" class="pri">Save my ethos</button><span class="kv-hint" id="kvEthosMsg"></span></div></form>` : '';
-    return `<div class="kv-ethos-grid">${mine}${cards}</div>
+    return `<div class="kv-ethos-grid">${cards}${mine}</div>
       <p class="kv-hint kv-ethos-src">The research behind each point, with sources: <a href="https://github.com/jakecapmeil/kestrel/blob/main/docs/ethos.md" target="_blank" rel="noopener">docs/ethos.md</a>. Version ${esc(e.version)}.</p>`;
   };
   ACT.ethosSave = async (v, f)=>{
