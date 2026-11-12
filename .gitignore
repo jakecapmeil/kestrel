@@ -9,3 +9,14 @@ llm/models/
 *.gguf
 *.safetensors
 *.bin
+
+# Native app shells: dependencies and build output
+apps/*/node_modules/
+apps/desktop/dist/
+apps/mobile/ios/App/build/
+apps/mobile/ios/DerivedData/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/app/build/
+apps/mobile/android/local.properties
+.claude/

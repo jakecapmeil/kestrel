@@ -1,0 +1,18 @@
+{
+  "appId": "com.jakecapmeil.kestrel",
+  "appName": "Kestrel",
+  "webDir": "www",
+  "server": {
+    "url": "https://kestrel.jakecapmeil.workers.dev",
+    "cleartext": false,
+    "errorPath": "offline.html"
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0d0d0f",
+    "limitsNavigationsToAppBoundDomains": false
+  },
+  "android": {
+    "backgroundColor": "#0d0d0f"
+  }
+}
