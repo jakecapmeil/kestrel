@@ -107,29 +107,21 @@ function showcase() {
 
 // The iOS, Android and Mac apps load this site in a web view. Google blocks its sign-in inside embedded web views,
 // so the apps sign in with email (a Google account can add a password through Forgot password).
-const NATIVE = !!(window.Capacitor?.isNativePlatform?.() || /KestrelDesktop/.test(navigator.userAgent));
+// `?app` in the address previews the app look in a normal browser.
+const NATIVE = !!(window.Capacitor?.isNativePlatform?.() || /KestrelDesktop/.test(navigator.userAgent) || new URLSearchParams(location.search).has('app'));
+if (NATIVE) document.documentElement.classList.add('k-native');
 
-function renderLanding(mode = 'signin', message = '') {
-  const signup = mode === 'signup';
-  gate(html`<header class="k-top"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="44" height="44"><span class="k-top-word">kestrel</span></a><a class="k-btn small ghost" href="/lab">Kestrel Lab</a></header><div class="k-landing">${hero()}
-  <div class="k-auth">
-    <span class="k-chip accent k-auth-chip">free &amp; open source</span>
-    <h2>${signup ? 'Create your account' : 'Sign in'}</h2>
-    ${NATIVE ? html`<p class="k-small">In the app, sign in with email. Made your account with Google? Tap “Forgot password” to set a password for it once.</p>` : html`<button class="k-btn wide" id="kGoogle" type="button"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
-    <div class="k-or">or with email</div>`}
-    <form id="kEmailForm">
-      <label class="k-label" for="kEm">Email</label><input class="k-input" id="kEm" name="email" type="email" autocomplete="email" required>
-      <label class="k-label" for="kPw">Password</label><input class="k-input" id="kPw" name="password" type="password" minlength="8" autocomplete="${signup ? 'new-password' : 'current-password'}" required>
-      ${signup ? html`<p class="k-small">We'll email you a link to confirm your address before you can sign in. By creating an account you agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>. You must be 13 or older.</p>` : ''}
-      ${message ? html`<p class="k-small k-good">${message}</p>` : ''}
-      <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
-    </form>
-    <div class="k-row spread">
-      <button class="k-link" type="button" id="kSwap">${signup ? 'Have an account? Sign in' : 'New here? Create an account'}</button>
-      ${signup ? '' : html`<button class="k-link" type="button" id="kForgot">Forgot password?</button>`}
-    </div>
-    <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. <a href="/legal" target="_blank" rel="noopener">Terms, privacy and safety</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
-  </div></div>${showcase()}`);
+const GOOGLE_ICON = raw('<svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>');
+
+function emailFields(signup, message) {
+  return html`<label class="k-label" for="kEm">Email</label><input class="k-input" id="kEm" name="email" type="email" autocomplete="email" autocapitalize="off" required>
+    <label class="k-label" for="kPw">Password</label><input class="k-input" id="kPw" name="password" type="password" minlength="8" autocomplete="${signup ? 'new-password' : 'current-password'}" required>
+    ${signup ? html`<p class="k-small">We'll email you a link to confirm your address before you can sign in. By creating an account you agree to the <a href="/legal#terms" target="_blank" rel="noopener">Terms</a> and <a href="/legal#privacy" target="_blank" rel="noopener">Privacy Policy</a>. You must be 13 or older.</p>` : ''}
+    ${message ? html`<p class="k-small k-good" role="status">${message}</p>` : ''}`;
+}
+
+// Google, the sign-in/sign-up swap, forgot password and the email form: shared by the website and the app.
+function wireAuth(signup) {
   if ($('kGoogle')) $('kGoogle').onclick = (e) => attempt(async () => {
     const { error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
     if (error) throw error;
@@ -157,6 +149,100 @@ function renderLanding(mode = 'signin', message = '') {
       }
     }, e.submitter);
   };
+}
+
+// mode: 'signin' | 'signup', or (apps only) 'welcome', the first screen.
+function renderLanding(mode, message = '') {
+  if (NATIVE) return renderAppStart(mode || (message ? 'signin' : 'welcome'), message);
+  const signup = mode === 'signup';
+  gate(html`<header class="k-top"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="44" height="44"><span class="k-top-word">kestrel</span></a><a class="k-btn small ghost" href="/lab">Kestrel Lab</a></header><div class="k-landing">${hero()}
+  <div class="k-auth">
+    <span class="k-chip accent k-auth-chip">free &amp; open source</span>
+    <h2>${signup ? 'Create your account' : 'Sign in'}</h2>
+    <button class="k-btn wide" id="kGoogle" type="button">${GOOGLE_ICON}Continue with Google</button>
+    <div class="k-or">or with email</div>
+    <form id="kEmailForm">
+      ${emailFields(signup, message)}
+      <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
+    </form>
+    <div class="k-row spread">
+      <button class="k-link" type="button" id="kSwap">${signup ? 'Have an account? Sign in' : 'New here? Create an account'}</button>
+      ${signup ? '' : html`<button class="k-link" type="button" id="kForgot">Forgot password?</button>`}
+    </div>
+    <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. <a href="/legal" target="_blank" rel="noopener">Terms, privacy and safety</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
+  </div></div>${showcase()}`);
+  wireAuth(signup);
+}
+
+// ---------- the apps' start: a welcome screen, then a full-screen sign-in. No site header, marketing or footer.
+
+const APP_MARK = raw(`<svg viewBox="0 0 32 32" aria-hidden="true"><path d="${HAWK_PATH}" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/><circle cx="20.5" cy="12.6" r="1" fill="var(--accent)"/></svg>`);
+const CHEVRON = raw('<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+
+function appCards() {
+  const week = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const reps = [62, 70, 66, 74, 68, 78, 72, 84];
+  return html`
+  <article class="ka-card">
+    <div class="ka-art ka-week" aria-hidden="true">${week.map((d, i) => html`<span class="${i === 2 ? 'on' : i < 2 ? 'done' : ''}"><b>${d}</b><i></i></span>`)}</div>
+    <h2>A plan that listens</h2>
+    <p>Tell Kestrel how you feel or that you can't run Thursday. Your week moves with you.</p>
+  </article>
+  <article class="ka-card">
+    <div class="ka-art ka-team" aria-hidden="true"><span>AK</span><span>JM</span><span>RS</span><span>TL</span><em>+12 going</em></div>
+    <h2>Your whole team</h2>
+    <p>Practices, meets, the bus time and who's coming, on one calendar.</p>
+  </article>
+  <article class="ka-card">
+    <div class="ka-art ka-reps" aria-hidden="true">${reps.map((h) => html`<i style="height:${h}%"></i>`)}</div>
+    <h2>Every rep, explained</h2>
+    <p>Sync your watch and see each session split into reps, with a summary from your coach.</p>
+  </article>`;
+}
+
+function renderAppStart(mode, message) {
+  if (mode === 'welcome') {
+    gate(html`<div class="ka-screen"><div class="ka ka-welcome">
+      <div class="ka-hello">
+        <div class="ka-mark">${APP_MARK}</div>
+        <div class="ka-word">kestrel</div>
+        <p class="ka-tag">Your running coach and your team, in one place.</p>
+      </div>
+      <div class="ka-cards" id="kaCards">${appCards()}</div>
+      <div class="ka-dots" role="tablist" aria-label="About Kestrel">${[0, 1, 2].map((i) => html`<button type="button" role="tab" aria-label="Card ${i + 1} of 3" aria-selected="${String(i === 0)}" data-i="${i}"></button>`)}</div>
+      <div class="ka-actions">
+        <button class="k-btn primary wide" type="button" id="kaNew">Get started</button>
+        <button class="k-btn wide ka-quiet" type="button" id="kaHave">I have an account</button>
+      </div>
+      <p class="ka-fine">Free and open source</p>
+    </div></div>`);
+    const cards = $('kaCards');
+    const dots = [...document.querySelectorAll('.ka-dots button')];
+    const step = () => cards.children[1].offsetLeft - cards.children[0].offsetLeft;
+    cards.addEventListener('scroll', () => {
+      const i = Math.round(cards.scrollLeft / step());
+      dots.forEach((d, j) => d.setAttribute('aria-selected', String(i === j)));
+    }, { passive: true });
+    dots.forEach((d) => { d.onclick = () => cards.scrollTo({ left: step() * Number(d.dataset.i), behavior: 'smooth' }); });
+    $('kaNew').onclick = () => renderAppStart('signup', '');
+    $('kaHave').onclick = () => renderAppStart('signin', '');
+    return;
+  }
+  const signup = mode === 'signup';
+  gate(html`<div class="ka-screen"><form class="ka ka-form" id="kEmailForm">
+    <div class="ka-bar"><button class="ka-back" type="button" id="kaBack" aria-label="Back">${CHEVRON}</button><div class="ka-mark small">${APP_MARK}</div><span></span></div>
+    <h1 class="ka-title">${signup ? 'Create your account' : 'Welcome back'}</h1>
+    <p class="ka-sub">${signup ? 'Free for every runner and every team.' : 'Sign in with your email.'}</p>
+    ${emailFields(signup, message)}
+    ${signup ? '' : html`<button class="k-link ka-forgot" type="button" id="kForgot">Forgot password?</button>
+    <p class="k-small ka-note">Made your account with Google on the website? Tap “Forgot password” once to give it a password for the app.</p>`}
+    <div class="ka-bottom">
+      <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
+      <button class="k-link" type="button" id="kSwap">${signup ? 'I already have an account' : 'New to Kestrel? Create an account'}</button>
+    </div>
+  </form></div>`);
+  $('kaBack').onclick = () => renderAppStart('welcome', '');
+  wireAuth(signup);
 }
 
 function renderNewPassword() {
@@ -1534,7 +1620,7 @@ async function boot() {
     return;
   }
   if (data.session) await afterSignIn();
-  else renderLanding('signin', fromLink ? 'Your email is confirmed. Sign in to continue.' : '');
+  else renderLanding(fromLink ? 'signin' : undefined, fromLink ? 'Your email is confirmed. Sign in to continue.' : '');
 }
 
 boot().catch((err) => { console.error(err); gate(html`<p class="k-small">Kestrel could not start: ${err.message}</p>`); });

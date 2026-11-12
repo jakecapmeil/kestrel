@@ -9,10 +9,10 @@
   },
   "ios": {
     "contentInset": "never",
-    "backgroundColor": "#0d0d0f",
+    "backgroundColor": "#f5f2ea",
     "limitsNavigationsToAppBoundDomains": false
   },
   "android": {
-    "backgroundColor": "#0d0d0f"
+    "backgroundColor": "#f5f2ea"
   }
 }
