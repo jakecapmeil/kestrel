@@ -74,8 +74,12 @@ async function icu(apiKey, path, env) {
 const athletePath = (id) => `/athlete/${encodeURIComponent(id)}`;
 
 export async function connect(env, personId, athleteId, apiKey) {
-  const id = String(athleteId || '').trim();
-  const key = String(apiKey || '').trim();
+  // Accept the ID as typed, without its i, or inside a pasted intervals.icu link (…/athlete/i123456/…).
+  let id = String(athleteId || '').trim();
+  const inLink = id.match(/athlete\/(i?\d{1,12})/i);
+  if (inLink) id = inLink[1];
+  if (/^\d{1,12}$/.test(id)) id = 'i' + id;
+  const key = String(apiKey || '').replace(/\s+/g, '');
   if (!/^i?\d{1,12}$/.test(id)) throw new IntervalsError('Athlete ID looks like i123456: copy it from intervals.icu → Settings → Developer Settings (bottom of the page).');
   if (key.length < 10 || key.length > 200) throw new IntervalsError('Paste the API key from intervals.icu Settings → Developer Settings.');
   const me = await icu(key, athletePath(id), env);
@@ -453,7 +457,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
 
 async function loadPerson(env, personId) {
   const person = await withPlans(env.DB, await env.DB.prepare(
-    'SELECT id, name, class_year, plan_rank, coach_rank, health_status, health_updated_at, training_status, icu_athlete, icu_key_enc, icu_synced_at, icu_import_cursor, icu_import_done FROM people WHERE id = ?'
+    'SELECT id, name, class_year, plan_rank, coach_rank, health_status, health_updated_at, training_status, icu_athlete, icu_key_enc, icu_synced_at, icu_import_cursor, icu_import_done, settings FROM people WHERE id = ?'
   ).bind(personId).first());
   if (!person?.icu_key_enc) throw new IntervalsError('Not connected to intervals.icu');
   return person;
@@ -580,7 +584,10 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
     const key = await decrypt(env, person.icu_key_enc);
     const lastSyncDay = person.icu_synced_at ? todayInTz(new Date(person.icu_synced_at - 3 * 86400000)) : null;
     const oldest = days ? todayInTz(new Date(Date.now() - days * 86400000)) : (lastSyncDay || todayInTz(new Date(Date.now() - FIRST_SYNC_DAYS * 86400000)));
-    const res = await importRange(env, person, key, { oldest, newest: today, ai: true, lapBudget: MAX_LAP_FETCHES });
+    // A runner who writes run summaries with their own model gets the rule-based labels here; the app writes the reports.
+    let ownSummaries = false;
+    try { ownSummaries = JSON.parse(person.settings || '{}')?.ai_tasks?.summary === 'own'; } catch { /* bad settings: use Kestrel AI */ }
+    const res = await importRange(env, person, key, { oldest, newest: today, ai: !ownSummaries, lapBudget: MAX_LAP_FETCHES });
     res.wellness_days = await syncWellness(env, person, key, today);
     res.best_efforts = await syncBestEfforts(env, person, key);
     if (backfill) res.weather = await backfillConditions(db, person.id);

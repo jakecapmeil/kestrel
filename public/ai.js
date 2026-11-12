@@ -3,7 +3,7 @@
 // "kestrel" is the exception: it goes to /api/ai/chat, which runs the free default (Gemini, with an open-weight fallback).
 
 export const PROVIDERS = {
-  kestrel: { label: 'Kestrel (free default, Gemini)', kind: 'kestrel', needsKey: false },
+  kestrel: { label: 'Kestrel (free default)', kind: 'kestrel', needsKey: false },
   openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-4o-mini', needsKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
   anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5', needsKey: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
   gemini: { label: 'Google Gemini (your key)', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-flash-latest', needsKey: true, keyUrl: 'https://aistudio.google.com/apikey' },
@@ -16,13 +16,37 @@ export const PROVIDERS = {
 
 const KEY = 'kestrel.ai';
 
+// What each Kestrel AI job runs on. '' means the model chosen in Kestrel Lab (state.provider).
+export const TASKS = {
+  chat: { label: 'Kestrel chat and plans', hint: 'Coach chat, plan building and the team schedule reader.' },
+  summary: { label: 'Run summaries', hint: 'The short report on each session after it syncs.' },
+  food: { label: 'Food photos', hint: 'Estimates portions, calories, carbs, protein and fat from a photo or a description.', vision: true },
+};
+
 export function loadAi() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
-    return { provider: PROVIDERS[s.provider] ? s.provider : 'kestrel', configs: s.configs || {} };
+    const tasks = {};
+    for (const t of Object.keys(TASKS)) if (s.tasks?.[t] && PROVIDERS[s.tasks[t]]) tasks[t] = s.tasks[t];
+    return { provider: PROVIDERS[s.provider] ? s.provider : 'kestrel', configs: s.configs || {}, tasks };
   } catch {
-    return { provider: 'kestrel', configs: {} };
+    return { provider: 'kestrel', configs: {}, tasks: {} };
   }
+}
+
+// The state to call for one job: its own provider when one is set, else the main one.
+export function forTask(state, task) {
+  const id = state.tasks?.[task];
+  return { ...state, provider: id && PROVIDERS[id] ? id : state.provider };
+}
+
+// Providers that can actually run: the free default, plus any with a key (or a local / custom address) saved.
+export function usable(state) {
+  return Object.keys(PROVIDERS).filter((id) => {
+    if (id === 'kestrel') return true;
+    const p = PROVIDERS[id], c = configFor(state, id);
+    return p.needsKey ? !!c.key : !!(state.configs[id] && c.base && c.model);
+  });
 }
 
 export function saveAi(state) {
@@ -38,7 +62,7 @@ export function configFor(state, id) {
 
 export function describe(state) {
   const id = state.provider;
-  if (id === 'kestrel') return 'Kestrel (Gemini)';
+  if (id === 'kestrel') return 'Kestrel free';
   const c = configFor(state, id);
   return `${PROVIDERS[id].label.replace(/ \(.*\)$/, '')}${c.model ? ' · ' + c.model : ''}`;
 }
@@ -60,7 +84,8 @@ function networkHelp(id, base, err) {
   return `Could not reach ${base} (${err.message}). Check the address, or that this provider allows calls from a browser.`;
 }
 
-// messages: [{ role: 'user' | 'assistant', content }]  system: string  -> reply text
+// messages: [{ role: 'user' | 'assistant', content, images?: [{ mime, data (base64) }] }]  system: string  -> reply text
+// Images need a model that can see (Claude, GPT-4o class, Gemini, or a local vision model such as llava).
 export async function complete(state, system, messages, { apiFetch }) {
   const id = state.provider;
   const p = PROVIDERS[id];
@@ -79,7 +104,7 @@ export async function complete(state, system, messages, { apiFetch }) {
       res = await fetch(`${base}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': c.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-        body: JSON.stringify({ model: c.model, max_tokens: 1500, system, messages }),
+        body: JSON.stringify({ model: c.model, max_tokens: 1500, system, messages: messages.map((m) => (m.images?.length ? { role: m.role, content: [...m.images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })), { type: 'text', text: m.content }] } : { role: m.role, content: m.content })) }),
       });
     } else if (p.kind === 'gemini') {
       res = await fetch(`${base}/models/${encodeURIComponent(c.model)}:generateContent`, {
@@ -87,14 +112,14 @@ export async function complete(state, system, messages, { apiFetch }) {
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': c.key },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
-          contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+          contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [...(m.images || []).map((i) => ({ inline_data: { mime_type: i.mime, data: i.data } })), { text: m.content }] })),
         }),
       });
     } else {
       res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(c.key ? { Authorization: `Bearer ${c.key}` } : {}) },
-        body: JSON.stringify({ model: c.model, messages: [{ role: 'system', content: system }, ...messages], temperature: 0.5 }),
+        body: JSON.stringify({ model: c.model, messages: [{ role: 'system', content: system }, ...messages.map((m) => (m.images?.length ? { role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] } : { role: m.role, content: m.content }))], temperature: 0.5 }),
       });
     }
   } catch (err) {

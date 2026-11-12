@@ -9,6 +9,7 @@ import { logTools, callLogTool, LogError, getDays, compactDays, fiveKFor, getPrs
 import { getFitness } from './fitness.js';
 import { trackMiles } from './workouts.js';
 import { BODY_PARTS } from './body.js';
+import { ethosBlock } from './ethos.js';
 import { weatherFor } from './conditions.js';
 import { gradeRun, checkedCategory } from './grade.js';
 
@@ -388,6 +389,8 @@ export async function getCoachContext(db, person) {
     training_log_last_14_days: compactDays(await getDays(db, person.id, addDays(today, -13), today)),
     ...(await coachTracking(db, person, today).catch(() => ({}))),
     rubric: COACH_RUBRIC,
+    // How Kestrel coaches (and the runner's own additions). Follow it in every reply and plan change.
+    ethos: ethosBlock(await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first().then((r) => { try { return JSON.parse(r?.settings || '{}').ethos || ''; } catch { return ''; } })),
   };
 }
 

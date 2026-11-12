@@ -13,6 +13,7 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
+import { COACH_RUBRIC } from './train/coach.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
@@ -24,10 +25,16 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
+import { sessionReportChat, ethosOf, askFood } from './train/gemini.js';
+import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/food.js';
+import { redeemCode, cleanAppearance, ACCENTS, SupportError } from './train/support.js';
+import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
+import { shareOf, cleanShare, ShareError, exportDataset } from './train/dataset.js';
+import { getDays } from './train/log.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -54,6 +61,14 @@ async function sha256(text) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+// Compares two secrets without leaking how much of them matched.
+function sameText(a, b) {
+  a = String(a); b = String(b);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 async function readJson(request) {
   try { return await request.json(); } catch { throw new BadRequest('Expected a JSON body.'); }
 }
@@ -85,6 +100,10 @@ async function meView(db, me) {
     prefs: prefsOf(settingsOf(me)),
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
+    data_share: shareOf(settingsOf(me)),
+    ai_tasks: settingsOf(me).ai_tasks || {},
+    supporter: settingsOf(me).supporter ? { tier: settingsOf(me).supporter.tier, since: settingsOf(me).supporter.since } : null,
+    appearance: settingsOf(me).appearance || { accent: 'kestrel' },
     teams,
   };
 }
@@ -492,7 +511,7 @@ async function planChatRoute(env, db, me, b, scope, promptOnly, today) {
   const history = Array.isArray(b.history) ? b.history : [];
   const documents = (Array.isArray(b.documents) ? b.documents : []).slice(0, 5)
     .map((d) => ({ name: str(d?.name, 80), text: String(d?.text || '').slice(0, 12000) })).filter((d) => d.text.trim());
-  const sc = { ...scope, documents, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
+  const sc = { ...scope, my_ethos: settingsOf(me).ethos || '', documents, current: b.current && typeof b.current === 'object' ? b.current : scope.current };
   if (promptOnly) return planChat(history, sc, today);
   const out = await askPlan(env, db, me, history, sc, today);
   return checkedPlanReply(out);
@@ -626,7 +645,8 @@ const clockPace = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60
 // What the coach reads: the athlete's own data plus their teams' meets (coach.js), the workout library,
 // 16 weeks of totals, every workout session, and the plan as the Plan tab shows it.
 async function coachContext(db, person) {
-  const { rubric, already_logged, ...context } = await getCoachContext(db, person);
+  const { rubric, already_logged, ethos, ...context } = await getCoachContext(db, person);
+  context.my_ethos = person.settings !== undefined ? ethosOf(person) : ethosOf(await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first());
   context.workout_library = WORKOUTS.map((w) => ({ id: w.id, name: w.name, type: w.type, races: w.races, min: w.total_min, level: w.level, main: w.main }));
   const past = await getLog(db, person.id, todayInTz(new Date(Date.now() - 112 * 86400000)), todayInTz());
   context.weekly_totals_16_weeks = past.weeks;
@@ -1145,7 +1165,11 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [] });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [],
+      // What the free default runs on here: Gemini (which can read photos) when its key is set, else open-weight models.
+      freeModel: env.GEMINI_API_KEY ? 'Gemini' : 'open-weight Llama', freeVision: !!env.GEMINI_API_KEY,
+      // Where donations go (Support Kestrel). Unset links are hidden. See docs/funding.md.
+      donate: { main: env.DONATE_URL || '', alt: env.DONATE_ALT_URL || '', campaign: env.CAMPAIGN_URL || '' }, accents: ACCENTS });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));
@@ -1174,6 +1198,12 @@ async function route(request, env, url) {
     if (path === '/api/v1/predict' && method === 'POST') {
       const key = await apiKeyUser(db, request);
       return json(await apiPredict(db, key.person_id, await readJson(request)), 200, CORS);
+    }
+    // The anonymized dataset, for Kestrel's maintainers (a Worker secret, DATASET_TOKEN). scope=open: open-dataset consent only.
+    if (path === '/api/v1/dataset' && method === 'GET') {
+      const tok = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+      if (!env.DATASET_TOKEN || tok.length < 20 || !sameText(tok, env.DATASET_TOKEN)) throw new AuthError('A dataset token is needed.');
+      return new Response(await exportDataset(env, q.get('scope') === 'open' ? 'open' : 'all'), { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' } });
     }
     throw new NotFound('No such API route. See /lab/docs.');
   }
@@ -1259,6 +1289,48 @@ async function route(request, env, url) {
     return json(await planChatRoute(env, db, me, await readJson(request), { team: false, current: own, athlete }, path.endsWith('prompt'), today));
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
+
+  // Supporter perks: redeem a code from a donation, then pick an app colour. Cosmetic only.
+  if (path === '/api/me/supporter' && method === 'POST') {
+    const st = settingsOf(me), got = await redeemCode(env.SUPPORTER_SECRET, (await readJson(request)).code);
+    // Single use: the first account to redeem a code keeps it.
+    await db.prepare('INSERT INTO supporter_codes (code, person_id, tier, redeemed_at) VALUES (?, ?, ?, ?) ON CONFLICT(code) DO NOTHING').bind(got.code, me.id, got.tier, Date.now()).run();
+    const owner = await db.prepare('SELECT person_id FROM supporter_codes WHERE code = ?').bind(got.code).first();
+    if (owner?.person_id !== me.id) throw new SupportError('That code has already been used. Each code is for one account; reply to your thank-you email for another.');
+    // Keep the earlier date, and never step a champion down to supporter.
+    const supporter = st.supporter && (st.supporter.tier === got.tier || st.supporter.tier === 'champion') ? st.supporter : got;
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, supporter }), me.id).run();
+    return json({ supporter: { tier: supporter.tier, since: supporter.since } });
+  }
+  if (path === '/api/me/appearance' && method === 'PUT') {
+    const st = settingsOf(me), appearance = cleanAppearance(await readJson(request), !!st.supporter);
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, appearance }), me.id).run();
+    return json({ appearance });
+  }
+  // The Kestrel ethos every AI follows, and the runner's own on top of it.
+  if (path === '/api/ethos') {
+    if (method === 'GET') return json({ version: ETHOS_VERSION, sections: ETHOS_SECTIONS, mine: settingsOf(me).ethos || '' });
+    if (method === 'PUT') {
+      const st = settingsOf(me), ethos = cleanEthos((await readJson(request)).mine);
+      await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, ethos }), me.id).run();
+      return json({ mine: ethos });
+    }
+  }
+  // Whether the runner shares anonymized training to improve Kestrel's models (off by default). See train/dataset.js.
+  if (path === '/api/me/data-sharing' && method === 'PUT') {
+    const st = settingsOf(me);
+    const data_share = cleanShare(str((await readJson(request)).choice, 10), st.profile);
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, data_share }), me.id).run();
+    return json({ data_share });
+  }
+  // Which AI writes run summaries: Kestrel's free default on the server, or the runner's own model in their browser
+  // (their key never leaves it, so the app writes those reports and the server's sync leaves them to it).
+  if (path === '/api/me/ai-tasks' && method === 'PUT') {
+    const b = await readJson(request), st = settingsOf(me);
+    const ai_tasks = { ...(st.ai_tasks || {}), summary: b.summary === 'own' ? 'own' : 'kestrel' };
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, ai_tasks }), me.id).run();
+    return json({ ai_tasks });
+  }
 
   // Which Train tabs to show and in what order, custom cross-training, fueling display and targets.
   if (path === '/api/me/prefs') {
@@ -1740,6 +1812,30 @@ async function route(request, env, url) {
     return json(coachChat(Array.isArray(b.history) ? b.history : [], await coachContext(db, person), today, BODY_PARTS));
   }
   if (path === '/api/coach/apply') return json(await applyCoachSaves(db, me.id, b.out || {}));
+  // Food estimates. Free default: the photo goes to Gemini here. Own model: the browser asks for the prompt, calls the
+  // model itself, then sends the answer back to be checked. Nothing is saved: the runner edits and adds it in Fuel.
+  if (path === '/api/ai/food' || path === '/api/ai/food/prompt' || path === '/api/ai/food/check') {
+    if (path.endsWith('check')) return json(cleanFoodEstimate(b.out || {}));
+    const st = settingsOf(me);
+    if (path.endsWith('prompt')) return json(foodChat({ text: b.text, meal: b.meal, photos: Math.min(3, Number(b.photos) || 0) }, st.profile, st.ethos));
+    const images = cleanImages(b.images);
+    const chat = foodChat({ text: b.text, meal: b.meal, photos: images.length }, st.profile, st.ethos);
+    return json(cleanFoodEstimate(await askFood(env, db, me, chat, images, today)));
+  }
+  // A session's report from the runner's own model: the prompt to send, then the report to keep (on its main activity).
+  if (path === '/api/ai/session/prompt' || path === '/api/ai/session/save') {
+    const key = str(b.key, 20), date = key.split('#')[0];
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
+    const sess = day?.sessions?.find((x) => x.key === key);
+    if (!sess) throw new NotFound('That session is gone.');
+    if (path.endsWith('prompt')) return json({ ...sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, COACH_RUBRIC), main_id: sess.main_id });
+    // A sync between the prompt and the save can renumber the day's sessions: only save onto the session the prompt was for.
+    if (str(b.main_id, 80) !== String(sess.main_id)) throw new BadRequest('That day changed while the report was being written. Open the session and try again.');
+    const report = str(b.report, 1200).trim();
+    if (report.length < 20) throw new BadRequest('The model returned too little to keep.');
+    await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
+    return json({ ok: true, report });
+  }
   if (path === '/api/coach/link') {
     const token = await issueCoachToken(db, me.id, b.regenerate === true);
     return json({ url: `${url.origin}/mcp/coach/${token}` });
@@ -1780,7 +1876,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError || err instanceof SupportError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

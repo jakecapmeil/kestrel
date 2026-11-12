@@ -7,7 +7,7 @@
   const V = { key:null, stack:[], month:null, sel:null, wtime:0, wopen:null, fitEdit:false, fitTab:'prs', foodDate:null, xtSport:null, bmView:'front', edit:null, cache:{} };
   const SCREENS = {}, ACT = {};
   // Tab/view (from the heading row) to the screen that draws it.
-  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log',
+  const SCREEN_OF = { 'run/plan':'plan', 'run/library':'library', 'run/ethos':'ethos', 'run/fitness':'fitness', 'run/goals':'goals', 'calendar/log':'log',
     'body/recovery':'recovery', 'body/xtrain':'xtrain', 'body/food':'food', 'team/feed':'feed', 'team/meets':'meets', 'team/training':'teamplan', 'team/roster':'roster' };
   const host = ()=> document.getElementById('pageV');
   const own = ()=> isRealPerson();
@@ -55,6 +55,8 @@
     window.KV.park?.();
     el.className = 'kv kvs-' + name;
     el.innerHTML = html;
+    // Every Run view ends with the way to choose which Run views show (the phone's view bar has no room for it).
+    if(!V.stack.length && V.key.startsWith('run/') && V.key !== 'run/plan') el.insertAdjacentHTML('beforeend', `<div class="kv-runviews">${runViewsBtn()}</div>`);
     fn.after?.(el, arg);
     window.renderNav?.();
     if(V.keepScroll) window.scrollTo(0, top); V.keepScroll = false;
@@ -84,11 +86,13 @@
   // Headings: what the page says, not the page's name.
   function title(){
     const sp = V.stack[V.stack.length - 1];
-    if(sp){ const [n, a] = sp.split('|'); if(n === 'day') return runTitle(V.cache['day:' + a]) || nice(a); if(n === 'edit') return 'Edit run'; if(n === 'wk') return (WO_TILES.find(t=> t.key === a) || {}).label || 'Workouts'; }
+    if(sp){ const [n, a] = sp.split('|'); if(n === 'day'){ const x = V.cache['day:' + a], ss = (x?.sessions || []).filter(z=> z.category !== 'crosstrain'); return ss.length > 1 ? `${ss.length} sessions · ${Math.round(x.miles * 10) / 10} mi` : runTitle(x) || nice(a); }
+      if(n === 'sess'){ const x = V.cache['day:' + a.split('#')[0]], s = window.KDay?.sessionOf(x, a); return s ? window.KDay.sessionName(s) : 'Session'; } if(n === 'edit') return 'Edit run'; if(n === 'wk') return (WO_TILES.find(t=> t.key === a) || {}).label || 'Workouts'; }
     const k = V.key;
     if(k === 'today') return new Date().toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric' });
     if(k === 'run/plan') return V.cache.weekTitle || 'This week';
     if(k === 'run/library') return `${V.cache.libCount || ''} workouts`.trim();
+    if(k === 'run/ethos') return 'The Kestrel ethos';
     if(k === 'run/fitness') return V.cache.fitTitle || 'Fitness';
     if(k === 'run/goals') return V.cache.goalsTitle || 'Goals';
     if(k === 'calendar/log') return V.cache.monthTitle || 'Your training';
@@ -99,7 +103,7 @@
     return '';
   }
   function subtitle(){
-    if(V.stack.length){ const [n, a] = V.stack[V.stack.length - 1].split('|'); return n === 'day' || n === 'edit' ? nice(a, { weekday:'long', month:'long', day:'numeric' }) : ''; }
+    if(V.stack.length){ const [n, a] = V.stack[V.stack.length - 1].split('|'); return n === 'day' || n === 'edit' ? nice(a, { weekday:'long', month:'long', day:'numeric' }) : n === 'sess' ? nice(a.split('#')[0], { weekday:'long', month:'long', day:'numeric' }) : ''; }
     return V.cache['sub:' + V.key] || '';
   }
   const setSub = (k, s)=>{ V.cache['sub:' + k] = s; };
@@ -124,7 +128,7 @@
         <button type="button" class="kv-runh" data-a="day" data-v="${today}">${esc(t?.type === 'Off' ? 'Rest day' : t?.type || 'Rest day')}${t?.miles ? ` <span>${esc(t.miles)} mi</span>` : ''} <i>›</i></button>
         ${detail ? `<div class="kv-hint kv-on">${esc(detail)}</div>` : ''}
         ${changed && t.reason ? `<div class="kv-hint kv-on"><b>Why:</b> ${esc(t.reason)}</div>` : ''}
-        ${done.length ? `<div class="kv-done">${done.map(s=> `<button type="button" data-a="day" data-v="${today}"><b>${esc(SESSION_LABEL[s.category] || 'Run')} ${esc(s.miles)} mi</b><span>${esc([s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
+        ${done.length ? `<div class="kv-done">${done.map(s=> `<button type="button" data-a="${s.key ? 'sess' : 'day'}" data-v="${esc(s.key || today)}"><b>${esc(SESSION_LABEL[s.category] || 'Run')} ${esc(s.miles)} mi</b><span>${esc([s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
         ${h.tomorrow ? `<div class="kv-hint kv-on kv-next">Tomorrow: ${esc(h.tomorrow.type === 'Off' ? 'Rest' : `${h.tomorrow.type}${h.tomorrow.miles ? ' ' + h.tomorrow.miles + ' mi' : ''}`)}</div>` : ''}
         <div class="kv-btns">${done.length ? `<button type="button" class="pri" data-a="day" data-v="${today}">View run</button>` : `<button type="button" class="pri" data-a="record">Start run</button><button type="button" data-a="cant">Can’t do this</button>`}<button type="button" data-a="ask">Ask Kestrel AI</button>${changed ? `<button type="button" data-a="unswap" data-v="${t.date}">Back to the plan</button>` : ''}</div>
       </div>`;
@@ -132,7 +136,8 @@
     const feel = own() ? feelCard(day, true) : need('Pick your name to check in.');
     const week = h?.week ? `<div class="kv-week">${h.week.days.map(d=>{ const lg = byDate[d.date], dt = new Date(d.date + 'T12:00:00'), off = d.type === 'Off';
         const did = lg?.miles > 0;
-        return `<button type="button" class="kv-wk ${d.date === today ? 'now' : ''} ${did ? 'did' : ''} ${off ? 'off' : ''}" data-a="day" data-v="${d.date}"><span>${dt.toLocaleDateString(undefined, { weekday:'short' })} ${dt.getDate()}</span><b>${esc(off ? 'Rest' : d.type)}</b><i>${did ? '✓ ' + lg.miles + ' mi' : off ? '–' : d.miles + ' mi'}</i>${(events[d.date] || []).some(e=> e.type === 'meet') ? '<em>Meet</em>' : ''}</button>`; }).join('')}</div>` : '';
+        const mi = did ? Math.round(lg.miles * 10) / 10 : off ? '–' : d.miles;
+        return `<button type="button" class="kv-wk ${d.date === today ? 'now' : ''} ${did ? 'did' : ''} ${off ? 'off' : ''}" data-a="day" data-v="${d.date}" aria-label="${esc(dt.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' }))}: ${did ? 'ran ' + mi + ' miles' : off ? 'rest' : esc(d.type) + ' ' + d.miles + ' miles planned'}"><span>${dt.toLocaleDateString(undefined, { weekday:'short' })}<u>${dt.getDate()}</u></span><b>${esc(off ? 'Rest' : d.type)}</b><i>${did ? '<s>✓</s>' : ''}${mi}${off ? '' : '<small> mi</small>'}</i>${(events[d.date] || []).some(e=> e.type === 'meet') ? '<em>Meet</em>' : ''}</button>`; }).join('')}</div>` : '';
     const planned = h?.week ? h.week.days.reduce((a, d)=> a + (Number(d.miles) || 0), 0) : 0;
     const doneMi = (wk?.days || []).reduce((a, d)=> a + (d.miles || 0), 0);
     const xw = x?.this_week || {};
@@ -147,8 +152,13 @@
       <div class="kv-row" style="--c:1.55fr 1fr">${sec('Your run', run)}${sec('How you feel', feel)}</div>
       ${week ? sec('This week', week, `${Math.round(doneMi * 10) / 10} of ${Math.round(planned * 10) / 10} mi${h?.level ? ' · ' + h.level.weekly_miles + ' mi level' : ''}`) : ''}
       <div class="kv-row" style="--c:1fr 1fr 1.15fr">${sec('Off the run', off)}${sec('Team today', teamToday)}${sec('Kestrel AI', kai)}</div>
+      ${askShare((wk?.days || []).some(d=> d.miles > 0) || !!day?.miles) ? sec('Help improve Kestrel', `<div class="card kv-card kv-share"><div id="kvShareHost"></div><div class="kv-btns"><button type="button" data-a="shareLater">Ask me later</button></div></div>`) : ''}
     </div>`;
   };
+  // Asked once, after a runner has some training in: share anonymized runs for Kestrel's models, or not.
+  const askShare = (ranLately)=>{ const me = window.kestrelMe?.(); if(!own() || !ranLately || !me || me.data_share?.at) return false; try{ return !localStorage.getItem('kestrel.shareAsked'); }catch(e){ return false; } };
+  SCREENS.today.after = ()=>{ const h = document.getElementById('kvShareHost'); if(h) window.kestrelShareCard?.(h, ()=> setTimeout(redraw, 1200)); };
+  ACT.shareLater = ()=>{ try{ localStorage.setItem('kestrel.shareAsked', String(Date.now())); }catch(e){} redraw(); };
   function latestPost(){
     const p = [...(posts || [])].sort((a, b)=> b.createdAt - a.createdAt)[0];
     if(!p) return '';
@@ -183,6 +193,9 @@
   ACT.day = (d)=>{ V.sel = d; push('day|' + d); };
 
   // ---------------------------------------------------------------- Run › Plan
+  // Which Run views show, and in what order. Lives here (and beside the views on a laptop) so the phone's view bar stays one row.
+  const runViewsBtn = ()=> own() && window.kTrack ? `<button type="button" class="kv-linkbtn" data-a="runViews"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Choose which Run views show</button>` : '';
+  ACT.runViews = ()=> window.kTrack?.customizeTabs();
   SCREENS.plan = async ()=>{
     if(!own()) return need('Pick your name to see your plan.');
     const h = await loadKai();
@@ -198,11 +211,11 @@
         const changed = ['kai','hawky','auto'].includes(d.source);
         const lanes = [[off ? 'bl' : '', off ? 'Rest' : d.type], ...(changed ? [['', 'Kestrel AI']] : []), ...(events[d.date] || []).map(e=> ['g', `${e.title}${e.time ? ' ' + e.time : ''}`])];
         return `<button type="button" class="kv-day ${d.date === today ? 'now' : ''}" data-a="day" data-v="${d.date}"><div class="kv-dn"><b>${dt.getDate()}</b><span>${dt.toLocaleDateString(undefined, { weekday:'short' })}</span></div>
-          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc(runTitle(did))} · ${did.miles} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
+          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc((did.sessions || []).filter(z=> z.category !== 'crosstrain').length > 1 ? (did.sessions || []).filter(z=> z.category !== 'crosstrain').length + ' sessions' : runTitle(did))} · ${Math.round(did.miles * 10) / 10} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
     const side = card('This week', '', tiles([['Done', Math.round(done * 10) / 10, `of ${Math.round(planned * 10) / 10} mi`], ['Runs', days.filter(d=> byDate[d.date]?.miles).length, `of ${days.filter(d=> d.type !== 'Off').length}`]], 2))
       + card('Your level', '', levelHtml(h))
       + card('Kestrel AI’s changes', 'What moved in your plan and why.', `<div class="kv-changes">${changesHtml(h)}</div>`);
-    return `<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}</div></div>`;
+    return `<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}${runViewsBtn()}</div></div>`;
   };
   SCREENS.plan.after = (el)=>{
     el.querySelectorAll('[data-undo]').forEach(b=> b.addEventListener('click', async ()=>{ await resetPlanDay(b.dataset.undo, false); redraw(); }));
@@ -219,7 +232,7 @@
     setSub('run/library', lib.fitness?.vo2r ? 'Written for you: your level, with goal splits from your fitness.' : 'Add PRs or connect your watch to get goal splits written for you.');
     const tilesHtml = WO_TILES.map(t=>{ const n = t.key === 'kai' ? null : lib.workouts.filter(w=> fits(w) && (t.key === 'all' || w.type === t.key)).length;
       return `<button type="button" class="card kv-card kv-wo ${t.key === 'kai' ? 'kai' : ''} ${n === 0 ? 'none' : ''}" data-a="${t.key === 'kai' ? 'woKai' : 'wo'}" data-v="${t.key}">${WO_ICON[t.icon] || ''}${n !== null ? `<i>${n}</i>` : ''}<b>${t.label}</b><small>${t.sub}</small></button>`; }).join('');
-    return `<div class="kv-chips kv-filter">${LIB_LEN.map(([v, l])=> `<button type="button" class="kv-chip ${V.wtime === v ? 'on' : ''}" data-a="wtime" data-v="${v}">${l}</button>`).join('')}</div><div class="kv-wogrid">${tilesHtml}</div>`;
+    return `<button type="button" class="card kv-card kv-ethos-link" data-a="go" data-v="run/ethos"><span><b>The Kestrel ethos</b><small>How Kestrel thinks you should train: easy days, mileage, recovery, food, race day. Every workout here and every AI answer follows it.</small></span><i aria-hidden="true">›</i></button><div class="kv-chips kv-filter">${LIB_LEN.map(([v, l])=> `<button type="button" class="kv-chip ${V.wtime === v ? 'on' : ''}" data-a="wtime" data-v="${v}">${l}</button>`).join('')}</div><div class="kv-wogrid">${tilesHtml}</div>`;
   };
   ACT.wtime = (v)=>{ V.wtime = +v; redraw(); };
   ACT.wo = (k)=> push('wk|' + k);

@@ -1,6 +1,6 @@
-// A run's day, two ways: the summary under (or beside) the calendar, and the full-screen page.
-// The summary is the six numbers that matter, the difficulty notches and Kestrel AI's line; desktop adds the route.
-// The full page adds the route in 2D or 3D, elevation and heart rate along the run, and the splits.
+// A run's day and its sessions. The day is one sentence, its miles, time and difficulty, and a card per session
+// (a morning workout and an evening shakeout are two). Each session opens on its own: its numbers, its reps as a
+// bar chart (a workout), its parts (warm-up, reps, cool-down), its route in 2D or 3D, elevation and heart rate, and its splits.
 (function(){
   const esc = (s)=> String(s ?? '').replace(/[&<>"']/g, (c)=> ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
   const clock = (s)=>{ s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? `${h}:${String(m).padStart(2, '0')}` : m) + ':' + String(x).padStart(2, '0'); };
@@ -47,14 +47,154 @@
 
   const eye = '<svg viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="var(--accent)"/><circle cx="7" cy="7" r="2.2" fill="var(--surface)"/></svg>';
 
+  // ---------------------------------------------------------------- sessions
+  // A day can hold several sessions (a morning workout and an evening shakeout). Each one is its own page.
+  const KIND = { easy:'Easy run', recovery:'Recovery run', long:'Long run', workout:'Workout', race:'Race', shakeout:'Shakeout', crosstrain:'Cross-training' };
+  const ROLE = { warmup:'Warm-up', cooldown:'Cool-down' };
+  const SEG = { warmup:'Warm', cooldown:'Cool' };
+  const GENERIC = /^(morning|afternoon|evening|lunch|night|midday)? ?(run|running|activity|workout)$/i;
+  const runs = (x)=> (x?.sessions || []).filter((s)=> s.category !== 'crosstrain');
+  // A day as the pages show it. Logged by hand (no watch): one session from the day's own numbers and reps.
+  // Hand-built reps on a watch day replace the workout session's laps (they were typed to fix them).
+  function prepare(x){
+    if(!x || x._prepped) return x;
+    x._prepped = true;
+    const reps = (x.split_reps || []).filter((r)=> r.m && r.s);
+    if(!(x.sessions || []).length && x.miles){
+      x.sessions = [{ key: x.date + '#hand', manual: true, category: reps.length >= 2 || (x.types || []).includes('workout') ? 'workout' : (x.types || []).includes('long') ? 'long' : 'easy',
+        title: '', start: '', miles: x.miles, minutes: x.minutes, pace: x.miles && x.minutes ? clock(x.minutes * 60 / x.miles) : null,
+        avg_hr: null, effort: x.difficulty, track: !!x.track, splits: reps, splits_hand: true, report: '', elev_ft: null, activities: [] }];
+    } else if(x.split_source === 'hand' && reps.length >= 2){
+      const w = (x.sessions || []).filter((z)=> z.category === 'workout' || z.category === 'race').sort((a, b)=> (b.miles || 0) - (a.miles || 0))[0];
+      if(w){ w.splits = reps; w.splits_hand = true; }
+    }
+    return x;
+  }
+  const sessionOf = (x, key)=> (prepare(x)?.sessions || []).find((s)=> s.key === key) || null;
+  const toMin = (t)=>{ const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const ampm = (t)=>{ const m = toMin(t); if(m == null) return ''; const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, '0'); return `${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`; };
+  const partOfDay = (t)=>{ const m = toMin(t); return m == null ? '' : m < 660 ? 'Morning' : m < 840 ? 'Midday' : m < 1020 ? 'Afternoon' : 'Evening'; };
+  const r1 = (n)=> Math.round(n * 10) / 10;
+  const r2 = (n)=> (Math.round(n * 100) / 100).toFixed(2);
+
+  // Rep times: tenths when the watch has them, m:ss for long reps.
+  function repClock(s){
+    if(s >= 600 || Number.isInteger(s)) return s < 60 ? Math.round(s) + 's' : clock(s);
+    return s < 60 ? s.toFixed(1) : `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+  }
+  const distLabel = (m, track)=> !track && Math.abs(m - MI) < 40 ? '1 mi' : m >= 200 ? `${Math.round(m / 100) * 100} m` : `${Math.round(m / 10) * 10} m`;
+  const restLabel = (r)=>{ const t = String(r || '').trim(); if(!t) return ''; const m = t.match(/^(\d+)\s*s(ec)?$/i); return m ? `${m[1]} s` : t; };
+
+  // A workout's reps from its laps: how they group ("25 × 400 m", "1600 · 1200 · 800 · 400 m"), and the fastest,
+  // slowest and average by pace. Only workouts get reps; an easy run's mile laps are splits.
+  function repsOf(s){
+    if(!s || s.category !== 'workout') return null;
+    let laps = (s.splits || []).filter((l)=> l.m >= 100 && l.s > 0);
+    if(laps.length < 2) return null;
+    // One watch activity often holds the warm-up, the reps (with lapped jogs) and the cool-down. Keep the reps:
+    // laps far slower than the fast half are recoveries, and slow laps at either end are the warm-up and cool-down.
+    const pace = (l)=> l.s / (l.m / MI);
+    const sorted = laps.map(pace).sort((a, b)=> a - b), half = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
+    const ref = half[Math.floor(half.length / 2)];
+    // Reps typed by hand are exactly what the runner ran: keep them all. Watch laps: a warm-up or cool-down runs at
+    // easy pace (well over 20% slower than the reps), so a threshold mile before 800s at 3200 pace stays in.
+    if(!s.splits_hand){
+      laps = laps.filter((l)=> pace(l) <= ref * 1.35);
+      while(laps.length > 2 && pace(laps[0]) > ref * 1.22) laps = laps.slice(1);
+      while(laps.length > 2 && pace(laps[laps.length - 1]) > ref * 1.22) laps = laps.slice(0, -1);
+    }
+    if(laps.length < 2) return null;
+    const groups = [];
+    for(const l of laps){ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) g.n++; else groups.push({ m: l.m, n: 1 }); }
+    const label = groups.length === 1 ? `${groups[0].n} × ${distLabel(groups[0].m, s.track)}`
+      : groups.every((g)=> g.n === 1) && groups.length <= 6 && groups.every((g)=> g.m >= 200 && (s.track || Math.abs(g.m - MI) >= 40)) ? groups.map((g)=> Math.round(g.m / 100) * 100).join(' · ') + ' m'
+      : groups.map((g)=> g.n > 1 ? `${g.n} × ${distLabel(g.m, s.track)}` : distLabel(g.m, s.track)).join(' + ');
+    const same = groups.length === 1;
+    const rows = laps.map((l, i)=> ({ i, m: l.m, s: l.s, hr: l.hr || null, pace: l.s / (l.m / MI), rest: restLabel(l.rest) }));
+    const by = (a, b)=> a.pace - b.pace;
+    const fast = [...rows].sort(by)[0], slow = [...rows].sort(by).pop();
+    const avgS = rows.reduce((a, r)=> a + r.s, 0) / rows.length;
+    const avgPace = rows.reduce((a, r)=> a + r.s, 0) / (rows.reduce((a, r)=> a + r.m, 0) / MI);
+    const rests = [...new Set(rows.map((r)=> r.rest).filter(Boolean))];
+    const hrs = rows.filter((r)=> r.hr);
+    return { track: !!s.track, rows, label, same, fast, slow, avgS, avgPace, rest: rests.length === 1 ? rests[0] : '', work: rows.reduce((a, r)=> a + r.m, 0),
+      hr: hrs.length >= 2 ? { first: hrs[0].hr, last: hrs[hrs.length - 1].hr, max: Math.max(...hrs.map((r)=> r.hr)) } : null };
+  }
+  // What a rep reads as: its time when every rep is the same distance, its pace when they differ.
+  const repVal = (R, r)=> R.same ? repClock(r.s) : clock(r.pace) + '/mi';
+  const repAvg = (R)=> R.same ? repClock(Math.round(R.avgS * 10) / 10) : clock(R.avgPace) + '/mi';
+
+  function sessionName(s){
+    if(s.title && !GENERIC.test(s.title.trim())) return s.title;
+    const R = repsOf(s);
+    return R ? R.label : KIND[s.category] || 'Run';
+  }
+  const timeSpan = (s)=>{ const a = s.activities || []; const st = a[0]?.start || s.start, en = a[a.length - 1]?.end; return [ampm(st), en ? ampm(en) : ''].filter(Boolean).join(' – '); };
+
+  // The one-sentence day: Kestrel AI's own line when it has written one, else built from the sessions.
+  function daySentence(x){
+    if(x?.day_line) return x.day_line;
+    const ss = runs(x);
+    if(!ss.length) return '';
+    const bits = ss.map((s)=>{ const R = repsOf(s), when = partOfDay(s.start).toLowerCase();
+      const what = R ? `${R.label} workout` : `${(KIND[s.category] || 'run').toLowerCase()} of ${r1(s.miles || 0)} mi`;
+      return when ? `${what} in the ${when === 'midday' ? 'middle of the day' : when}` : what; });
+    const lead = ss.length === 1 ? '' : `${ss.length === 2 ? 'Two' : ss.length === 3 ? 'Three' : ss.length} sessions, ${r1(x.miles || 0)} mi: `;
+    const list = bits.length === 1 ? bits[0] : bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1];
+    return (lead ? lead + list : list.charAt(0).toUpperCase() + list.slice(1)) + '.';
+  }
+
+  // The day's own numbers: miles, time, how many sessions, how hard.
+  function dayStats(x){
+    const ss = runs(x), t = totals(x), lv = levelOf(t.difficulty);
+    return `<div class="kdd-stats">
+      ${stat('Miles', t.miles != null ? r2(t.miles) : null)}
+      ${stat('Time', t.minutes != null ? clock(t.minutes * 60) : null)}
+      ${stat(ss.length === 1 ? 'Session' : 'Sessions', ss.length || '–')}
+      <div class="kd-stat"><span>Difficulty</span>${t.difficulty ? `<em class="kd-pill l${lv}"><b>${t.difficulty}</b>${LEVEL[lv]}</em>` : '<b>–</b>'}</div></div>`;
+  }
+  function dayExtras(x){
+    const chips = [];
+    if(x?.plan) chips.push(`<span class="kdd-chip ${x.plan.tone}" title="${esc(x.plan.reason || '')}">${esc(x.plan.label)}${x.plan.reason && x.plan.tone !== 'on' ? ' · ' + esc(x.plan.reason) : ''}</span>`);
+    if(x?.load) chips.push(`<span class="kdd-chip">Load ${Math.round(x.load)}</span>`);
+    if(x?.feel) chips.push(`<span class="kdd-chip">Felt ${x.feel}/10</span>`);
+    if(x?.sleep_hours) chips.push(`<span class="kdd-chip">Slept ${x.sleep_hours} h</span>`);
+    return chips.length ? `<div class="kdd-chips">${chips.join('')}</div>` : '';
+  }
+
+  // Bars for a session card: one per rep, taller is faster.
+  function miniBars(R){
+    const lo = R.slow.pace, hi = R.fast.pace;
+    return `<div class="ksc-bars" aria-hidden="true">${R.rows.map((r)=> `<i style="height:${lo === hi ? 70 : Math.round(30 + (lo - r.pace) / (lo - hi) * 70)}%"${r === R.fast ? ' class="f"' : r === R.slow ? ' class="s"' : ''}></i>`).join('')}</div>`;
+  }
+  function segBar(s){
+    const a = (s.activities || []).filter((z)=> z.miles > 0);
+    if(a.length < 2) return '';
+    const tot = a.reduce((m, z)=> m + z.miles, 0);
+    return `<div class="ksc-seg" aria-label="${a.map((z)=> `${ROLE[z.role] || KIND[z.category] || 'Run'} ${r1(z.miles)} mi`).join(', ')}">${a.map((z)=> `<span class="${z.role || (z.category === 'workout' || z.category === 'race' ? 'main' : 'easy')}" style="flex:${z.miles / tot}"><b>${esc(SEG[z.role] || (z.category === 'workout' ? 'Reps' : z.category === 'race' ? 'Race' : 'Run'))}</b>${r1(z.miles)}</span>`).join('')}</div>`;
+  }
+
+  // One session as a card on the day: when, what, the numbers, and its reps or parts at a glance.
+  function sessionCard(s, on, compact){
+    const R = repsOf(s), lv = levelOf(s.effort);
+    const nums = [[r1(s.miles || 0), 'mi'], s.pace ? [s.pace, '/mi'] : null, s.avg_hr ? [s.avg_hr, 'bpm'] : null, !compact && s.minutes ? [clock(s.minutes * 60), ''] : null].filter(Boolean);
+    return `<button type="button" class="ksc ${on ? 'on' : ''} ${compact ? 'sm' : ''}" data-a="sess" data-v="${esc(s.key)}" aria-pressed="${!!on}">
+      <span class="ksc-t"><span>${esc([partOfDay(s.start), ampm(s.start)].filter(Boolean).join(' · ') || 'Session')}</span>${s.effort ? `<em class="kd-pill l${lv}">${esc(s.tag_label || KIND[s.category] || 'Run')}</em>` : `<em class="kd-pill">${esc(s.tag_label || KIND[s.category] || 'Run')}</em>`}</span>
+      <b class="ksc-name">${esc(sessionName(s))}</b>
+      <span class="ksc-nums">${nums.map(([v, u])=> `<span><b>${esc(v)}</b>${u ? `<i>${u}</i>` : ''}</span>`).join('')}</span>
+      ${!compact && R ? miniBars(R) : ''}${!compact ? segBar(s) : ''}
+      <i class="ksc-go" aria-hidden="true">›</i></button>`;
+  }
+
   // ---------------------------------------------------------------- the summary beside the calendar
-  // wide: desktop, which leads with the route. own: the day belongs to the signed-in runner (routes are theirs alone).
+  // wide: desktop, which leads with the route. One sentence, the day's numbers, then each session to open.
   function peekHtml(x, wide){
-    const t = totals(x), line = x?.day_line || mainSession(x)?.report || '';
+    prepare(x);
+    const ss = x?.sessions || [];
     return `${wide ? '<div class="kd-thumb" id="kdThumb" hidden></div>' : ''}
-      ${statsHtml(t)}
-      ${notchesHtml(t.difficulty)}
-      ${line ? `<div class="kd-ai"><div class="kd-eb">${eye}Kestrel AI</div><p>${esc(line)}</p></div>` : ''}`;
+      ${daySentence(x) ? `<p class="kdd-line">${esc(daySentence(x))}</p>` : ''}
+      ${dayStats(x)}
+      ${ss.length ? `<div class="kdd-sl"><div class="kd-eb">${ss.length === 1 ? 'Session' : ss.length + ' sessions'} · tap to open</div>${ss.map((s)=> sessionCard(s, false, true)).join('')}</div>` : ''}`;
   }
 
   async function mountPeek(x, own){
@@ -66,36 +206,123 @@
     host.hidden = false;
   }
 
-  // ---------------------------------------------------------------- the full-screen page
-  function fullHtml(x){
-    const t = totals(x), s = mainSession(x), many = (x?.sessions || []).filter((z)=> z.category !== 'crosstrain').length > 1;
-    const reports = (x?.sessions || []).map((z)=> z.report).filter(Boolean);
-    const head = x?.day_line || reports.shift() || '';
-    const body = [x?.summary, ...reports].filter(Boolean);
-    const ai = head || body.length || x?.coach_note
-      ? `<div class="kd-eb">${eye}Kestrel AI analysis</div>${head ? `<p class="kd-ai-h">${esc(head)}</p>` : ''}${body.map((b)=> `<p>${esc(b)}</p>`).join('')}${x?.coach_note ? `<div class="kd-next"><b>Next:</b> ${esc(x.coach_note)}</div>` : ''}`
-      : `<div class="kd-eb">${eye}Kestrel AI analysis</div><p class="kv-hint">Kestrel AI writes this once the run syncs and it reviews your day.</p>`;
-    return `<div class="kd-full">
-      <div class="kd-map card" id="kdMap"${s?.main_id && !s.track ? '' : ' hidden'}>
+  // ---------------------------------------------------------------- the day page
+  // The day on top (one sentence, its numbers), then its sessions. On a phone a session opens on its own page;
+  // on a laptop the chosen session sits beside the list. A one-session day shows that session straight away.
+  function dayHtml(x, selKey, wide){
+    prepare(x);
+    const ss = x?.sessions || [];
+    const sel = sessionOf(x, selKey) || (ss.length === 1 || wide ? mainSession(x) || ss[0] : null);
+    const ai = x?.summary || x?.coach_note;
+    const sum = `<section class="card kv-card kdd-sum">
+        <div class="kd-eb">${eye}Day summary</div>
+        ${daySentence(x) ? `<p class="kdd-line big">${esc(daySentence(x))}</p>` : ''}
+        ${dayStats(x)}${notchesHtml(totals(x).difficulty)}${dayExtras(x)}
+        ${ai ? `<div class="kdd-ai">${x.summary ? `<p>${esc(x.summary)}</p>` : ''}${x.coach_note ? `<div class="kd-next"><b>Next:</b> ${esc(x.coach_note)}</div>` : ''}</div>` : ''}
+      </section>`;
+    const list = ss.length > 1 || wide ? `<section class="kdd-list"><h3 class="kdd-h">${ss.length === 1 ? 'Session' : ss.length + ' sessions'}</h3>${ss.map((s)=> sessionCard(s, wide && s === sel)).join('')}</section>` : '';
+    if(wide) return `<div class="kdd wide"><div class="kdd-side">${sum}${list}</div><div class="kdd-main">${sel ? sessionHtml(x, sel, true) : ''}</div></div>`;
+    return `<div class="kdd">${sum}${list}${ss.length === 1 && sel ? `<h3 class="kdd-h">The session</h3>${sessionHtml(x, sel, true)}` : ''}</div>`;
+  }
+
+  // ---------------------------------------------------------------- one session
+  function repCard(s, R){
+    const lo = R.slow.pace, hi = R.fast.pace;
+    const h = (r)=> lo === hi ? 70 : Math.round(28 + (lo - r.pace) / (lo - hi) * 72);
+    const work = R.work >= 1000 ? `${r1(R.work / 1000)} km of reps` : `${Math.round(R.work)} m of reps`;
+    const fourth = R.hr ? `<div><b>${R.hr.first}→${R.hr.last}</b><span class="a">heart rate, bpm</span></div>`
+      : `<div><b>${repClock(Math.round((R.same ? R.slow.s - R.fast.s : R.slow.pace - R.fast.pace) * 10) / 10)}</b><span class="a">spread</span></div>`;
+    return `<section class="card kr" aria-label="Reps">
+      <div class="kr-top"><div class="kr-tags"><em class="kr-badge">${esc(s.tag_label || 'Workout')}</em><span>${esc(work)}</span></div>
+        <div class="kr-avg"><span>Average</span><b>${repAvg(R)}</b></div></div>
+      <div class="kr-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 11l3-3 4 1 2 4 3 1M11 15l-2-3"/></svg><b>${esc(R.label)}</b>${R.rest ? `<span>off ${esc(R.rest)} rest</span>` : ''}</div>
+      <div class="kr-plot"><div class="kr-tip" id="krTip" hidden></div>
+        <div class="kr-bars" style="--n:${R.rows.length}">${R.rows.map((r)=> `<button type="button" class="kr-bar ${r === R.fast ? 'f' : r === R.slow ? 's' : ''}" data-i="${r.i}" aria-label="Rep ${r.i + 1}, ${distLabel(r.m, R.track)} in ${repVal(R, r)}${r.hr ? ', ' + r.hr + ' bpm' : ''}"><i style="height:${h(r)}%"></i></button>`).join('')}</div></div>
+      <div class="kr-axis"><span>Rep 1</span><span>Rep ${R.rows.length}</span></div>
+      <div class="kr-stats">
+        <div><b>${repVal(R, R.fast)}</b><span class="g">fastest · rep ${R.fast.i + 1}</span></div>
+        <div><b>${repAvg(R)}</b><span class="r">average</span></div>
+        <div><b>${repVal(R, R.slow)}</b><span class="b">slowest · rep ${R.slow.i + 1}</span></div>
+        ${fourth}</div>
+    </section>`;
+  }
+  function repTable(R){
+    return `<h2 class="kv-ct">Every rep</h2>
+      <div class="kd-split hd kr-row"><span>Rep</span><span>${R.same ? 'Time' : 'Dist'}</span><span></span><span>Pace</span><span>HR</span></div>
+      ${R.rows.map((r)=> `<div class="kd-split kr-row"><span class="m">${r.i + 1}</span><b>${R.same ? repClock(r.s) : distLabel(r.m, R.track)}</b><span class="bar"><i style="width:${R.slow.pace === R.fast.pace ? 70 : Math.round(30 + (R.slow.pace - r.pace) / (R.slow.pace - R.fast.pace) * 65)}%"></i></span><span>${clock(r.pace)}</span><span class="m">${r.hr ?? ''}</span></div>`).join('')}`;
+  }
+  function sessionStats(s){
+    return `<div class="kd-stats">
+      ${stat('Distance', s.miles != null ? r2(s.miles) : null, ' mi')}
+      ${stat('Time', s.minutes ? clock(s.minutes * 60) : null)}
+      ${stat('Pace', s.pace, '/mi')}
+      ${stat('Effort', s.effort, '/10')}
+      ${stat('Avg HR', s.avg_hr, ' bpm')}
+      ${s.track ? stat('Where', 'Track') : stat('Elev gain', s.elev_ft != null ? Math.round(s.elev_ft) : null, ' ft')}</div>`;
+  }
+  // The parts of a session (warm-up, the reps, cool-down), each with its own numbers.
+  function partsHtml(s){
+    const a = (s.activities || []).filter((z)=> z.miles > 0);
+    if(a.length < 2) return '';
+    return `<section class="card kv-card ks-parts"><h2 class="kv-ct">Parts</h2>${segBar(s)}
+      ${a.map((z)=> `<div class="ks-part"><span class="m">${esc(ampm(z.start))}</span><b>${esc(ROLE[z.role] || KIND[z.category] || 'Run')}</b><span>${r2(z.miles)} mi</span><span>${esc(z.pace || '–')}${z.pace ? '<i>/mi</i>' : ''}</span><span class="m">${z.avg_hr ? z.avg_hr + ' bpm' : ''}</span></div>`).join('')}</section>`;
+  }
+
+  // Kestrel AI's report. With the runner's own model on run summaries, the app writes it (and can rewrite it).
+  function reportHtml(s, busy){
+    const t = window.kestrelAiTask?.('summary');
+    if(s.manual) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Logged by hand. Ask Kestrel AI about it in chat.</p>`;
+    if(!s.report && t?.serverOwn && !t.own) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Your run summaries are set to your own model, which this device doesn’t have. Switch them back to Kestrel free, or set up your model in Kestrel Lab here.</p><button type="button" class="sm-btn" data-a="sumKestrel">Use Kestrel free for summaries</button>`;
+    const btn = t?.own ? `<button type="button" class="sm-btn" data-a="sessReport" data-v="${esc(s.key)}"${busy ? ' disabled' : ''}>${busy ? 'Writing…' : s.report ? 'Rewrite' : 'Write it'} with ${esc(t.label)}</button>` : '';
+    return `<div class="kd-eb">${eye}Kestrel AI on this session</div>${s.report ? `<p>${esc(s.report)}</p>` : `<p class="kv-hint">${t?.own ? 'Not written yet.' : 'Kestrel AI writes this once the run syncs and it reviews your day.'}</p>`}${btn}`;
+  }
+  async function writeReport(x, key){
+    const s = sessionOf(x, key), el = document.getElementById('ksReport');
+    if(!s || !el) return;
+    el.innerHTML = reportHtml(s, true);
+    try{ s.report = await window.kestrelWriteReport(key); }
+    catch(e){ el.innerHTML = reportHtml(s) + `<p class="kv-hint">${esc(e.message)}</p>`; return; }
+    if(el.isConnected) el.innerHTML = reportHtml(s);
+  }
+  const autoTried = new Set();
+
+  // inline: part of the day page (no own header row). Otherwise the session's own page.
+  function sessionHtml(x, s, inline){
+    prepare(x);
+    const R = repsOf(s), more = (s.activities || []).flatMap((z)=> z.prs || []);
+    const conds = [s.temp_f != null ? `${Math.round(s.temp_f)}°F` : '', s.track ? 'On the track' : ''].filter(Boolean).join(' · ');
+    return `<div class="ks ${inline ? 'inline' : ''}" data-key="${esc(s.key)}"><div class="ks-a">
+      <section class="card kv-card ks-head">
+        <div class="kv-eb">${esc([partOfDay(s.start), timeSpan(s)].filter(Boolean).join(' · '))}${conds ? ' · ' + esc(conds) : ''}</div>
+        <div class="kv-ct big">${esc(sessionName(s))}</div>
+        ${more.length ? `<div class="kdd-chips">${more.map((p)=> `<span class="kdd-chip pr">PR · ${esc(p.label)} ${esc(p.time)}</span>`).join('')}</div>` : ''}
+        ${sessionStats(s)}${notchesHtml(s.effort)}
+      </section>
+      ${R ? repCard(s, R) : ''}
+      ${partsHtml(s)}
+      <section class="card kv-card kd-aicard" id="ksReport">${reportHtml(s)}</section>
+      </div><div class="ks-b">
+      <div class="kd-map card" id="kdMap"${s.main_id && !s.track ? '' : ' hidden'}>
         <div class="kd-map-in" id="kdMap2d"><div class="kv-hint">Loading the route…</div></div>
         <div class="kd-map-in" id="kdMap3d" hidden></div>
         <div class="kd-seg" role="group" aria-label="Map view"><button type="button" class="on" aria-pressed="true" data-kdv="2d">Route</button><button type="button" aria-pressed="false" data-kdv="3d">3D</button></div>
-        ${many ? `<div class="kd-maptag">${esc(s.title || 'Main run')} · ${esc(s.miles)} mi</div>` : ''}
       </div>
-      <div class="card kv-card kd-sumcard">${statsHtml(t, true)}${notchesHtml(t.difficulty)}</div>
-      <div class="kd-cols">
-        <section class="card kv-card kd-aicard">${ai}</section>
-        <section class="card kv-card kd-chartcard" id="kdChart" hidden></section>
-        <section class="card kv-card kd-splitcard" id="kdSplits" hidden></section>
-      </div>
-    </div>`;
+      <section class="card kv-card kd-chartcard" id="kdChart" hidden></section>
+      <section class="card kv-card kd-splitcard" id="kdSplits"${R ? '' : ' hidden'}>${R ? repTable(R) : ''}</section>
+    </div></div>`;
   }
 
-  async function mountFull(x, own){
-    const s = mainSession(x);
+  async function mountSession(x, key, own){
+    prepare(x);
+    const s = sessionOf(x, key) || mainSession(x);
+    const box = document.querySelector('.ks');
+    if(!s || !box) return;
+    wireReps(box, repsOf(s));
+    // Own model on summaries: write a missing report once, the first time the session opens.
+    if(own && !s.report && window.kestrelAiTask?.('summary').own && !autoTried.has(s.key)){ autoTried.add(s.key); writeReport(x, s.key); }
     const splitsEl = document.getElementById('kdSplits');
     let r = null;
-    if(own && s?.main_id && !s.track) r = await loadTrack(s.main_id);
+    if(own && s.main_id && !s.track) r = await loadTrack(s.main_id);
     if(!document.getElementById('kdMap')?.isConnected) return;
     if(r){
       document.getElementById('kdMap2d').innerHTML = routeSvg(r, true);
@@ -104,9 +331,24 @@
       const chart = document.getElementById('kdChart');
       chart.innerHTML = chartHtml(r); chart.hidden = false; wireChart(chart, r);
     } else document.getElementById('kdMap').hidden = true;
+    if(repsOf(s)) return;
     const rows = r ? mileSplits(r.pts) : [];
-    const html = rows.length ? splitsHtml(rows, 'Splits', 'Mile') : lapsHtml(s?.splits?.length ? s.splits : x?.split_reps || []);
+    const html = rows.length ? splitsHtml(rows, 'Splits') : lapsHtml(s.splits || []);
     if(html && splitsEl){ splitsEl.innerHTML = html; splitsEl.hidden = false; }
+  }
+
+  // Tap (or point at) a rep to read it out above its bar.
+  function wireReps(box, R){
+    const tip = box.querySelector('#krTip'); if(!tip || !R) return;
+    const show = (b)=>{
+      const r = R.rows[+b.dataset.i]; if(!r) return;
+      box.querySelectorAll('.kr-bar.on').forEach((x)=> x.classList.remove('on')); b.classList.add('on');
+      tip.innerHTML = `<b>Rep ${r.i + 1}</b> ${esc(distLabel(r.m, R.track))} · ${repClock(r.s)}${R.same ? '' : ` · ${clock(r.pace)}/mi`}${r.hr ? ` · ${r.hr} bpm` : ''}${r.rest ? ` · ${esc(r.rest)} rest` : ''}`;
+      tip.hidden = false;
+      const pb = b.parentNode.getBoundingClientRect(), bb = b.getBoundingClientRect(), tw = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(pb.width - tw, bb.left - pb.left + bb.width / 2 - tw / 2)) + 'px';
+    };
+    box.querySelectorAll('.kr-bar').forEach((b)=>{ b.addEventListener('click', ()=> show(b)); b.addEventListener('pointerenter', (e)=>{ if(e.pointerType === 'mouse') show(b); }); });
   }
 
   // ---------------------------------------------------------------- data
@@ -285,5 +527,5 @@
     return rows.length ? splitsHtml(rows, 'Laps').replace('<span>Mile</span>', '<span>Lap</span>') : '';
   }
 
-  window.KDay = { peekHtml, mountPeek, fullHtml, mountFull, notchesHtml, levelOf, mileSplits };
+  window.KDay = { prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
 })();
