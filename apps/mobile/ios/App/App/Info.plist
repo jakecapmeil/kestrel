@@ -76,5 +76,16 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.jakecapmeil.kestrel</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>kestrel</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

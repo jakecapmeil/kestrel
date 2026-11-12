@@ -105,9 +105,10 @@ function showcase() {
   </section>`;
 }
 
-// The iOS, Android and Mac apps load this site in a web view. Google blocks its sign-in inside embedded web views,
-// so the apps sign in with email (a Google account can add a password through Forgot password).
-// `?app` in the address previews the app look in a normal browser.
+// The iOS, Android and Mac apps load this site in a web view. Google blocks its sign-in inside embedded web views, so in the
+// apps "Continue with Google" opens the system browser, and the site there hands the sign-in code back to the app through
+// kestrel://auth-callback (see googleInApp). `?app` in the address previews the app look in a normal browser.
+const SHELL = !!(window.Capacitor?.isNativePlatform?.() || /KestrelDesktop/.test(navigator.userAgent));
 const NATIVE = !!(window.Capacitor?.isNativePlatform?.() || /KestrelDesktop/.test(navigator.userAgent) || new URLSearchParams(location.search).has('app'));
 if (NATIVE) document.documentElement.classList.add('k-native');
 
@@ -120,9 +121,32 @@ function emailFields(signup, message) {
     ${message ? html`<p class="k-small k-good" role="status">${message}</p>` : ''}`;
 }
 
+// In the apps: sign in with Google in the system browser. The code comes back as kestrel://auth-callback?code=...
+// (iOS and Android through Capacitor's App plugin, the Mac through the app's own protocol handler) and is exchanged here,
+// where the PKCE verifier was stored.
+async function googleInApp() {
+  const { data, error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/?appauth=1', skipBrowserRedirect: true } });
+  if (error) throw error;
+  const browser = window.Capacitor?.Plugins?.Browser;
+  if (browser) await browser.open({ url: data.url }); else window.open(data.url, '_blank');
+}
+window.kestrelAuthCallback = async (url) => {
+  try {
+    const u = new URL(url);
+    if (u.searchParams.get('error_description')) throw new Error(u.searchParams.get('error_description'));
+    const code = u.searchParams.get('code');
+    if (!code || !K.sb) return;
+    const { error } = await K.sb.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+  } catch (e) { toast(e.message, true); }
+  try { await window.Capacitor?.Plugins?.Browser?.close?.(); } catch {}
+};
+window.Capacitor?.Plugins?.App?.addListener?.('appUrlOpen', (e) => { if (/^kestrel:\/\/auth-callback/.test(e.url)) window.kestrelAuthCallback(e.url); });
+
 // Google, the sign-in/sign-up swap, forgot password and the email form: shared by the website and the app.
 function wireAuth(signup) {
   if ($('kGoogle')) $('kGoogle').onclick = (e) => attempt(async () => {
+    if (SHELL) return googleInApp();
     const { error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/' } });
     if (error) throw error;
   }, e.currentTarget);
@@ -232,10 +256,11 @@ function renderAppStart(mode, message) {
   gate(html`<div class="ka-screen"><form class="ka ka-form" id="kEmailForm">
     <div class="ka-bar"><button class="ka-back" type="button" id="kaBack" aria-label="Back">${CHEVRON}</button><div class="ka-mark small">${APP_MARK}</div><span></span></div>
     <h1 class="ka-title">${signup ? 'Create your account' : 'Welcome back'}</h1>
-    <p class="ka-sub">${signup ? 'Free for every runner and every team.' : 'Sign in with your email.'}</p>
+    <p class="ka-sub">${signup ? 'Free for every runner and every team.' : 'Sign in to pick up where you left off.'}</p>
+    <button class="k-btn wide" id="kGoogle" type="button">${GOOGLE_ICON}Continue with Google</button>
+    <div class="k-or">or with email</div>
     ${emailFields(signup, message)}
-    ${signup ? '' : html`<button class="k-link ka-forgot" type="button" id="kForgot">Forgot password?</button>
-    <p class="k-small ka-note">Made your account with Google on the website? Tap “Forgot password” once to give it a password for the app.</p>`}
+    ${signup ? '' : html`<button class="k-link ka-forgot" type="button" id="kForgot">Forgot password?</button>`}
     <div class="ka-bottom">
       <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
       <button class="k-link" type="button" id="kSwap">${signup ? 'I already have an account' : 'New to Kestrel? Create an account'}</button>
@@ -1600,6 +1625,13 @@ async function boot() {
   }
   const params = new URLSearchParams(location.search);
   K.recovering = params.has('reset');
+  // Google sign-in started in an app finishes here, in the system browser: pass the code back to the app.
+  if (params.has('appauth') && !SHELL) {
+    const back = 'kestrel://auth-callback' + location.search;
+    gate(html`<div class="k-landing"><div class="k-auth"><h2>Opening Kestrel…</h2><p class="k-small">If the app doesn’t open, tap the button.</p><a class="k-btn primary wide" href="${back}">Open Kestrel</a></div></div>`);
+    location.replace(back);
+    return;
+  }
   const fromLink = params.has('code');
   K.sb = createClient(K.cfg.supabaseUrl, K.cfg.supabaseKey, { auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true } });
   K.sb.auth.onAuthStateChange((event, session) => {

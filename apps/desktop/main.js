@@ -27,6 +27,18 @@ async function checkForUpdate(manual) {
   } catch (e) { if (manual) dialog.showMessageBox({ type: 'warning', message: 'Couldn’t check for updates', detail: String(e.message || e), buttons: ['OK'] }); }
 }
 
+// Google sign-in runs in the default browser (Google blocks embedded windows). The site there sends the code back as
+// kestrel://auth-callback?code=..., which macOS hands to this app; the page inside the window finishes the sign-in.
+let main = null;
+app.setAsDefaultProtocolClient('kestrel');
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  if (!/^kestrel:\/\/auth-callback/.test(url) || !main || main.isDestroyed()) return;
+  main.webContents.executeJavaScript(`window.kestrelAuthCallback && window.kestrelAuthCallback(${JSON.stringify(url)})`).catch(() => {});
+  if (main.isMinimized()) main.restore();
+  main.show(); main.focus();
+});
+
 function open() {
   const win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 380, minHeight: 600,
@@ -39,6 +51,7 @@ function open() {
   win.webContents.on('did-fail-load', (e, code, desc, url, isMain) => { if (isMain && code !== -3) win.loadFile(path.join(__dirname, 'offline.html')); });
   // Camera and microphone (food photos, Speak), geolocation (Record): only for Kestrel's own pages.
   win.webContents.session.setPermissionRequestHandler((wc, permission, done) => done(allowed(wc.getURL()) && ['media', 'geolocation', 'notifications', 'clipboard-sanitized-write'].includes(permission)));
+  main = win;
   win.loadURL(SITE);
 }
 
