@@ -2,6 +2,18 @@
 
 Kestrel is free, and it should stay free for the school runners it was built for. This document covers what Kestrel costs to run, where the money can come from, and what to do first. The research was done in November 2026, and every number in it needs checking on the official page before you rely on it.
 
+## Decide first: Gemini and under-18 runners
+
+The current [Gemini API terms](https://ai.google.dev/gemini-api/terms) require API users to be 18 or older. They also say the API must not be used in an app "directed towards or likely to be accessed by" people under 18. Kestrel is built for high school teams (13 and up) and uses Gemini's free tier as its default AI, so the default probably doesn't comply today. This was true before these changes too.
+
+This is a decision for the maintainer, ideally after legal advice. The options:
+
+- **Make the default an open-weight model on Cloudflare Workers AI** (Llama or Gemma). It's already the last-resort fallback in `gemini.js`. Check Cloudflare's and the model licence's age terms. Photo food estimates would need a vision model there, such as Llama 3.2 Vision.
+- **Gate Kestrel AI to verified adults** and give under-18s the rule-based plan and labels. This loses a lot of the product.
+- **Ask Google directly** whether a 13+ coaching app can use the API. Forum threads show staff declining to give guidance.
+
+Whatever is chosen, the per-job model picker added here makes switching cheap: only the server's free default changes.
+
 ## What it costs today
 
 | Cost | Now | At 1,000 weekly runners |
