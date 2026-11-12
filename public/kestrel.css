@@ -84,7 +84,7 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-member .dot{width:14px;height:14px;border-radius:50%;}
 
 /* ---------- the gate: sign-in, onboarding, first team (the landing page returns in phase 5) */
-#kGate{max-width:1120px;margin:0 auto;padding:12px 16px 40px;font-family:var(--font-ui);color:var(--text);}
+#kGate{max-width:1120px;margin:0 auto;padding:calc(12px + env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));font-family:var(--font-ui);color:var(--text);}
 #kGate:empty{display:none;}
 .k-landing{display:grid;gap:34px;padding-top:8px;}
 .k-kicker{font:600 13px var(--font-ui);color:var(--accent-ink);margin-bottom:6px;}

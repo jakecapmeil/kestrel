@@ -1,0 +1,32 @@
+{
+  "name": "kestrel-desktop",
+  "productName": "Kestrel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kestrel for Mac: a small window around the live site (https://kestrel.jakecapmeil.workers.dev).",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dmg": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.jakecapmeil.kestrel",
+    "productName": "Kestrel",
+    "files": ["main.js", "offline.html"],
+    "mac": {
+      "category": "public.app-category.healthcare-fitness",
+      "icon": "build/icon.png",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "hardenedRuntime": true,
+      "extendInfo": {
+        "NSCameraUsageDescription": "Kestrel uses the camera when you photograph a meal for your fuel log.",
+        "NSMicrophoneUsageDescription": "Kestrel uses the microphone when you tap Speak to describe a meal."
+      }
+    },
+    "dmg": { "title": "Kestrel" }
+  }
+}
