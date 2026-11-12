@@ -45,7 +45,9 @@ In Android Studio:
 ```bash
 cd apps/desktop && npm install && npm run dmg
 ```
-The output is `apps/desktop/dist/Kestrel-1.0.0-arm64.dmg` (Apple silicon). `package.json` also lists an Intel (x64) build; it wasn't produced this time because the Mac building it was low on disk.
+The output is `apps/desktop/dist/Kestrel-<version>-arm64.dmg` (Apple silicon). `package.json` also lists an Intel (x64) build; it wasn't produced this time because the Mac building it was low on disk.
+
+**Updates.** The window shows the live site, so site changes reach the Mac app on their own. When the shell changes, bump `version` in `apps/desktop/package.json` and run `npm run release` there: it builds the `.dmg` and publishes it as GitHub release `mac-vX.Y.Z`. The app checks that release list at launch and every 6 hours (and under Kestrel → Check for Updates…), then offers the download. It can't replace itself silently: macOS only allows that for signed apps, so the new `.dmg` is opened and dragged over the old app. Signing (below) is what unlocks silent updates, through `electron-updater`.
 
 The `.dmg` is **unsigned**, so macOS warns the first time it opens (right-click → Open). To make it open cleanly for everyone:
 1. Get a "Developer ID Application" certificate (Apple Developer Program, $99 a year).

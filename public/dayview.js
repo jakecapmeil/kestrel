@@ -8,6 +8,22 @@
   const LEVEL = ['Not rated', 'Easy', 'Moderate', 'Hard', 'Very hard'];
   const levelOf = (d)=> !d ? 0 : d <= 3 ? 1 : d <= 5 ? 2 : d <= 7 ? 3 : 4;
 
+  // The runner's own 5K (set from the log), so "quick" and "easy" mean quick and easy for them, not for anyone.
+  let fiveK = null; // seconds per mile at 5K pace
+  function setFiveK(t){ const m = String(t || '').trim().match(/^(\d{1,2}):(\d{2})$/); fiveK = m ? (+m[1] * 60 + +m[2]) / 3.10686 : null; }
+  // 1 quick (red) to 4 easy (green), for this runner. Two readings, averaged: how the rep's pace sits against their 5K (at or inside
+  // 10K pace is quick, up to tempo strong, up to steady steady, slower easy), and where it falls in the session's own range, so a
+  // set of even 400s still shows which reps were the quickest. A very even set stays on the 5K reading alone.
+  // With no 5K on file, the session's own range decides.
+  function effortOf(pace, R){
+    const lo = R.fast.pace, hi = R.slow.pace, spread = hi - lo >= lo * 0.015;
+    const rel = spread ? 1 + 3 * (pace - lo) / (hi - lo) : null;
+    if(!fiveK) return rel == null ? 1 : Math.round(rel);
+    const q = pace / fiveK, abs = q <= 1.04 ? 1 : q <= 1.12 ? 2 : q <= 1.22 ? 3 : 4;
+    return rel == null ? abs : Math.max(abs, Math.min(4, Math.round((abs + rel) / 2)));
+  }
+  const EFFORT = ['', 'quick', 'strong', 'steady', 'easy'];
+
   // The run the route, chart and splits belong to: the longest running session of the day.
   const mainSession = (x)=> (x?.sessions || []).filter((s)=> s.category !== 'crosstrain').sort((a, b)=> (b.miles || 0) - (a.miles || 0))[0] || null;
 
@@ -165,7 +181,7 @@
   // Bars for a session card: one per rep, taller is faster.
   function miniBars(R){
     const lo = R.slow.pace, hi = R.fast.pace;
-    return `<div class="ksc-bars" aria-hidden="true">${R.rows.map((r)=> `<i style="height:${lo === hi ? 70 : Math.round(30 + (lo - r.pace) / (lo - hi) * 70)}%"${r === R.fast ? ' class="f"' : r === R.slow ? ' class="s"' : ''}></i>`).join('')}</div>`;
+    return `<div class="ksc-bars" aria-hidden="true">${R.rows.map((r)=> `<i style="height:${lo === hi ? 70 : Math.round(30 + (lo - r.pace) / (lo - hi) * 70)}%"${effortOf(r.pace, R) > 1 ? ` class="e${effortOf(r.pace, R)}"` : ''}></i>`).join('')}</div>`;
   }
   function segBar(s){
     const a = (s.activities || []).filter((z)=> z.miles > 0);
@@ -234,15 +250,15 @@
       : `<div><b>${repClock(Math.round((R.same ? R.slow.s - R.fast.s : R.slow.pace - R.fast.pace) * 10) / 10)}</b><span class="a">spread</span></div>`;
     return `<section class="card kr" aria-label="Reps">
       <div class="kr-top"><div class="kr-tags"><em class="kr-badge">${esc(s.tag_label || 'Workout')}</em><span>${esc(work)}</span></div>
-        <div class="kr-avg"><span>Average</span><b>${repAvg(R)}</b></div></div>
+        <div class="kr-avg e${effortOf(R.avgPace, R)}"><span>Average</span><b>${repAvg(R)}</b></div></div>
       <div class="kr-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 11l3-3 4 1 2 4 3 1M11 15l-2-3"/></svg><b>${esc(R.label)}</b>${R.rest ? `<span>off ${esc(R.rest)} rest</span>` : ''}</div>
       <div class="kr-plot"><div class="kr-tip" id="krTip" hidden></div>
-        <div class="kr-bars" style="--n:${R.rows.length}">${R.rows.map((r)=> `<button type="button" class="kr-bar ${r === R.fast ? 'f' : r === R.slow ? 's' : ''}" data-i="${r.i}" aria-label="Rep ${r.i + 1}, ${distLabel(r.m, R.track)} in ${repVal(R, r)}${r.hr ? ', ' + r.hr + ' bpm' : ''}"><i style="height:${h(r)}%"></i></button>`).join('')}</div></div>
+        <div class="kr-bars" style="--n:${R.rows.length}">${R.rows.map((r)=> `<button type="button" class="kr-bar e${effortOf(r.pace, R)}" data-i="${r.i}" aria-label="Rep ${r.i + 1}, ${distLabel(r.m, R.track)} in ${repVal(R, r)}, ${EFFORT[effortOf(r.pace, R)]}${r.hr ? ', ' + r.hr + ' bpm' : ''}"><i style="height:${h(r)}%"></i></button>`).join('')}</div></div>
       <div class="kr-axis"><span>Rep 1</span><span>Rep ${R.rows.length}</span></div>
       <div class="kr-stats">
-        <div><b>${repVal(R, R.fast)}</b><span class="g">fastest · rep ${R.fast.i + 1}</span></div>
-        <div><b>${repAvg(R)}</b><span class="r">average</span></div>
-        <div><b>${repVal(R, R.slow)}</b><span class="b">slowest · rep ${R.slow.i + 1}</span></div>
+        <div><b>${repVal(R, R.fast)}</b><span class="e${effortOf(R.fast.pace, R)}">fastest · rep ${R.fast.i + 1}</span></div>
+        <div><b>${repAvg(R)}</b><span class="e${effortOf(R.avgPace, R)}">average</span></div>
+        <div><b>${repVal(R, R.slow)}</b><span class="e${effortOf(R.slow.pace, R)}">slowest · rep ${R.slow.i + 1}</span></div>
         ${fourth}</div>
     </section>`;
   }
@@ -472,6 +488,19 @@
 
   // Elevation (filled) and heart rate (line) by distance, one grid line a mile. Pointing at it reads out that spot.
   const CW = 600, CH = 200;
+  // Pace (s/mi) at each point over about a tenth of a mile around it. Null where the runner stood still.
+  function paceSeries(r){
+    const n = r.pts.length, t = r.pts.map((p)=> p[3]), out = new Array(n).fill(null);
+    if(t[0] == null) return out;
+    let a = 0, b = 0;
+    for(let i = 0; i < n; i++){
+      while(r.ds[a] < r.ds[i] - 80) a++;
+      while(b < n - 1 && r.ds[b] < r.ds[i] + 80) b++;
+      const dd = r.ds[b] - r.ds[a], dt = (t[b] ?? 0) - (t[a] ?? 0);
+      if(dd > 40 && dt > 0){ const v = dt / (dd / MI); if(v < 1200) out[i] = v; }
+    }
+    return out;
+  }
   function chartHtml(r){
     const tot = r.ds[r.ds.length - 1] || 1, X = (d)=> (d / tot * CW).toFixed(1);
     const alts = r.pts.map((p)=> p[2]).filter((v)=> v != null), lo = Math.min(...alts), hi = Math.max(lo + 8, ...alts);
@@ -481,13 +510,24 @@
     let grid = ''; for(let m = 1; m * MI < tot; m++) grid += `M${X(m * MI)} 0V${CH - 10}`;
     const elev = r.hasAlt ? r.pts.map((p, i)=> `${X(r.ds[i])} ${ay(p[2] ?? lo)}`).join(' L') : '';
     const hr = r.hasHr ? r.pts.map((p, i)=> p[4] ? `${X(r.ds[i])} ${hy(p[4])}` : null).filter(Boolean).join(' L') : '';
+    const pc = paceSeries(r), pv = pc.filter((v)=> v != null).sort((x, y)=> x - y);
+    r.pace = pc; r.hasPace = pv.length > r.pts.length / 3;
+    let pace = '';
+    if(r.hasPace){
+      const plo = pv[Math.floor(pv.length * 0.03)], phi = Math.max(plo + 30, pv[Math.floor(pv.length * 0.97)]);
+      const py = (v)=> (CH - 12 - (phi - Math.min(phi, Math.max(plo, v))) / (phi - plo) * (CH - 28)).toFixed(1); // quicker is higher
+      pace = pc.map((v, i)=> v == null ? null : `${X(r.ds[i])} ${py(v)}`).reduce((d, pt, i, arr)=> pt ? d + (i && arr[i - 1] ? 'L' : 'M') + pt : d, '');
+    }
     const miles = Math.floor(tot / MI);
-    return `<div class="kd-chart-h"><h2 class="kv-ct">${r.hasHr ? 'Elevation &amp; heart rate' : 'Elevation'}</h2><span class="kd-sub">↑${Math.round(r.stats.gain_m * FT)} ft · ↓${Math.round(r.stats.loss_m * FT)} ft</span></div>
-      <div class="kd-keys"><span><i class="ke"></i>Elevation</span>${r.hasHr ? '<span><i class="kh"></i>Heart rate</span>' : ''}</div>
+    const what = ['Elevation', r.hasHr ? 'heart rate' : null, r.hasPace ? 'pace' : null].filter(Boolean);
+    const title = what.length > 1 ? what.slice(0, -1).join(', ') + ' &amp; ' + what[what.length - 1] : what[0];
+    return `<div class="kd-chart-h"><h2 class="kv-ct">${title}</h2><span class="kd-sub">↑${Math.round(r.stats.gain_m * FT)} ft · ↓${Math.round(r.stats.loss_m * FT)} ft</span></div>
+      <div class="kd-keys"><span><i class="ke"></i>Elevation</span>${r.hasHr ? '<span><i class="kh"></i>Heart rate</span>' : ''}${r.hasPace ? '<span><i class="kp"></i>Pace</span>' : ''}</div>
       <div class="kd-read" id="kdRead">Point at the chart to read a spot on the run.</div>
-      <div class="kd-plot"><svg viewBox="0 0 ${CW} ${CH}" preserveAspectRatio="none" role="img" aria-label="Elevation${r.hasHr ? ' and heart rate' : ''} along the run, ${Math.round(lo * FT)} to ${Math.round(hi * FT)} feet">
+      <div class="kd-plot"><svg viewBox="0 0 ${CW} ${CH}" preserveAspectRatio="none" role="img" aria-label="${what.join(', ').toLowerCase()} along the run, ${Math.round(lo * FT)} to ${Math.round(hi * FT)} feet">
         <path d="${grid}" class="kd-grid"/>
         ${elev ? `<path d="M0 ${CH - 10} L${elev} L${CW} ${CH - 10} Z" class="kd-elev"/>` : ''}
+        ${pace ? `<path d="${pace}" class="kd-pace"/>` : ''}
         ${hr ? `<path d="M${hr}" class="kd-hr"/>` : ''}
         <path d="M-10 0V${CH}" class="kd-cur" id="kdCur"/></svg></div>
       <div class="kd-ticks" style="--n:${Math.max(1, miles)}">${Array.from({ length: miles }, (_, i)=> `<span>${i + 1}</span>`).join('')}</div>`;
@@ -527,5 +567,5 @@
     return rows.length ? splitsHtml(rows, 'Laps').replace('<span>Mile</span>', '<span>Lap</span>') : '';
   }
 
-  window.KDay = { prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
+  window.KDay = { setFiveK, prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
 })();

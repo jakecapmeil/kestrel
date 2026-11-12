@@ -29,7 +29,7 @@
   const toast = (t)=>{ const n = document.createElement('div'); n.className = 'kv-toast'; n.textContent = t; document.body.appendChild(n); setTimeout(()=> n.remove(), 1800); };
   async function getJson(u){ try{ const r = await fetch(u, { cache:'no-store' }); return r.ok ? await r.json() : null; }catch(e){ return null; } }
   async function post(u, body){ try{ const r = await fetch(u, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) }); const d = await r.json().catch(()=> ({})); return r.ok ? d : { error:d.error || 'That didn’t save. Try again.' }; }catch(e){ return { error:'Couldn’t reach Kestrel. Check your connection.' }; } }
-  async function logRange(from, to){ return own() ? await getJson(`/api/log?personId=${encodeURIComponent(activePersonId)}&from=${from}&to=${to}`) : null; }
+  async function logRange(from, to){ const r = own() ? await getJson(`/api/log?personId=${encodeURIComponent(activePersonId)}&from=${from}&to=${to}`) : null; if(r && 'five_k_time' in r) window.KDay?.setFiveK(r.five_k_time); return r; }
   const weekStart = (d = new Date())=>{ const x = new Date(d); x.setHours(12, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
   const intensity = (diff)=> !diff ? 'i1' : diff <= 3 ? 'i1' : diff <= 5 ? 'i2' : diff <= 7 ? 'i3' : 'i4';
   // A run's name: the main run's own title (not a watch's "Morning Run"), else its kind. Kestrel AI's summary is a paragraph, not a name.
