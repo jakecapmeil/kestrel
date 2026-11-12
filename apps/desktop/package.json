@@ -1,7 +1,7 @@
 {
   "name": "kestrel-desktop",
   "productName": "Kestrel",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Kestrel for Mac: a small window around the live site (https://kestrel.jakecapmeil.workers.dev).",
   "main": "main.js",

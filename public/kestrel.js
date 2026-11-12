@@ -125,10 +125,14 @@ function emailFields(signup, message) {
 // (iOS and Android through Capacitor's App plugin, the Mac through the app's own protocol handler) and is exchanged here,
 // where the PKCE verifier was stored.
 async function googleInApp() {
-  const { data, error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/?appauth=1', skipBrowserRedirect: true } });
+  // redirectTo is the site's plain address (already allowed in Supabase). The system browser first loads our own /?appauth=start
+  // page, which marks that browser as "signing in for the app" and then goes on to Google; when it comes back with the code,
+  // the mark tells the site to pass the code to the app instead of treating it as a website sign-in.
+  const { data, error } = await K.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + '/', skipBrowserRedirect: true } });
   if (error) throw error;
+  const url = location.origin + '/?appauth=start&to=' + encodeURIComponent(data.url);
   const browser = window.Capacitor?.Plugins?.Browser;
-  if (browser) await browser.open({ url: data.url }); else window.open(data.url, '_blank');
+  if (browser) await browser.open({ url }); else window.open(url, '_blank');
 }
 window.kestrelAuthCallback = async (url) => {
   try {
@@ -1625,12 +1629,26 @@ async function boot() {
   }
   const params = new URLSearchParams(location.search);
   K.recovering = params.has('reset');
-  // Google sign-in started in an app finishes here, in the system browser: pass the code back to the app.
-  if (params.has('appauth') && !SHELL) {
-    const back = 'kestrel://auth-callback' + location.search;
-    gate(html`<div class="k-landing"><div class="k-auth"><h2>Opening Kestrel…</h2><p class="k-small">If the app doesn’t open, tap the button.</p><a class="k-btn primary wide" href="${back}">Open Kestrel</a></div></div>`);
-    location.replace(back);
-    return;
+  // Google sign-in started in an app runs in the system browser and finishes here: first mark the browser and go on to Google,
+  // then, when Google sends the code back, pass it to the app.
+  if (!SHELL) {
+    const MARK = 'k-appauth';
+    let marked = false;
+    try { marked = Date.now() - Number(localStorage.getItem(MARK) || 0) < 10 * 60e3; } catch {}
+    const to = params.get('to') || '';
+    if (params.get('appauth') === 'start' && to.startsWith(K.cfg.supabaseUrl + '/auth/v1/authorize')) {
+      try { localStorage.setItem(MARK, String(Date.now())); } catch {}
+      gate(html`<div class="k-landing"><div class="k-auth"><h2>Continuing with Google…</h2></div></div>`);
+      location.replace(to);
+      return;
+    }
+    if (marked && (params.has('code') || params.has('error'))) {
+      try { localStorage.removeItem(MARK); } catch {}
+      const back = 'kestrel://auth-callback' + location.search;
+      gate(html`<div class="k-landing"><div class="k-auth"><h2>Opening Kestrel…</h2><p class="k-small">If the app doesn’t open, tap the button.</p><a class="k-btn primary wide" href="${back}">Open Kestrel</a></div></div>`);
+      location.replace(back);
+      return;
+    }
   }
   const fromLink = params.has('code');
   K.sb = createClient(K.cfg.supabaseUrl, K.cfg.supabaseKey, { auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true } });
