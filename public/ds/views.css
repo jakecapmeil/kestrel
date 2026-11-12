@@ -602,3 +602,34 @@ body.kv-spoke #navSegs{display:none;}
 .kv-ethos.mine textarea{width:100%;box-sizing:border-box;margin-top:10px;min-height:110px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:15px/1.45 var(--font-ui);resize:vertical;}
 .kv-ethos.mine .kv-btns{align-items:center;}
 .kv-ethos-src{margin:16px 0 24px;}
+
+/* Fuel: snap or describe a meal, Kestrel AI estimates it, the runner checks it */
+.kv-snap{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+.kv-snap-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+.kv-snap-btn{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);font:600 14px var(--font-ui);cursor:pointer;position:relative;overflow:hidden;}
+.kv-snap-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.kv-snap-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.kv-snap-btn.on{background:var(--accent);color:var(--on-accent);border-color:transparent;}
+.kv-snap-btn.off{opacity:.45;}
+.kv-snap-meal{height:44px;min-width:0;flex:1 1 120px;padding:0 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:600 14px var(--font-ui);}
+.kv-snap textarea{width:100%;box-sizing:border-box;min-height:64px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:15px/1.4 var(--font-ui);resize:vertical;}
+.kv-snap-photos{display:flex;gap:8px;flex-wrap:wrap;}
+.kv-snap-ph{position:relative;width:84px;height:84px;border-radius:14px;overflow:hidden;background:var(--surface-2);}
+.kv-snap-ph img{width:100%;height:100%;object-fit:cover;display:block;}
+.kv-snap-ph button{position:absolute;top:4px;right:4px;width:26px;height:26px;padding:0;border:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font:600 16px/26px var(--font-ui);}
+.kv-snap-out{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:16px;background:var(--surface-2);}
+.kv-snap-conf{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.kv-snap-item{border:0;margin:0;padding:10px 0 0;border-top:1px solid var(--line);min-width:0;}
+.kv-snap-item:first-of-type{border-top:0;padding-top:0;}
+.kv-snap-name{display:flex;align-items:center;gap:8px;}
+.kv-snap-name input[type=checkbox]{width:20px;height:20px;flex:none;accent-color:var(--accent);}
+.kv-snap-name input[name^=name]{flex:1;min-width:0;height:38px;padding:0 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:600 15px var(--font-ui);}
+.kv-grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:6px;}
+.kv-grid4 label{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.kv-grid4 span{font:600 11px var(--font-ui);color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kv-grid4 span i{font-style:normal;font-weight:500;display:block;font-size:10.5px;}
+.kv-grid4 input{width:100%;box-sizing:border-box;height:38px;padding:0 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:600 14px var(--font-mono);}
+@media (max-width:380px){ .kv-grid4{grid-template-columns:repeat(2,minmax(0,1fr));} }
+.kv-snap-foot{margin:0;font-size:12.5px;}
+.kv-or{display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:var(--text-2);font:600 11px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;}
+.kv-or::before,.kv-or::after{content:"";flex:1;height:1px;background:var(--line);}

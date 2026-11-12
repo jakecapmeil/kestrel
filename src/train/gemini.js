@@ -58,7 +58,7 @@ async function spend(db, personId, today) {
   if (row.calls > AI_DAILY_CAP) throw new AiError(`You have used today's ${AI_DAILY_CAP} free Kestrel AI calls. Pick your own model in AI settings, or try tomorrow.`);
 }
 
-async function generate(env, { system, prompt, schema, maxTokens = 1024 }) {
+async function generate(env, { system, prompt, schema, maxTokens = 1024, images = [] }) {
   const chain = modelChain(env);
   const now = Date.now();
   // Models still cooling down go last, so a call is never refused while one might work.
@@ -66,8 +66,10 @@ async function generate(env, { system, prompt, schema, maxTokens = 1024 }) {
   const order = [...ready, ...chain.filter((m) => !ready.includes(m))];
   let busy = false;
   // Without a Gemini key the Gemini models are skipped; Workers AI still answers.
+  // Photos need a model that can see: only Gemini here (the free fallbacks read text only).
+  if (images.length && !env.GEMINI_API_KEY) throw new AiError('Photo estimates need Kestrel’s Gemini key, which this server doesn’t have. Describe the food in words instead, or pick a model that can see images for Food photos in You → Settings → Kestrel AI.');
   for (const model of env.GEMINI_API_KEY ? order : []) {
-    const res = await callModel(env, model, { system, prompt, schema, maxTokens });
+    const res = await callModel(env, model, { system, prompt, schema, maxTokens, images });
     if (res.retry) {
       busy = busy || res.busy;
       cooling.set(model, Date.now() + res.cooldown);
@@ -75,6 +77,7 @@ async function generate(env, { system, prompt, schema, maxTokens = 1024 }) {
     }
     return res.value;
   }
+  if (images.length) throw new AiError(busy ? 'The AI is busy (free-tier rate limit). Try again in a minute, or describe the food in words.' : 'The photo couldn’t be read. Try again, or describe the food in words.');
   for (const p of compatProviders(env)) {
     if ((cooling.get(p.name) || 0) > now) continue;
     const res = await callCompat(env, p, { system, prompt, schema, maxTokens });
@@ -167,7 +170,7 @@ async function callWorkersAi(env, { system, prompt, schema, maxTokens }) {
 }
 
 // One model. { retry: true } means try the next one in the chain.
-async function callModel(env, model, { system, prompt, schema, maxTokens }) {
+async function callModel(env, model, { system, prompt, schema, maxTokens, images = [] }) {
   // GEMINI_API_BASE overrides the endpoint for local testing.
   const base = env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com';
   let res;
@@ -177,7 +180,7 @@ async function callModel(env, model, { system, prompt, schema, maxTokens }) {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [{ role: 'user', parts: [...images.map((i) => ({ inline_data: { mime_type: i.mime, data: i.data } })), { text: prompt }] }],
         generationConfig: {
           temperature: 0.4,
           // Thinking models spend part of this budget reasoning before they
@@ -532,4 +535,11 @@ Session (${session.category}${session.track ? ', on the track' : ''}): ${session
 Its parts: ${JSON.stringify(acts)}
 Write 2-4 plain sentences on this session: what it was, the reps or pace against what it should have been, and one thing to focus on next. Watches lap every mile by themselves, so mile laps on an easy run are not reps. No headings, no lists, no medical advice. Reply with the report only.`,
   };
+}
+
+// Food estimates from a photo and/or a description, on the free default. See food.js for the prompt and the checks.
+export async function askFood(env, db, person, chat, images, today) {
+  if (!aiEnabled(env)) throw new AiError('The free Kestrel AI is not set up on this server. Pick another model for Food photos in You → Settings → Kestrel AI.');
+  await spend(db, person.id, today);
+  return await generate(env, { ...chat, images, maxTokens: 1200 });
 }

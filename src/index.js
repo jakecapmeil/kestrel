@@ -25,7 +25,8 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
-import { sessionReportChat, ethosOf } from './train/gemini.js';
+import { sessionReportChat, ethosOf, askFood } from './train/gemini.js';
+import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/food.js';
 import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
@@ -1779,6 +1780,16 @@ async function route(request, env, url) {
     return json(coachChat(Array.isArray(b.history) ? b.history : [], await coachContext(db, person), today, BODY_PARTS));
   }
   if (path === '/api/coach/apply') return json(await applyCoachSaves(db, me.id, b.out || {}));
+  // Food estimates. Free default: the photo goes to Gemini here. Own model: the browser asks for the prompt, calls the
+  // model itself, then sends the answer back to be checked. Nothing is saved: the runner edits and adds it in Fuel.
+  if (path === '/api/ai/food' || path === '/api/ai/food/prompt' || path === '/api/ai/food/check') {
+    if (path.endsWith('check')) return json(cleanFoodEstimate(b.out || {}));
+    const st = settingsOf(me);
+    if (path.endsWith('prompt')) return json(foodChat({ text: b.text, meal: b.meal, photos: Math.min(3, Number(b.photos) || 0) }, st.profile, st.ethos));
+    const images = cleanImages(b.images);
+    const chat = foodChat({ text: b.text, meal: b.meal, photos: images.length }, st.profile, st.ethos);
+    return json(cleanFoodEstimate(await askFood(env, db, me, chat, images, today)));
+  }
   // A session's report from the runner's own model: the prompt to send, then the report to keep (on its main activity).
   if (path === '/api/ai/session/prompt' || path === '/api/ai/session/save') {
     const key = str(b.key, 20), date = key.split('#')[0];
@@ -1831,7 +1842,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

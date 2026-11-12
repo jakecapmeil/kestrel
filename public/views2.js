@@ -240,12 +240,96 @@
     const day = card(`<button type="button" class="kv-nav" data-a="foodDay" data-v="-1" aria-label="Previous day">‹</button> ${esc(V.foodDate === todayKey() ? 'Today' : nice(V.foodDate))} <button type="button" class="kv-nav" data-a="foodDay" data-v="1" aria-label="Next day">›</button>`, esc(d.tier?.note || ''),
       `<div class="kv-fuel">${ring}<div class="kv-macros">${bar('Carbs', 'carbs_g', '')}${bar('Protein', 'protein_g', 'bl')}${bar('Fat', 'fat_g', 'g')}</div></div>${d.weight_known ? '' : '<div class="kv-note">Add your weight in your profile to get gram targets.</div>'}`);
     const meals = card('Meals', '', `<div class="kv-list">${(d.entries || []).map(e=> `<div class="kv-li"><div><b>${esc(e.name || 'Food')}</b><span>${esc((d.meals || []).find(m=> m.key === e.meal)?.label || e.meal)} · ${Math.round(e.carbs_g || 0)} g carbs · ${Math.round(e.protein_g || 0)} g protein</span></div><i>${e.kcal ? Math.round(e.kcal) : ''}</i><button type="button" class="kv-x" data-a="foodDel" data-v="${e.id}" aria-label="Remove">×</button></div>`).join('') || '<div class="kv-hint">Nothing logged for this day yet.</div>'}</div>`);
-    const add = card('Add food', 'Tap a recent food, or type your own.', `<div class="kv-addgrid">${(rec?.foods || []).slice(0, 6).map((x, i)=> `<button type="button" data-a="foodQuick" data-v="${i}">${esc(x.name)}</button>`).join('')}</div>
+    const add = card('Add food', 'Snap it, say it, or tap a recent food.', snapHtml(d) + `<div class="kv-or"><span>or by hand</span></div><div class="kv-addgrid">${(rec?.foods || []).slice(0, 6).map((x, i)=> `<button type="button" data-a="foodQuick" data-v="${i}">${esc(x.name)}</button>`).join('')}</div>
       <form class="kv-form" data-f="foodSave" style="margin-top:12px"><label><span>What</span><input name="name" placeholder="Bagel with peanut butter" required></label><div class="kv-grid3"><label><span>Carbs g</span><input name="carbs_g" inputmode="numeric"></label><label><span>Protein g</span><input name="protein_g" inputmode="numeric"></label><label><span>kcal</span><input name="kcal" inputmode="numeric"></label></div>
       <label><span>Meal</span><select name="meal">${(d.meals || []).map(m=> `<option value="${m.key}">${esc(m.label)}</option>`).join('')}</select></label><div class="kv-btns"><button type="submit" class="pri">Add</button></div></form>`);
     V.cache.recentFoods = rec?.foods || [];
     const tips = card('Fueling your running', '', `<div class="kv-how">${(d.run_fuel || []).map(x=> `<p><b>${esc(cap(x.when))}:</b> ${esc(x.text)}</p>`).join('')}</div>`);
     return `<div class="kv-row" style="--c:1fr 1fr 1fr"><div class="kv-stack">${day}${meals}</div>${add}<div class="kv-stack">${tips}</div></div>`;
+  };
+  // ---- Snap or describe: a photo and/or a few words, Kestrel AI estimates, the runner checks, then adds.
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // The meal a photo most likely is, from the time of day.
+  const mealNow = ()=>{ const h = new Date().getHours() + new Date().getMinutes() / 60; return h < 10.5 ? 'breakfast' : h < 14.5 ? 'lunch' : h >= 17 && h < 21.5 ? 'dinner' : 'snack'; };
+  const snap = ()=> V.snap || (V.snap = { images:[], text:'', out:null, busy:false, err:'', meal: mealNow() });
+  function snapHtml(d){
+    const st = snap(), ai = window.kestrelAiTask?.('food') || { label:'Kestrel free (Gemini)' };
+    const meals = (d.meals || []).map(m=> `<option value="${m.key}" ${st.meal === m.key ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
+    const out = st.out ? snapResult(st.out) : '';
+    return `<div class="kv-snap">
+      ${st.images.length ? `<div class="kv-snap-photos">${st.images.map((im, i)=> `<span class="kv-snap-ph"><img src="${im.url}" alt="Food photo ${i + 1}"><button type="button" data-a="snapDrop" data-v="${i}" aria-label="Remove photo">×</button></span>`).join('')}</div>` : ''}
+      <div class="kv-snap-row">
+        <label class="kv-snap-btn${st.images.length >= 3 ? ' off' : ''}"><input type="file" id="kvSnapFile" accept="image/*" multiple ${st.images.length >= 3 ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>${st.images.length ? 'Add photo' : 'Photo'}</label>
+        ${SR ? `<button type="button" class="kv-snap-btn${st.listening ? ' on' : ''}" data-a="snapMic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>${st.listening ? 'Listening…' : 'Speak'}</button>` : ''}
+        <select class="kv-snap-meal" id="kvSnapMeal" aria-label="Meal">${meals}</select>
+      </div>
+      <textarea id="kvSnapText" rows="2" maxlength="600" placeholder="Describe it: “bowl of pasta with meat sauce, about 2 cups, glass of milk”. Add amounts and anything hidden, like oil or sauce.">${esc(st.text)}</textarea>
+      <div class="kv-btns"><button type="button" class="pri" data-a="snapGo" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Estimating…' : 'Estimate with Kestrel AI'}</button>${st.images.length || st.text || st.out ? '<button type="button" data-a="snapClear">Clear</button>' : ''}</div>
+      ${st.err ? `<div class="kv-note">${esc(st.err)}</div>` : ''}
+      ${out}
+      <p class="kv-hint kv-snap-foot">Runs on ${esc(ai.label)}. Estimates are rough, often 20-30% off: check them before adding.</p></div>`;
+  }
+  function snapResult(o){
+    if(!o.items.length) return `<div class="kv-note">${esc(o.note || 'Nothing to add.')}</div>`;
+    const mid = (r)=> Math.round((r[0] + r[1]) / 2);
+    const rng = (r, u)=> r[0] === r[1] ? `${r[0]}${u}` : `${r[0]}–${r[1]}${u}`;
+    return `<form class="kv-snap-out" data-f="snapAdd"><div class="kv-snap-conf"><b>Kestrel AI’s estimate</b><span class="kv-pill">${esc(o.confidence)} confidence</span></div>
+      ${o.items.map((x, i)=> `<fieldset class="kv-snap-item"><label class="kv-snap-name"><input type="checkbox" name="use${i}" checked aria-label="Add ${esc(x.name)}"><input name="name${i}" value="${esc(x.name)}" aria-label="Name"></label>
+        <div class="kv-hint">${esc(x.portion)}</div>
+        <div class="kv-grid4"><label><span>kcal <i>${rng(x.kcal, '')}</i></span><input name="kcal${i}" inputmode="numeric" value="${mid(x.kcal)}"></label><label><span>Carbs <i>${rng(x.carbs_g, ' g')}</i></span><input name="carbs_g${i}" inputmode="numeric" value="${mid(x.carbs_g)}"></label><label><span>Protein <i>${rng(x.protein_g, ' g')}</i></span><input name="protein_g${i}" inputmode="numeric" value="${mid(x.protein_g)}"></label><label><span>Fat <i>${rng(x.fat_g, ' g')}</i></span><input name="fat_g${i}" inputmode="numeric" value="${mid(x.fat_g)}"></label></div></fieldset>`).join('')}
+      ${o.note ? `<p class="kv-hint">${esc(o.note)}</p>` : ''}
+      <div class="kv-btns"><button type="submit" class="pri">Add to ${esc(V.foodDate === todayKey() ? 'today' : nice(V.foodDate))}</button></div></form>`;
+  }
+  // Photos are shrunk to 1024 px JPEG in the browser before they go anywhere.
+  async function shrink(file){
+    const url = URL.createObjectURL(file);
+    try{
+      const img = await new Promise((ok, bad)=>{ const i = new Image(); i.onload = ()=> ok(i); i.onerror = bad; i.src = url; });
+      const k = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const du = c.toDataURL('image/jpeg', 0.82);
+      return { mime:'image/jpeg', data: du.split(',')[1], url: du };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const keepText = ()=>{ const t = document.getElementById('kvSnapText'), m = document.getElementById('kvSnapMeal'); if(t) snap().text = t.value; if(m) snap().meal = m.value; };
+  SCREENS.food.after = ()=>{
+    const f = document.getElementById('kvSnapFile');
+    if(f) f.onchange = async ()=>{ keepText(); const st = snap(); st.err = '';
+      for(const file of [...f.files].slice(0, 3 - st.images.length)){ try{ st.images.push(await shrink(file)); }catch(e){ st.err = 'That photo couldn’t be read. Try a JPEG or PNG.'; } }
+      redraw(); };
+    const t = document.getElementById('kvSnapText'); if(t) t.oninput = ()=>{ snap().text = t.value; };
+    const m = document.getElementById('kvSnapMeal'); if(m) m.onchange = ()=>{ snap().meal = m.value; };
+  };
+  ACT.snapDrop = (i)=>{ keepText(); snap().images.splice(+i, 1); redraw(); };
+  ACT.snapClear = ()=>{ V.snap = null; redraw(); };
+  ACT.snapMic = ()=>{
+    keepText(); const st = snap();
+    if(st.rec){ st.rec.stop(); return; }
+    const rec = new SR(); rec.lang = navigator.language || 'en-US'; rec.interimResults = false; rec.continuous = false;
+    rec.onresult = (e)=>{ const said = [...e.results].map((r)=> r[0].transcript).join(' ').trim(); if(said) st.text = (st.text ? st.text.trim() + ' ' : '') + said; };
+    rec.onerror = (e)=>{ st.err = e.error === 'not-allowed' ? 'Kestrel needs the microphone to listen. You can also tap the mic on your keyboard.' : ''; };
+    rec.onend = ()=>{ st.rec = null; st.listening = false; redraw(); };
+    st.rec = rec; st.listening = true; rec.start(); redraw();
+  };
+  ACT.snapGo = async ()=>{
+    keepText(); const st = snap();
+    if(!st.images.length && !st.text.trim()){ st.err = 'Take a photo or describe what you ate first.'; return redraw(); }
+    st.busy = true; st.err = ''; st.out = null; redraw();
+    try{ st.out = await window.kestrelFoodEstimate({ images: st.images.map(({ mime, data })=> ({ mime, data })), text: st.text, meal: st.meal }); }
+    catch(e){ st.err = e.message || 'The estimate didn’t work. Try again.'; }
+    st.busy = false; redraw();
+  };
+  ACT.snapAdd = async (_, f)=>{
+    const st = snap(), fd = new FormData(f), meal = st.meal || document.getElementById('kvSnapMeal')?.value;
+    let added = 0;
+    for(let i = 0; i < (st.out?.items || []).length; i++){
+      if(!fd.get('use' + i)) continue;
+      const r = await post('/api/food', { date:V.foodDate, meal, name: fd.get('name' + i), kcal: fd.get('kcal' + i), carbs_g: fd.get('carbs_g' + i), protein_g: fd.get('protein_g' + i), fat_g: fd.get('fat_g' + i), notes: 'Estimated by Kestrel AI' });
+      if(r.error) return alert(r.error);
+      added++;
+    }
+    V.snap = null; toast(added ? `Added ${added} ${added === 1 ? 'item' : 'items'}` : 'Nothing added'); redraw();
   };
   ACT.foodDay = (s)=>{ const d = new Date(V.foodDate + 'T12:00:00'); d.setDate(d.getDate() + +s); V.foodDate = iso(d); redraw(); };
   ACT.foodDel = async (id)=>{ await post('/api/food/delete', { id }); redraw(); };
