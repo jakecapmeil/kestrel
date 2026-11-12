@@ -54,7 +54,23 @@
   const SEG = { warmup:'Warm', cooldown:'Cool' };
   const GENERIC = /^(morning|afternoon|evening|lunch|night|midday)? ?(run|running|activity|workout)$/i;
   const runs = (x)=> (x?.sessions || []).filter((s)=> s.category !== 'crosstrain');
-  const sessionOf = (x, key)=> (x?.sessions || []).find((s)=> s.key === key) || null;
+  // A day as the pages show it. Logged by hand (no watch): one session from the day's own numbers and reps.
+  // Hand-built reps on a watch day replace the workout session's laps (they were typed to fix them).
+  function prepare(x){
+    if(!x || x._prepped) return x;
+    x._prepped = true;
+    const reps = (x.split_reps || []).filter((r)=> r.m && r.s);
+    if(!(x.sessions || []).length && x.miles){
+      x.sessions = [{ key: x.date + '#hand', manual: true, category: reps.length >= 2 || (x.types || []).includes('workout') ? 'workout' : (x.types || []).includes('long') ? 'long' : 'easy',
+        title: '', start: '', miles: x.miles, minutes: x.minutes, pace: x.miles && x.minutes ? clock(x.minutes * 60 / x.miles) : null,
+        avg_hr: null, effort: x.difficulty, track: !!x.track, splits: reps, report: '', elev_ft: null, activities: [] }];
+    } else if(x.split_source === 'hand' && reps.length >= 2){
+      const w = (x.sessions || []).filter((z)=> z.category === 'workout' || z.category === 'race').sort((a, b)=> (b.miles || 0) - (a.miles || 0))[0];
+      if(w) w.splits = reps;
+    }
+    return x;
+  }
+  const sessionOf = (x, key)=> (prepare(x)?.sessions || []).find((s)=> s.key === key) || null;
   const toMin = (t)=>{ const m = String(t || '').match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
   const ampm = (t)=>{ const m = toMin(t); if(m == null) return ''; const h = Math.floor(m / 60), mm = String(m % 60).padStart(2, '0'); return `${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`; };
   const partOfDay = (t)=>{ const m = toMin(t); return m == null ? '' : m < 660 ? 'Morning' : m < 840 ? 'Midday' : m < 1020 ? 'Afternoon' : 'Evening'; };
@@ -73,7 +89,16 @@
   // slowest and average by pace. Only workouts get reps; an easy run's mile laps are splits.
   function repsOf(s){
     if(!s || s.category !== 'workout') return null;
-    const laps = (s.splits || []).filter((l)=> l.m >= 100 && l.s > 0);
+    let laps = (s.splits || []).filter((l)=> l.m >= 100 && l.s > 0);
+    if(laps.length < 2) return null;
+    // One watch activity often holds the warm-up, the reps (with lapped jogs) and the cool-down. Keep the reps:
+    // laps far slower than the fast half are recoveries, and slow laps at either end are the warm-up and cool-down.
+    const pace = (l)=> l.s / (l.m / MI);
+    const sorted = laps.map(pace).sort((a, b)=> a - b), half = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
+    const ref = half[Math.floor(half.length / 2)];
+    laps = laps.filter((l)=> pace(l) <= ref * 1.3);
+    while(laps.length > 2 && pace(laps[0]) > ref * 1.12) laps = laps.slice(1);
+    while(laps.length > 2 && pace(laps[laps.length - 1]) > ref * 1.12) laps = laps.slice(0, -1);
     if(laps.length < 2) return null;
     const groups = [];
     for(const l of laps){ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) g.n++; else groups.push({ m: l.m, n: 1 }); }
@@ -160,6 +185,7 @@
   // ---------------------------------------------------------------- the summary beside the calendar
   // wide: desktop, which leads with the route. One sentence, the day's numbers, then each session to open.
   function peekHtml(x, wide){
+    prepare(x);
     const ss = x?.sessions || [];
     return `${wide ? '<div class="kd-thumb" id="kdThumb" hidden></div>' : ''}
       ${daySentence(x) ? `<p class="kdd-line">${esc(daySentence(x))}</p>` : ''}
@@ -180,6 +206,7 @@
   // The day on top (one sentence, its numbers), then its sessions. On a phone a session opens on its own page;
   // on a laptop the chosen session sits beside the list. A one-session day shows that session straight away.
   function dayHtml(x, selKey, wide){
+    prepare(x);
     const ss = x?.sessions || [];
     const sel = sessionOf(x, selKey) || (ss.length === 1 || wide ? mainSession(x) || ss[0] : null);
     const ai = x?.summary || x?.coach_note;
@@ -240,6 +267,8 @@
   // Kestrel AI's report. With the runner's own model on run summaries, the app writes it (and can rewrite it).
   function reportHtml(s, busy){
     const t = window.kestrelAiTask?.('summary');
+    if(s.manual) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Logged by hand. Ask Kestrel AI about it in chat.</p>`;
+    if(!s.report && t?.serverOwn && !t.own) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Your run summaries are set to your own model, which this device doesn’t have. Switch them back to Kestrel free, or set up your model in Kestrel Lab here.</p><button type="button" class="sm-btn" data-a="sumKestrel">Use Kestrel free for summaries</button>`;
     const btn = t?.own ? `<button type="button" class="sm-btn" data-a="sessReport" data-v="${esc(s.key)}"${busy ? ' disabled' : ''}>${busy ? 'Writing…' : s.report ? 'Rewrite' : 'Write it'} with ${esc(t.label)}</button>` : '';
     return `<div class="kd-eb">${eye}Kestrel AI on this session</div>${s.report ? `<p>${esc(s.report)}</p>` : `<p class="kv-hint">${t?.own ? 'Not written yet.' : 'Kestrel AI writes this once the run syncs and it reviews your day.'}</p>`}${btn}`;
   }
@@ -255,6 +284,7 @@
 
   // inline: part of the day page (no own header row). Otherwise the session's own page.
   function sessionHtml(x, s, inline){
+    prepare(x);
     const R = repsOf(s), more = (s.activities || []).flatMap((z)=> z.prs || []);
     const conds = [s.temp_f != null ? `${Math.round(s.temp_f)}°F` : '', s.track ? 'On the track' : ''].filter(Boolean).join(' · ');
     return `<div class="ks ${inline ? 'inline' : ''}" data-key="${esc(s.key)}"><div class="ks-a">
@@ -279,6 +309,7 @@
   }
 
   async function mountSession(x, key, own){
+    prepare(x);
     const s = sessionOf(x, key) || mainSession(x);
     const box = document.querySelector('.ks');
     if(!s || !box) return;
@@ -492,5 +523,5 @@
     return rows.length ? splitsHtml(rows, 'Laps').replace('<span>Mile</span>', '<span>Lap</span>') : '';
   }
 
-  window.KDay = { writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
+  window.KDay = { prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
 })();

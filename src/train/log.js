@@ -361,6 +361,8 @@ export async function getDays(db, personId, from, to) {
       splits: e?.splits || '',
       // Hand-built reps win, then the watch laps, then whatever the splits text says.
       split_reps: reps.length ? reps : laps.length ? laps : parseReps(e?.splits).map((r) => ({ ...r, m: track ? snap100(r.m) : r.m, rest: '' })),
+      // Where split_reps came from, so the day page can let hand-built reps replace a workout's watch laps.
+      split_source: reps.length ? 'hand' : laps.length ? 'watch' : (e?.splits ? 'text' : ''),
       day_line: e?.day_line || '',
       plan: dayPlanTag(rs, stravaMiles, maxHrEffort),
       sessions: sessionsOf(rs, events.results, prMap),

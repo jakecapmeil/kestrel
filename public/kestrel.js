@@ -1305,11 +1305,14 @@ function dialog() {
 // A supporter's accent colour, on every page. Only the accent changes; the rest of the design stays put.
 function applyAccent() {
   const a = K.cfg?.accents?.[K.me?.appearance?.accent], root = document.documentElement;
-  if (!a || K.me?.appearance?.accent === 'kestrel' || !K.me?.supporter) { ['--accent', '--accent-hover', '--hawk-eye'].forEach((v) => root.style.removeProperty(v)); return; }
+  if (!a || K.me?.appearance?.accent === 'kestrel' || !K.me?.supporter) { ['--accent', '--accent-hover', '--hawk-eye', '--accent-ink', '--accent-subtle'].forEach((v) => root.style.removeProperty(v)); return; }
   const dark = root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   const c = dark ? a.dark : a.light;
   root.style.setProperty('--accent', c); root.style.setProperty('--accent-hover', c); root.style.setProperty('--hawk-eye', c);
+  root.style.setProperty('--accent-ink', dark ? `color-mix(in srgb, ${c} 75%, white)` : `color-mix(in srgb, ${c} 80%, black)`);
+  root.style.setProperty('--accent-subtle', `color-mix(in srgb, ${c} ${dark ? 22 : 14}%, var(--surface))`);
 }
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyAccent()); } catch { /* old browsers */ }
 function renderSupportCard(el) {
   const d = K.cfg?.donate || {}, sup = K.me?.supporter, acc = K.me?.appearance?.accent || 'kestrel';
   const links = [d.main && ['Donate', d.main, 'primary'], d.alt && ['Other ways to give', d.alt, ''], d.campaign && ['Current campaign', d.campaign, '']].filter(Boolean);
@@ -1364,7 +1367,15 @@ window.kestrelShareCard = renderShareCard;
 window.kestrelMe = () => K.me;
 
 // Own-model helpers for the screens: a session's report, and food estimates. Free Kestrel AI runs on the server.
-window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', label: a.provider === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe(a) }; };
+window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', serverOwn: task === 'summary' && K.me?.ai_tasks?.summary === 'own', label: a.provider === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe(a) }; };
+// Run summaries: the choice is stored explicitly here and on the server, so it never drifts with the main model.
+async function setSummary(v) {
+  K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), summary: v } };
+  AI.saveAi(K.ai);
+  const r = await api('/api/me/ai-tasks', { method: 'PUT', body: JSON.stringify({ summary: v === 'kestrel' ? 'kestrel' : 'own' }) });
+  if (K.me) K.me.ai_tasks = r.ai_tasks;
+}
+window.kestrelSetSummary = setSummary;
 window.kestrelWriteReport = async (key) => {
   const ai = AI.forTask(K.ai, 'summary');
   if (ai.provider === 'kestrel') throw new Error('Run summaries are on Kestrel free: they are written when your runs sync.');
@@ -1402,11 +1413,9 @@ window.kestrelRenderSettings = async () => {
     $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
     ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
       const t = sel.dataset.task, v = sel.value;
-      K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), [t]: v === K.ai.provider ? undefined : v } };
-      if (K.ai.tasks[t] === undefined) delete K.ai.tasks[t];
-      AI.saveAi(K.ai);
       // Run summaries are written on the server unless they run on the runner's own model.
-      if (t === 'summary') await api('/api/me/ai-tasks', { method: 'PUT', body: JSON.stringify({ summary: v === 'kestrel' ? 'kestrel' : 'own' }) });
+      if (t === 'summary') await setSummary(v);
+      else { K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), [t]: v === K.ai.provider ? undefined : v } }; if (K.ai.tasks[t] === undefined) delete K.ai.tasks[t]; AI.saveAi(K.ai); }
       toast(`${AI.TASKS[t].label}: ${nameOf(v)}.`);
     }); });
   }

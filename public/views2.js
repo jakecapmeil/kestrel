@@ -61,7 +61,7 @@
     // The week totals count whole weeks, so the log runs from the Monday before the 1st to the Sunday after the last.
     const gridFrom = iso(weekStart(new Date(y, m, 1))), gridTo = iso(new Date(weekStart(new Date(y, m + 1, 0)).getTime() + 6 * 864e5));
     const [lg, h] = await Promise.all([logRange(gridFrom, gridTo), loadKai()]);
-    const byDate = {}; (lg?.days || []).forEach(d=> byDate[d.date] = d);
+    const byDate = {}; (lg?.days || []).forEach(d=> byDate[d.date] = window.KDay.prepare(d));
     const plan = {}; (h?.week?.days || []).forEach(d=> { if(d.date >= today) plan[d.date] = d; });
     const done = (lg?.days || []).filter(d=> d.miles > 0 && d.date >= first && d.date <= last);
     const tot = done.reduce((a, d)=> a + d.miles, 0);
@@ -105,7 +105,7 @@
   // The day: one sentence, its numbers, then every session. A session opens on its own page (phone) or beside the list (laptop).
   async function loadDay(d){
     const [lg] = await Promise.all([logRange(d, d)]);
-    const x = lg?.days?.[0]; V.cache['day:' + d] = x;
+    const x = window.KDay.prepare(lg?.days?.[0]); V.cache['day:' + d] = x;
     V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
     return x;
   }
@@ -142,6 +142,7 @@
     return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ ${esc(nice(d, { weekday:'short', month:'short', day:'numeric' }))}</button>${step}</div>${window.KDay.sessionHtml(x, s)}`;
   };
   SCREENS.sess.after = (el, key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.mountSession(x, key, own()); };
+  ACT.sumKestrel = async ()=>{ await window.kestrelSetSummary?.('kestrel'); redraw(); };
   ACT.sessReport = (key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.writeReport(x, key); };
   ACT.sessGo = (key)=>{ V.stack[V.stack.length - 1] = 'sess|' + key; V.sessSel = key; window.scrollTo(0, 0); redraw(); };
 
