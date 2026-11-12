@@ -46,7 +46,7 @@
   --hawk-eye:var(--red-500);
   --pick:#f0b13c; --pick-ink:var(--amber-600);
   /* Rep bars keep their own colour so a supporter's accent never clashes with fastest (green) and slowest (blue). */
-  --rep:#e5533d;
+  --rep:#e5533d; --on-pick:#17171a;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
@@ -59,7 +59,7 @@
     --danger:#ff7a6b; --danger-subtle:#3d1b18;
     --shadow-1:none; --shadow-2:0 10px 32px rgba(0,0,0,.55);
     --hawk-eye:var(--red-400);
-    --pick-ink:#f0b850;
+    --pick-ink:#f0b850; --pick:#f4bd55; --rep:#ef6a52;
   }
 }
 :root[data-theme="dark"]{
@@ -72,7 +72,7 @@
   --danger:#ff7a6b; --danger-subtle:#3d1b18;
   --shadow-1:none; --shadow-2:0 10px 32px rgba(0,0,0,.55);
   --hawk-eye:var(--red-400);
-  --pick-ink:#f0b850;
+  --pick-ink:#f0b850; --pick:#f4bd55; --rep:#ef6a52;
 }
 
 /* ---- 3. legacy names (Kestrel app). Remove as screens move to the semantic layer. */

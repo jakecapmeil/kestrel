@@ -76,11 +76,11 @@ Every supporter gets the same perks, whatever they gave, and perks are always co
 
 The donation platforms don't tell Kestrel who gave, so the maintainer sends each donor a **supporter code**.
 
-1. Mint codes: `node scripts/supporter-code.mjs supporter 5` (or `champion` for $100+). Use the same `KESTREL_SECRET` as the Worker.
+1. Set a signing secret once: `openssl rand -hex 32 | npx wrangler secret put SUPPORTER_SECRET` (keep a copy somewhere safe). Then mint codes: `SUPPORTER_SECRET=… node scripts/supporter-code.mjs supporter 5` (or `champion` for $100+).
 2. Email a code to each donor.
 3. They enter it in You → Settings → Support Kestrel.
 
-Codes are signed with `KESTREL_SECRET`, so they can't be guessed. They can be shared, though, which is acceptable for cosmetic perks. Later, webhooks from Open Collective or GitHub Sponsors could do this automatically.
+Codes are signed with `SUPPORTER_SECRET`, so they can't be guessed, and each works for one account only. Later, webhooks from Open Collective or GitHub Sponsors could do this automatically.
 
 ### Setting the links
 
@@ -96,6 +96,6 @@ Put the donation pages in `wrangler.jsonc` vars. The Support card hides any link
 
 1. Decide who holds the money: a parent or guardian, HCB (teen-led), or Open Collective.
 2. Create the donation page and set `DONATE_URL`.
-3. Set `KESTREL_SECRET` (already needed for watch keys) and mint the first supporter codes.
+3. Set `SUPPORTER_SECRET` and mint the first supporter codes.
 4. Write a one-page pitch: users, teams, cost per runner, the safety work (guardrails, the ethos, the 100-case coach eval), and open data. Send it to two local foundations and to NLnet's next call.
 5. After 3–6 months of real usage numbers, apply to FLOSS/fund. Run a GoFundMe only for a concrete, time-boxed goal.

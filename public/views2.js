@@ -254,13 +254,14 @@
   const mealNow = ()=>{ const h = new Date().getHours() + new Date().getMinutes() / 60; return h < 10.5 ? 'breakfast' : h < 14.5 ? 'lunch' : h >= 17 && h < 21.5 ? 'dinner' : 'snack'; };
   const snap = ()=> V.snap || (V.snap = { images:[], text:'', out:null, busy:false, err:'', meal: mealNow() });
   function snapHtml(d){
-    const st = snap(), ai = window.kestrelAiTask?.('food') || { label:'Kestrel free (Gemini)' };
+    const st = snap(), ai = window.kestrelAiTask?.('food') || { label:'Kestrel free', vision:false };
     const meals = (d.meals || []).map(m=> `<option value="${m.key}" ${st.meal === m.key ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
     const out = st.out ? snapResult(st.out) : '';
     return `<div class="kv-snap">
       ${st.images.length ? `<div class="kv-snap-photos">${st.images.map((im, i)=> `<span class="kv-snap-ph"><img src="${im.url}" alt="Food photo ${i + 1}"><button type="button" data-a="snapDrop" data-v="${i}" aria-label="Remove photo">×</button></span>`).join('')}</div>` : ''}
       <div class="kv-snap-row">
-        <label class="kv-snap-btn${st.images.length >= 3 ? ' off' : ''}"><input type="file" id="kvSnapFile" accept="image/*" multiple ${st.images.length >= 3 ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>${st.images.length ? 'Add photo' : 'Photo'}</label>
+        ${ai.vision ? '' : '<p class="kv-hint" style="margin:0;flex-basis:100%">Photos need a model that can see images: pick one for Food photos in You → Settings → Kestrel AI. Describing it works now.</p>'}
+        <label class="kv-snap-btn${st.images.length >= 3 || !ai.vision ? ' off' : ''}"><input type="file" id="kvSnapFile" accept="image/*" multiple ${st.images.length >= 3 || !ai.vision ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>${st.images.length ? 'Add photo' : 'Photo'}</label>
         ${SR ? `<button type="button" class="kv-snap-btn${st.listening ? ' on' : ''}" data-a="snapMic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>${st.listening ? 'Listening…' : 'Speak'}</button>` : ''}
         <select class="kv-snap-meal" id="kvSnapMeal" aria-label="Meal">${meals}</select>
       </div>

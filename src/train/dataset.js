@@ -32,7 +32,8 @@ export function cleanShare(choice, profile) {
 }
 
 async function hmac(secret, text) {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret || 'kestrel-dev'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  if (!secret) throw new Error('KESTREL_SECRET is needed to make dataset pseudonyms.');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)));
 }
 
@@ -73,15 +74,17 @@ export async function exportDataset(env, scope) {
   const { results } = await env.DB.prepare(
     `SELECT id, sex, settings FROM people WHERE json_extract(settings, '$.data_share.choice') IN (${want.map(() => '?').join(',')})`
   ).bind(...want).all();
+  const people = results.map((p) => { try { return { ...p, parsed: JSON.parse(p.settings || '{}') }; } catch { return null; } })
+    .filter((p) => p && !(scope === 'open' && (ageOf(p.parsed.profile) ?? 0) < 18));
   const lines = [];
-  for (const person of results) {
-    let settings = {};
-    try { settings = JSON.parse(person.settings || '{}'); } catch { continue; }
-    if (scope === 'open' && (ageOf(settings.profile) ?? 0) < 18) continue;
+  // A few runners per query, so a large export stays inside the Worker's query limit.
+  for (let i = 0; i < people.length; i += 40) {
+    const batch = people.slice(i, i + 40);
     const { results: ws } = await env.DB.prepare(
-      'SELECT date, category, surface, distance_mi, moving_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, temp_f, effort, load, laps FROM workouts WHERE person_id = ? ORDER BY date'
-    ).bind(person.id).all();
-    lines.push(JSON.stringify(await anonymize(env, person, ws, settings)));
+      `SELECT person_id, date, category, surface, distance_mi, moving_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, temp_f, effort, load, laps
+       FROM workouts WHERE person_id IN (${batch.map(() => '?').join(',')}) ORDER BY date`
+    ).bind(...batch.map((p) => p.id)).all();
+    for (const person of batch) lines.push(JSON.stringify(await anonymize(env, person, ws.filter((w) => w.person_id === person.id), person.parsed)));
   }
   return lines.join('\n') + (lines.length ? '\n' : '');
 }

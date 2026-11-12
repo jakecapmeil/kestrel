@@ -1,6 +1,6 @@
 // The Kestrel ethos: how Kestrel thinks athletes should train. Every Kestrel AI job (chat, plans, run reports, food)
 // gets the short form below in its system prompt, whichever model runs it. The long form, with the research behind
-// each point, is docs/ethos.md; the app shows the sections (SECTIONS) under You → Kestrel ethos.
+// each point, is docs/ethos.md; the app shows the sections (SECTIONS) under Run → Workouts → The Kestrel ethos (and from Kestrel AI settings).
 // A runner can add their own ethos. It adds preferences; it never overrides safety or the plan guardrails.
 
 export const ETHOS_VERSION = '2026-11';

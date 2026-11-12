@@ -3,7 +3,7 @@
 // "kestrel" is the exception: it goes to /api/ai/chat, which runs the free default (Gemini, with an open-weight fallback).
 
 export const PROVIDERS = {
-  kestrel: { label: 'Kestrel (free default, Gemini)', kind: 'kestrel', needsKey: false },
+  kestrel: { label: 'Kestrel (free default)', kind: 'kestrel', needsKey: false },
   openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-4o-mini', needsKey: true, keyUrl: 'https://platform.openai.com/api-keys' },
   anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5', needsKey: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
   gemini: { label: 'Google Gemini (your key)', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-flash-latest', needsKey: true, keyUrl: 'https://aistudio.google.com/apikey' },
@@ -62,7 +62,7 @@ export function configFor(state, id) {
 
 export function describe(state) {
   const id = state.provider;
-  if (id === 'kestrel') return 'Kestrel (Gemini)';
+  if (id === 'kestrel') return 'Kestrel free';
   const c = configFor(state, id);
   return `${PROVIDERS[id].label.replace(/ \(.*\)$/, '')}${c.model ? ' · ' + c.model : ''}`;
 }

@@ -55,6 +55,8 @@
     window.KV.park?.();
     el.className = 'kv kvs-' + name;
     el.innerHTML = html;
+    // Every Run view ends with the way to choose which Run views show (the phone's view bar has no room for it).
+    if(!V.stack.length && V.key.startsWith('run/') && V.key !== 'run/plan') el.insertAdjacentHTML('beforeend', `<div class="kv-runviews">${runViewsBtn()}</div>`);
     fn.after?.(el, arg);
     window.renderNav?.();
     if(V.keepScroll) window.scrollTo(0, top); V.keepScroll = false;
@@ -150,11 +152,11 @@
       <div class="kv-row" style="--c:1.55fr 1fr">${sec('Your run', run)}${sec('How you feel', feel)}</div>
       ${week ? sec('This week', week, `${Math.round(doneMi * 10) / 10} of ${Math.round(planned * 10) / 10} mi${h?.level ? ' · ' + h.level.weekly_miles + ' mi level' : ''}`) : ''}
       <div class="kv-row" style="--c:1fr 1fr 1.15fr">${sec('Off the run', off)}${sec('Team today', teamToday)}${sec('Kestrel AI', kai)}</div>
-      ${askShare() ? sec('Help improve Kestrel', `<div class="card kv-card kv-share"><div id="kvShareHost"></div><div class="kv-btns"><button type="button" data-a="shareLater">Ask me later</button></div></div>`) : ''}
+      ${askShare((wk?.days || []).some(d=> d.miles > 0) || !!day?.miles) ? sec('Help improve Kestrel', `<div class="card kv-card kv-share"><div id="kvShareHost"></div><div class="kv-btns"><button type="button" data-a="shareLater">Ask me later</button></div></div>`) : ''}
     </div>`;
   };
   // Asked once, after a runner has some training in: share anonymized runs for Kestrel's models, or not.
-  const askShare = ()=>{ const me = window.kestrelMe?.(); if(!own() || !me || me.data_share?.at) return false; try{ return !localStorage.getItem('kestrel.shareAsked'); }catch(e){ return false; } };
+  const askShare = (ranLately)=>{ const me = window.kestrelMe?.(); if(!own() || !ranLately || !me || me.data_share?.at) return false; try{ return !localStorage.getItem('kestrel.shareAsked'); }catch(e){ return false; } };
   SCREENS.today.after = ()=>{ const h = document.getElementById('kvShareHost'); if(h) window.kestrelShareCard?.(h, ()=> setTimeout(redraw, 1200)); };
   ACT.shareLater = ()=>{ try{ localStorage.setItem('kestrel.shareAsked', String(Date.now())); }catch(e){} redraw(); };
   function latestPost(){

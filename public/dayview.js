@@ -63,10 +63,10 @@
     if(!(x.sessions || []).length && x.miles){
       x.sessions = [{ key: x.date + '#hand', manual: true, category: reps.length >= 2 || (x.types || []).includes('workout') ? 'workout' : (x.types || []).includes('long') ? 'long' : 'easy',
         title: '', start: '', miles: x.miles, minutes: x.minutes, pace: x.miles && x.minutes ? clock(x.minutes * 60 / x.miles) : null,
-        avg_hr: null, effort: x.difficulty, track: !!x.track, splits: reps, report: '', elev_ft: null, activities: [] }];
+        avg_hr: null, effort: x.difficulty, track: !!x.track, splits: reps, splits_hand: true, report: '', elev_ft: null, activities: [] }];
     } else if(x.split_source === 'hand' && reps.length >= 2){
       const w = (x.sessions || []).filter((z)=> z.category === 'workout' || z.category === 'race').sort((a, b)=> (b.miles || 0) - (a.miles || 0))[0];
-      if(w) w.splits = reps;
+      if(w){ w.splits = reps; w.splits_hand = true; }
     }
     return x;
   }
@@ -96,9 +96,13 @@
     const pace = (l)=> l.s / (l.m / MI);
     const sorted = laps.map(pace).sort((a, b)=> a - b), half = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
     const ref = half[Math.floor(half.length / 2)];
-    laps = laps.filter((l)=> pace(l) <= ref * 1.3);
-    while(laps.length > 2 && pace(laps[0]) > ref * 1.12) laps = laps.slice(1);
-    while(laps.length > 2 && pace(laps[laps.length - 1]) > ref * 1.12) laps = laps.slice(0, -1);
+    // Reps typed by hand are exactly what the runner ran: keep them all. Watch laps: a warm-up or cool-down runs at
+    // easy pace (well over 20% slower than the reps), so a threshold mile before 800s at 3200 pace stays in.
+    if(!s.splits_hand){
+      laps = laps.filter((l)=> pace(l) <= ref * 1.35);
+      while(laps.length > 2 && pace(laps[0]) > ref * 1.22) laps = laps.slice(1);
+      while(laps.length > 2 && pace(laps[laps.length - 1]) > ref * 1.22) laps = laps.slice(0, -1);
+    }
     if(laps.length < 2) return null;
     const groups = [];
     for(const l of laps){ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) g.n++; else groups.push({ m: l.m, n: 1 }); }

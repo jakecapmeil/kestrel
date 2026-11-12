@@ -10,6 +10,10 @@ Runners choose in **You → Settings → Help improve Kestrel's models** (and on
 
 The choice is stored in `people.settings.data_share` as `{ choice, at, version }`. The open option is refused on the server for runners under 18 or without a birth year.
 
+## How anonymous it is
+
+Plainly: the records are **pseudonymous**, not fully anonymous. Nothing names a runner, but each record keeps exact lap times, heart rates and distances, and weekdays stay right after the date shift. Someone who already knew a runner's exact training could recognise them. That's why the open option is adults-only, and why releases should drop thin records (see below) and could round lap times before publishing.
+
 ## What a record holds
 
 `src/train/dataset.js` builds it (`anonymize`). Per runner: a pseudonym (HMAC of the person id with `KESTREL_SECRET`), age band, sex if given, running experience. Per run: date shifted by a per-runner secret number of whole weeks (4-160), category, surface, miles, moving time, average and max heart rate, cadence, climbing (nearest 10 ft), temperature (nearest 5 °F), difficulty, load, and up to 40 laps (distance, time, heart rate).

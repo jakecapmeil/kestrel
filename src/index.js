@@ -61,6 +61,14 @@ async function sha256(text) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+// Compares two secrets without leaking how much of them matched.
+function sameText(a, b) {
+  a = String(a); b = String(b);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
 async function readJson(request) {
   try { return await request.json(); } catch { throw new BadRequest('Expected a JSON body.'); }
 }
@@ -1158,6 +1166,8 @@ async function route(request, env, url) {
   // ---- public
   if (path === '/api/config') {
     return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [],
+      // What the free default runs on here: Gemini (which can read photos) when its key is set, else open-weight models.
+      freeModel: env.GEMINI_API_KEY ? 'Gemini' : 'open-weight Llama', freeVision: !!env.GEMINI_API_KEY,
       // Where donations go (Support Kestrel). Unset links are hidden. See docs/funding.md.
       donate: { main: env.DONATE_URL || '', alt: env.DONATE_ALT_URL || '', campaign: env.CAMPAIGN_URL || '' }, accents: ACCENTS });
   }
@@ -1192,7 +1202,7 @@ async function route(request, env, url) {
     // The anonymized dataset, for Kestrel's maintainers (a Worker secret, DATASET_TOKEN). scope=open: open-dataset consent only.
     if (path === '/api/v1/dataset' && method === 'GET') {
       const tok = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-      if (!env.DATASET_TOKEN || tok.length < 20 || tok !== env.DATASET_TOKEN) throw new AuthError('A dataset token is needed.');
+      if (!env.DATASET_TOKEN || tok.length < 20 || !sameText(tok, env.DATASET_TOKEN)) throw new AuthError('A dataset token is needed.');
       return new Response(await exportDataset(env, q.get('scope') === 'open' ? 'open' : 'all'), { headers: { 'Content-Type': 'application/x-ndjson', 'Cache-Control': 'no-store' } });
     }
     throw new NotFound('No such API route. See /lab/docs.');
@@ -1282,8 +1292,13 @@ async function route(request, env, url) {
 
   // Supporter perks: redeem a code from a donation, then pick an app colour. Cosmetic only.
   if (path === '/api/me/supporter' && method === 'POST') {
-    const st = settingsOf(me), got = await redeemCode(env.KESTREL_SECRET, (await readJson(request)).code);
-    const supporter = st.supporter?.tier === 'champion' && got.tier === 'supporter' ? st.supporter : got;
+    const st = settingsOf(me), got = await redeemCode(env.SUPPORTER_SECRET, (await readJson(request)).code);
+    // Single use: the first account to redeem a code keeps it.
+    await db.prepare('INSERT INTO supporter_codes (code, person_id, tier, redeemed_at) VALUES (?, ?, ?, ?) ON CONFLICT(code) DO NOTHING').bind(got.code, me.id, got.tier, Date.now()).run();
+    const owner = await db.prepare('SELECT person_id FROM supporter_codes WHERE code = ?').bind(got.code).first();
+    if (owner?.person_id !== me.id) throw new SupportError('That code has already been used. Each code is for one account; reply to your thank-you email for another.');
+    // Keep the earlier date, and never step a champion down to supporter.
+    const supporter = st.supporter && (st.supporter.tier === got.tier || st.supporter.tier === 'champion') ? st.supporter : got;
     await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, supporter }), me.id).run();
     return json({ supporter: { tier: supporter.tier, since: supporter.since } });
   }
@@ -1813,7 +1828,9 @@ async function route(request, env, url) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
     const sess = day?.sessions?.find((x) => x.key === key);
     if (!sess) throw new NotFound('That session is gone.');
-    if (path.endsWith('prompt')) return json(sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, COACH_RUBRIC));
+    if (path.endsWith('prompt')) return json({ ...sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, COACH_RUBRIC), main_id: sess.main_id });
+    // A sync between the prompt and the save can renumber the day's sessions: only save onto the session the prompt was for.
+    if (str(b.main_id, 80) !== String(sess.main_id)) throw new BadRequest('That day changed while the report was being written. Open the session and try again.');
     const report = str(b.report, 1200).trim();
     if (report.length < 20) throw new BadRequest('The model returned too little to keep.');
     await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();

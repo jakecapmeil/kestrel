@@ -1,6 +1,7 @@
 // Supporter perks. Donations happen on an outside platform (Open Collective, HCB, GitHub Sponsors), which doesn't tell
 // Kestrel who gave, so the maintainer emails each donor a code (scripts/supporter-code.mjs). A code is signed with
-// KESTREL_SECRET: KS-<tier>-<nonce>-<signature>. Perks are cosmetic only; no feature is ever behind a donation.
+// SUPPORTER_SECRET (its own Worker secret, not the one that encrypts watch keys): KS-<tier>-<nonce>-<signature>.
+// Each code works for one account (the supporter_codes table). Perks are cosmetic only; no feature is ever behind a donation.
 
 export class SupportError extends Error {}
 

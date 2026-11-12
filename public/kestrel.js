@@ -1367,7 +1367,8 @@ window.kestrelShareCard = renderShareCard;
 window.kestrelMe = () => K.me;
 
 // Own-model helpers for the screens: a session's report, and food estimates. Free Kestrel AI runs on the server.
-window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', serverOwn: task === 'summary' && K.me?.ai_tasks?.summary === 'own', label: a.provider === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe(a) }; };
+window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', serverOwn: task === 'summary' && K.me?.ai_tasks?.summary === 'own', label: a.provider === 'kestrel' ? freeName() : AI.describe(a), vision: a.provider !== 'kestrel' || !!K.cfg?.freeVision }; };
+function freeName() { return `Kestrel free (${K.cfg?.freeModel || 'free model'})`; }
 // Run summaries: the choice is stored explicitly here and on the server, so it never drifts with the main model.
 async function setSummary(v) {
   K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), summary: v } };
@@ -1381,7 +1382,7 @@ window.kestrelWriteReport = async (key) => {
   if (ai.provider === 'kestrel') throw new Error('Run summaries are on Kestrel free: they are written when your runs sync.');
   const chat = await api('/api/ai/session/prompt', { method: 'POST', body: JSON.stringify({ key }) });
   const text = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
-  return (await api('/api/ai/session/save', { method: 'POST', body: JSON.stringify({ key, report: text }) })).report;
+  return (await api('/api/ai/session/save', { method: 'POST', body: JSON.stringify({ key, main_id: chat.main_id, report: text }) })).report;
 };
 window.kestrelFoodEstimate = async ({ images = [], text = '', meal = '' }) => {
   const ai = AI.forTask(K.ai, 'food');
@@ -1398,13 +1399,13 @@ window.kestrelRenderSettings = async () => {
   if (ai) {
     // One choice per job. The list is the free default plus every model set up in Kestrel Lab.
     const ids = AI.usable(K.ai);
-    const nameOf = (id) => id === 'kestrel' ? 'Kestrel free (Gemini)' : AI.describe({ ...K.ai, provider: id });
+    const nameOf = (id) => id === 'kestrel' ? freeName() : AI.describe({ ...K.ai, provider: id });
     ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up in Kestrel Lab (your own key, or a model on your own computer). Keys stay in this browser.</p>
       <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><span><b>${info.label}</b><small>${info.hint}</small></span>
         <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${nameOf(id)}</option>`)}</select></label>`)}</div>
       <div class="k-row spread"><span class="k-small" style="margin:0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Set up in Lab</a></div>
       <details class="k-help"><summary>Which should I pick?</summary><ul class="k-list">
-        <li><b>Kestrel free</b> costs nothing and needs no setup. It runs on Google Gemini’s free tier, which allows Google to use what is sent to improve its products, so Kestrel only sends your training numbers, never your name or email.</li>
+        <li><b>Kestrel free</b> costs nothing and needs no setup. Here it runs on ${K.cfg?.freeModel === 'Gemini' ? 'Google Gemini’s free tier, which allows Google to use what is sent to improve its products' : 'open-weight models on Cloudflare'}; Kestrel sends what each job needs (your first name, training, profile details, and what you type or photograph), never your email.${K.cfg?.freeVision ? '' : ' It can’t read food photos yet: describe food in words, or pick a model that sees images.'}</li>
         <li><b>Your own key</b> (Anthropic, OpenAI, Gemini paid, OpenRouter) keeps your data out of free-tier training and is usually a little sharper. You pay the provider directly; a month of chat is typically cents.</li>
         <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
         <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>

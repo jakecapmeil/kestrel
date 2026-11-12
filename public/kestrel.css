@@ -159,7 +159,7 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-tick input{accent-color:var(--accent);margin:0;}
 .k-tick:has(input:checked){background:var(--accent-subtle);box-shadow:inset 0 0 0 1.5px var(--accent);}
 .k-wsteps{margin:var(--s-4) 0;padding:0;list-style:none;display:grid;gap:10px;font-size:14.5px;line-height:1.5;counter-reset:ws;}
-.k-wstep{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start;padding:12px 14px;border-radius:16px;background:var(--surface-2);counter-increment:ws;}
+.k-wstep{display:grid;grid-template-columns:32px minmax(0,1fr);gap:12px;align-items:start;padding:12px 14px;border-radius:var(--r-md);background:var(--surface-2);counter-increment:ws;}
 .k-wstep b{display:block;font-size:15px;}
 .k-wstep b::before{content:counter(ws) ". ";color:var(--accent);}
 .k-wstep.done{opacity:.6;}
@@ -170,9 +170,9 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-wtick svg{width:16px;height:16px;fill:none;stroke:transparent;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .k-wstep.done .k-wtick{background:var(--positive);border-color:var(--positive);}
 .k-wstep.done .k-wtick svg{stroke:#fff;}
-.k-wlink{display:inline-flex;align-items:center;gap:4px;margin-top:8px;height:34px;padding:0 12px;border-radius:999px;background:var(--surface);font:600 13px var(--font-ui);text-decoration:none;color:var(--text);}
+.k-wlink{display:inline-flex;align-items:center;gap:4px;margin-top:8px;height:34px;padding:0 12px;border-radius:var(--r-pill);background:var(--surface);font:600 13px var(--font-ui);text-decoration:none;color:var(--text);}
 .k-flow{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px;margin:var(--s-4) 0 var(--s-2);}
-.k-flow-n{padding:10px 8px;border-radius:14px;background:var(--surface-2);text-align:center;min-width:0;}
+.k-flow-n{padding:10px 8px;border-radius:var(--r-md);background:var(--surface-2);text-align:center;min-width:0;}
 .k-flow-n b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .k-flow-n span{display:block;font-size:11.5px;color:var(--text-2);line-height:1.3;}
 .k-flow-n.mid{background:var(--info-subtle);}
@@ -289,9 +289,9 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .rt-ev,.rt-time{display:flex;flex-direction:column;min-width:0}
 .rt-ev small,.rt-time small{color:var(--text-2);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rt-time{font-variant-numeric:tabular-nums}
-.rt-bar{position:relative;height:8px;background:var(--surface-2);border-radius:4px}
+.rt-bar{position:relative;height:8px;background:var(--surface-2);border-radius:var(--r-xs)}
 .rt-bar::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--text-2);opacity:.5}
-.rt-fill{position:absolute;top:0;bottom:0;border-radius:4px}
+.rt-fill{position:absolute;top:0;bottom:0;border-radius:var(--r-xs)}
 .rt-fill.up{background:var(--positive)}
 .rt-fill.down{background:var(--text-2);opacity:.45}
 .rt-pct{text-align:right;font-variant-numeric:tabular-nums;font-size:.9rem}
@@ -299,7 +299,7 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 
 /* Kestrel AI: one model per job */
 .k-tasks{display:grid;gap:10px;margin:10px 0;}
-.k-task{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:10px;align-items:center;padding:10px 12px;border-radius:14px;background:var(--surface-2);}
+.k-task{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,220px);gap:10px;align-items:center;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2);}
 .k-task b{display:block;font-size:14.5px;}
 .k-task small{display:block;color:var(--text-2);font-size:12.5px;line-height:1.35;}
 .k-task select{width:100%;min-width:0;}
@@ -307,7 +307,7 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 
 /* Sharing training for Kestrel's models */
 .k-share{display:grid;gap:8px;margin:10px 0;}
-.k-shareopt{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border-radius:14px;border:1px solid var(--line);cursor:pointer;}
+.k-shareopt{display:grid;grid-template-columns:22px minmax(0,1fr);gap:10px;align-items:start;padding:12px;border-radius:var(--r-md);border:1px solid var(--line);cursor:pointer;}
 .k-shareopt input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--accent);}
 .k-shareopt b{display:block;font-size:14.5px;}
 .k-shareopt small{display:block;color:var(--text-2);font-size:13px;line-height:1.4;margin-top:2px;}
@@ -316,12 +316,12 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 
 /* Support Kestrel */
 .k-perks{list-style:none;margin:10px 0;padding:0;display:grid;gap:8px;}
-.k-perks li{display:grid;gap:2px;padding:10px 12px;border-radius:14px;background:var(--surface-2);}
+.k-perks li{display:grid;gap:2px;padding:10px 12px;border-radius:var(--r-md);background:var(--surface-2);}
 .k-perks b{font-size:14.5px;}
 .k-perks span{font-size:13px;color:var(--text-2);}
-.k-supported{margin:10px 0;padding:10px 12px;border-radius:14px;background:var(--accent-subtle);font-size:14px;}
+.k-supported{margin:10px 0;padding:10px 12px;border-radius:var(--r-md);background:var(--accent-subtle);font-size:14px;}
 .k-accents{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
-.k-accent{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px 0 6px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font:600 12.5px var(--font-ui);cursor:pointer;}
+.k-accent{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px 0 6px;border-radius:var(--r-pill);border:1px solid var(--line);background:var(--surface);color:var(--text);font:600 12.5px var(--font-ui);cursor:pointer;}
 .k-accent i{width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--sw) 50%,var(--sw2) 50%);}
 .k-accent.on{border-color:var(--text);box-shadow:0 0 0 1px var(--text);}
 .k-accent:disabled{opacity:.45;cursor:default;}
