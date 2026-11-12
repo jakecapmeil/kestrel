@@ -202,7 +202,7 @@ function appCards() {
 
 function renderAppStart(mode, message) {
   if (mode === 'welcome') {
-    gate(html`<div class="ka-screen dark"><div class="ka ka-welcome">
+    gate(html`<div class="ka-screen"><div class="ka ka-welcome">
       <div class="ka-hello">
         <div class="ka-mark">${APP_MARK}</div>
         <div class="ka-word">kestrel</div>

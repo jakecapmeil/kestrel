@@ -1,6 +1,6 @@
 // Kestrel for Mac: one window on the live site. Links to other sites open in the default browser, so the window stays
 // Kestrel. The user agent says KestrelDesktop so the site hides Google sign-in (Google blocks it in embedded browsers).
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, nativeTheme } = require('electron');
 const path = require('path');
 
 const SITE = process.env.KESTREL_URL || 'https://kestrel.jakecapmeil.workers.dev';
@@ -11,7 +11,7 @@ const allowed = (url) => { try { const u = new URL(url); return u.origin === ori
 function open() {
   const win = new BrowserWindow({
     width: 1280, height: 860, minWidth: 380, minHeight: 600,
-    title: 'Kestrel', backgroundColor: '#0d0d0f', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 16 },
+    title: 'Kestrel', backgroundColor: nativeTheme.shouldUseDarkColors ? '#0d0d0f' : '#f5f2ea', titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 16 },
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
   });
   win.webContents.setUserAgent(`${win.webContents.getUserAgent()} KestrelDesktop/${app.getVersion()}`);

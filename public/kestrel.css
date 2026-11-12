@@ -331,13 +331,11 @@ html.k-native,html.k-native body{overscroll-behavior:none;-webkit-tap-highlight-
 #kGate:has(.ka-screen){max-width:none;padding:0;}
 body:has(.ka-screen){padding:0;}
 .ka-screen{display:flow-root;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);}
-.ka-screen.dark{--bg:var(--ink-950);--inverse:var(--ink-50);--on-inverse:var(--ink-950);--positive:var(--green-300);--rep:#ef6a52;--surface:var(--ink-900);--surface-2:var(--ink-800);--text:var(--ink-50);--text-2:var(--ink-400);--line:rgba(245,242,234,.12);--accent:var(--red-400);--accent-hover:var(--red-300);--on-accent:var(--ink-900);--shadow-2:0 10px 32px rgba(0,0,0,.55);
-  background:radial-gradient(120% 60% at 50% -8%,rgba(255,91,58,.20),transparent 60%),var(--bg);}
 .ka{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;max-width:460px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 20px) 24px calc(env(safe-area-inset-bottom) + 20px);-webkit-user-select:none;user-select:none;}
 .ka input{-webkit-user-select:text;user-select:text;}
 .ka a{color:var(--text);text-decoration-color:var(--accent);text-underline-offset:3px;}
 .ka .k-btn{height:54px;font-size:16.5px;border-radius:16px;}
-.ka-mark{display:grid;place-items:center;width:104px;height:104px;border-radius:30px;background:linear-gradient(160deg,var(--surface-2),var(--surface));box-shadow:inset 0 0 0 1px var(--line),0 18px 50px rgba(255,91,58,.18);color:var(--text);}
+.ka-mark{display:grid;place-items:center;width:104px;height:104px;border-radius:30px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line),var(--shadow-1);color:var(--text);}
 .ka-mark svg{width:70%;height:70%;}
 .ka-mark.small{width:40px;height:40px;border-radius:12px;box-shadow:inset 0 0 0 1px var(--line);}
 
@@ -347,7 +345,7 @@ body:has(.ka-screen){padding:0;}
 .ka-tag{margin:12px 0 0;max-width:17em;color:var(--text-2);font-size:17px;line-height:1.4;}
 .ka-cards{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;margin:0 -24px;padding:0 24px 2px;scroll-padding:0 24px;scrollbar-width:none;animation:ka-rise .6s .08s var(--ease) both;}
 .ka-cards::-webkit-scrollbar{display:none;}
-.ka-card{flex:0 0 100%;scroll-snap-align:center;padding:18px 20px 20px;border-radius:24px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);}
+.ka-card{flex:0 0 100%;scroll-snap-align:center;padding:18px 20px 20px;border-radius:24px;background:var(--surface);box-shadow:var(--shadow-1);}
 .ka-card h2{margin:14px 0 4px;font-size:21px;}
 .ka-card p{margin:0;color:var(--text-2);font-size:15px;line-height:1.45;}
 .ka-art{height:64px;display:flex;align-items:flex-end;gap:6px;}
@@ -371,7 +369,7 @@ body:has(.ka-screen){padding:0;}
 .ka-dots button[aria-selected="true"]::before{width:20px;opacity:1;background:var(--text);}
 .ka-actions{display:grid;gap:10px;animation:ka-rise .6s .16s var(--ease) both;}
 .ka-quiet{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line);color:var(--text);}
-.ka-quiet:hover{background:var(--surface);}
+.ka-quiet:hover{background:var(--surface-2);}
 .ka-fine{margin:14px 0 0;text-align:center;color:var(--text-2);font-size:12.5px;}
 
 /* sign-in and sign-up */
@@ -385,16 +383,15 @@ body:has(.ka-screen){padding:0;}
 .ka-note{margin-top:4px;}
 .ka-bottom{margin-top:auto;padding-top:24px;display:grid;gap:12px;justify-items:center;}
 .ka-bottom .k-btn{margin:0;}
-.ka-screen:not(.dark) .ka-form{animation:ka-in .32s var(--ease) both;}
+.ka-form{animation:ka-in .32s var(--ease) both;}
 @keyframes ka-rise{from{opacity:0;transform:translateY(14px);}}
 @keyframes ka-in{from{opacity:0;transform:translateX(18px);}}
 @media (prefers-reduced-motion:reduce){.ka-hello,.ka-cards,.ka-actions,.ka-form{animation:none!important;}}
 /* Mac window and tablets: the same screens, centred in the window */
 @media (min-width:760px) and (min-height:640px){
   .ka{min-height:auto;margin:max(5vh,40px) auto;padding:40px 40px 32px;border-radius:32px;}
-  .ka-screen.dark .ka{background:rgba(23,23,26,.6);box-shadow:inset 0 0 0 1px var(--line);}
-  .ka-screen:not(.dark){display:grid;align-items:start;}
-  .ka-screen:not(.dark) .ka{background:var(--surface);box-shadow:var(--shadow-2);}
+  .ka-screen{display:grid;align-items:start;}
+  .ka-form{background:var(--surface);box-shadow:var(--shadow-2);}
   .ka-hello{padding-top:8px;}
   .ka-bottom{padding-top:32px;}
 }
