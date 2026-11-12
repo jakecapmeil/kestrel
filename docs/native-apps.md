@@ -12,6 +12,7 @@ Icons come from `apps/icon/` (`icon.svg` for iOS and Android, `mac-icon.svg` for
 
 ## What differs from the website
 
+- **Its own start screen.** Instead of the website's landing page, the apps open on a welcome screen (the hawk, three swipeable cards, Get started / I have an account), then a full-screen sign-in or sign-up. After sign-in, everything is the same as the website. Add `?app` to the address in a normal browser to preview it.
 - **Google sign-in is hidden in the apps.** Google blocks its sign-in inside embedded web views. The apps show email sign-in with a note: people who made their account with Google tap "Forgot password" once to give it a password. To add Google sign-in inside the apps later, open Supabase's OAuth URL in the system browser (Capacitor Browser plugin or Electron's `shell.openExternal`) and return through a deep link (`kestrel://auth-callback`) added to Supabase's redirect URLs.
 - **Offline:** if the site can't load, the app shows a "No connection" page with a retry button (`www/offline.html`, `apps/desktop/offline.html`).
 - **Permissions**, each explained to the user:
