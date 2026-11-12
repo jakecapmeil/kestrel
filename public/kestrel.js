@@ -536,6 +536,7 @@ async function offerPlan() {
 // Shows the app, starting it the first time and reloading it on a team switch.
 async function start() {
   openApp();
+  applyAccent();
   renderHeader();
   if (!K.started) {
     K.started = true;
@@ -1299,6 +1300,36 @@ function dialog() {
   return d;
 }
 
+// ---------- Support Kestrel: donations happen elsewhere; a code from the thank-you email unlocks cosmetic perks
+
+// A supporter's accent colour, on every page. Only the accent changes; the rest of the design stays put.
+function applyAccent() {
+  const a = K.cfg?.accents?.[K.me?.appearance?.accent], root = document.documentElement;
+  if (!a || K.me?.appearance?.accent === 'kestrel' || !K.me?.supporter) { ['--accent', '--accent-hover', '--hawk-eye'].forEach((v) => root.style.removeProperty(v)); return; }
+  const dark = root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const c = dark ? a.dark : a.light;
+  root.style.setProperty('--accent', c); root.style.setProperty('--accent-hover', c); root.style.setProperty('--hawk-eye', c);
+}
+function renderSupportCard(el) {
+  const d = K.cfg?.donate || {}, sup = K.me?.supporter, acc = K.me?.appearance?.accent || 'kestrel';
+  const links = [d.main && ['Donate', d.main, 'primary'], d.alt && ['Other ways to give', d.alt, ''], d.campaign && ['Current campaign', d.campaign, '']].filter(Boolean);
+  el.innerHTML = html`<p class="k-small">Kestrel is free and open source, with no ads and nothing sold. The servers and the AI cost a little for every runner; donations keep it free for school teams. Every donation gets a thank-you email with a supporter code.</p>
+    <ul class="k-perks"><li><b>Any amount</b><span>App colour themes, and the next cosmetic thank-yous as they’re added.</span></li><li><b>$100 or more</b><span>All of that, plus Kestrel merch, sent to you.</span></li></ul>
+    ${links.length ? html`<div class="k-row">${links.map(([l, u, c]) => html`<a class="k-btn small ${c}" href="${u}" target="_blank" rel="noopener">${l}</a>`)}</div>` : html`<p class="k-small"><i>Donations open soon.</i></p>`}
+    ${sup ? html`<div class="k-supported"><b>${sup.tier === 'champion' ? 'Champion supporter' : 'Supporter'}</b> since ${new Date(sup.since).toLocaleDateString()}. Thank you.</div>` : html`<form id="kSupForm" class="k-row"><input class="k-input mono" id="kSupCode" placeholder="KS-…" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Supporter code" style="flex:1;min-width:0"><button class="k-btn small">Redeem</button></form>`}
+    <div class="k-accents" role="radiogroup" aria-label="App colour">${Object.entries(K.cfg?.accents || {}).map(([k, a]) => html`<button type="button" class="k-accent ${k === acc ? 'on' : ''}" data-accent="${k}" role="radio" aria-checked="${k === acc}" ${!sup && k !== 'kestrel' ? 'disabled' : ''} style="--sw:${a.light};--sw2:${a.dark}" title="${a.label}"><i></i><span>${a.label}</span></button>`)}</div>
+    ${sup ? '' : html`<p class="k-small">Colours unlock with a supporter code.</p>`}`.s;
+  $('kSupForm')?.addEventListener('submit', (e) => { e.preventDefault(); attempt(async () => {
+    try { const r = await api('/api/me/supporter', { method: 'POST', body: JSON.stringify({ code: $('kSupCode').value }) }); K.me.supporter = r.supporter; toast('Thank you for supporting Kestrel.'); renderSupportCard(el); }
+    catch (err) { toast(err.message, true); }
+  }, e.submitter); });
+  el.querySelectorAll('[data-accent]').forEach((b) => { b.onclick = () => attempt(async () => {
+    const r = await api('/api/me/appearance', { method: 'PUT', body: JSON.stringify({ accent: b.dataset.accent }) });
+    K.me.appearance = r.appearance; applyAccent(); renderSupportCard(el);
+  }); });
+}
+window.kestrelApplyAccent = applyAccent;
+
 // ---------- Helping Kestrel's models: anonymized training, only with the runner's yes
 
 const SHARE_OPTS = [
@@ -1381,6 +1412,8 @@ window.kestrelRenderSettings = async () => {
   }
   const ds = $('kShareBody');
   if (ds) renderShareCard(ds);
+  const sp = $('kSupportBody');
+  if (sp) renderSupportCard(sp);
   const mb = $('kModelsBody');
   if (mb) {
     const labels = { race: 'Race times (800 m and up)', short: 'Sprints and steeple', marathon: 'Marathon' };

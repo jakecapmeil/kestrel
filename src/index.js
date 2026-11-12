@@ -27,6 +27,7 @@ import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
 import { sessionReportChat, ethosOf, askFood } from './train/gemini.js';
 import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/food.js';
+import { redeemCode, cleanAppearance, ACCENTS, SupportError } from './train/support.js';
 import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
@@ -93,6 +94,8 @@ async function meView(db, me) {
     event_models: settingsOf(me).event_models || {},
     data_share: shareOf(settingsOf(me)),
     ai_tasks: settingsOf(me).ai_tasks || {},
+    supporter: settingsOf(me).supporter ? { tier: settingsOf(me).supporter.tier, since: settingsOf(me).supporter.since } : null,
+    appearance: settingsOf(me).appearance || { accent: 'kestrel' },
     teams,
   };
 }
@@ -1154,7 +1157,9 @@ async function route(request, env, url) {
 
   // ---- public
   if (path === '/api/config') {
-    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [] });
+    return json({ supabaseUrl: env.SUPABASE_URL || '', supabaseKey: env.SUPABASE_KEY || '', platform: PLATFORM_NAME, purposes: PURPOSES, slotEvents: SLOT_EVENTS, tasks: TASKS, kinds: KINDS, defaults: DEFAULTS, labEvents: EVENTS, freeAi: aiEnabled(env), bodyParts: BODY_PARTS, levels: [],
+      // Where donations go (Support Kestrel). Unset links are hidden. See docs/funding.md.
+      donate: { main: env.DONATE_URL || '', alt: env.DONATE_ALT_URL || '', campaign: env.CAMPAIGN_URL || '' }, accents: ACCENTS });
   }
   if ((path === '/api/calc/heat' || path === '/api/calc/taper') && method === 'GET') {
     const args = Object.fromEntries([...q.entries()].map(([k, v]) => [k, str(v, 40)]));
@@ -1275,6 +1280,18 @@ async function route(request, env, url) {
   }
   if (path === '/api/me/plan/preview' && method === 'POST') return json(previewSpec((await readJson(request)).plan));
 
+  // Supporter perks: redeem a code from a donation, then pick an app colour. Cosmetic only.
+  if (path === '/api/me/supporter' && method === 'POST') {
+    const st = settingsOf(me), got = await redeemCode(env.KESTREL_SECRET, (await readJson(request)).code);
+    const supporter = st.supporter?.tier === 'champion' && got.tier === 'supporter' ? st.supporter : got;
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, supporter }), me.id).run();
+    return json({ supporter: { tier: supporter.tier, since: supporter.since } });
+  }
+  if (path === '/api/me/appearance' && method === 'PUT') {
+    const st = settingsOf(me), appearance = cleanAppearance(await readJson(request), !!st.supporter);
+    await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, appearance }), me.id).run();
+    return json({ appearance });
+  }
   // The Kestrel ethos every AI follows, and the runner's own on top of it.
   if (path === '/api/ethos') {
     if (method === 'GET') return json({ version: ETHOS_VERSION, sections: ETHOS_SECTIONS, mine: settingsOf(me).ethos || '' });
@@ -1842,7 +1859,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError || err instanceof SupportError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }
