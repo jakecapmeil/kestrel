@@ -496,7 +496,7 @@ body.kv-spoke #navSegs{display:none;}
 .ksc-nums i{font-style:normal;font-size:12px;color:var(--text-2);margin-left:2px;}
 .ksc-go{position:absolute;right:14px;top:50%;transform:translateY(-50%);font:400 24px var(--font-ui);font-style:normal;color:var(--text-2);}
 .ksc-bars{display:flex;align-items:flex-end;gap:2px;height:34px;}
-.ksc-bars i{flex:1;min-width:2px;border-radius:2px;background:var(--accent);opacity:.85;}
+.ksc-bars i{flex:1;min-width:2px;border-radius:2px;background:var(--rep);opacity:.85;}
 .ksc-bars i.f{background:var(--positive);opacity:1;}
 .ksc-bars i.s{background:var(--info);opacity:1;}
 .ksc-seg{display:flex;gap:3px;height:24px;border-radius:8px;overflow:hidden;}
@@ -540,7 +540,7 @@ body.kv-spoke #navSegs{display:none;}
 .kr-plot{position:relative;padding-top:36px;}
 .kr-bars{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:3px;height:120px;}
 .kr-bar{display:flex;align-items:flex-end;height:100%;min-width:0;padding:0;border:0;border-radius:4px;background:color-mix(in srgb,var(--text) 6%,transparent);cursor:pointer;}
-.kr-bar i{display:block;width:100%;border-radius:4px;background:var(--accent);transition:background var(--t-fast) var(--ease);}
+.kr-bar i{display:block;width:100%;border-radius:4px;background:var(--rep);transition:background var(--t-fast) var(--ease);}
 .kr-bar.f i{background:var(--positive);}
 .kr-bar.s i{background:var(--info);}
 .kr-bar.on i{background:var(--pick);}
@@ -633,3 +633,10 @@ body.kv-spoke #navSegs{display:none;}
 .kv-snap-foot{margin:0;font-size:12.5px;}
 .kv-or{display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:var(--text-2);font:600 11px var(--font-ui);letter-spacing:.06em;text-transform:uppercase;}
 .kv-or::before,.kv-or::after{content:"";flex:1;height:1px;background:var(--line);}
+.kv-ethos-link{white-space:normal;}
+.kv-ethos-link > span{min-width:0;flex:1;}
+@media (max-width:440px){
+  .kv-frow .tm{min-width:0;}
+  .kv-frow .tm small{display:block;margin:0;}
+  .ks .ks-head .kd-stat:nth-child(-n+3) b,.ks .ks-head .kd-stat b{font-size:18px;letter-spacing:-.04em;}
+}

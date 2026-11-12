@@ -45,6 +45,8 @@
   --shadow-2:0 10px 32px rgba(13,13,15,.16);
   --hawk-eye:var(--red-500);
   --pick:#f0b13c; --pick-ink:var(--amber-600);
+  /* Rep bars keep their own colour so a supporter's accent never clashes with fastest (green) and slowest (blue). */
+  --rep:#e5533d;
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
