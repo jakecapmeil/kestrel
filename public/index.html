@@ -1212,6 +1212,17 @@
 
   /* ---- Kestrel AI tab ------------------------------------------------------------ */
   .kai-chat{display:flex;flex-direction:column;gap:var(--sp-3);}
+  .kai-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:-4px 0 0;}
+  .kai-bar .k-power{margin:0;}
+  .kai-tools{gap:6px;flex-wrap:nowrap;margin-left:auto;}
+  .kai-tools .sm-btn{white-space:nowrap;}
+  .kai-hist{border:1px solid var(--line);border-radius:var(--r-control);padding:var(--sp-2);max-height:320px;overflow:auto;}
+  .kai-hist-list{display:flex;flex-direction:column;gap:2px;}
+  .kai-hist-row{display:flex;align-items:center;gap:6px;border-radius:8px;}
+  .kai-hist-row.on{background:var(--surface-2,rgba(127,127,127,.12));}
+  .kai-hist-open{flex:1;min-width:0;height:auto;min-height:0;box-shadow:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:none;border:0;padding:8px;color:inherit;cursor:pointer;font:inherit;}
+  .kai-hist-open b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-subhead);}
+  .kai-hist-open span{font-size:var(--fs-caption1,12px);color:var(--ink-soft);}
   .kai-chat .kai-thread{max-height:none;min-height:240px;height:clamp(240px, calc(100vh - 420px), 560px);}
   .kai-chat .chip-scroll{margin:0 calc(-1 * var(--sp-4));}
   .kai-saved.refused span{background:var(--int-2-bg);color:var(--int-2-ink);}
@@ -2061,7 +2072,14 @@
             </div>
           </div>
         </div>
-        <div class="k-power" id="kPower"></div>
+        <div class="kai-bar">
+          <div class="k-power" id="kPower"></div>
+          <div class="cluster kai-tools">
+            <button type="button" class="ghost sm-btn" id="kaiHistBtn" aria-expanded="false" aria-controls="kaiHist">History</button>
+            <button type="button" class="ghost sm-btn" id="kaiNewBtn">New chat</button>
+          </div>
+        </div>
+        <div class="kai-hist" id="kaiHist" hidden></div>
         <div class="kai-off hint" id="kaiOff" style="display:none;">The free Kestrel AI isn't switched on for this server. Pick another model to power it: Change, above.</div>
         <div class="kai-thread" id="kaiThread" aria-live="polite"></div>
         <div class="chip-scroll" id="kaiSuggest"></div>
@@ -4499,9 +4517,60 @@ async function autoSync(){
 // --- Kestrel AI ------------------------------------------------------------------
 const ASK_SUGGESTIONS = ['How was my week?', 'What should I run tomorrow?', 'My legs are sore', 'Build me a workout for my next race', 'Am I running my easy days too hard?'];
 
-// Kestrel AI is a chat. Each person's thread lives for this page load; the last
+// Kestrel AI is a chat. Each chat is saved (History reopens it, on any device); the last
 // 12 turns go to the server so Kestrel AI remembers what it just asked.
-let kaiChat = { personId: null, turns: [] };
+let kaiChat = { personId: null, id: null, turns: [] };
+const newChatId = ()=> 'c_' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 16) : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
+async function saveKaiChat(){
+  const c = kaiChat;
+  if(!c.id || !c.turns.some(t=> t.role === 'user')) return;
+  try{ await fetch('/api/chats/' + c.id, { method:'PUT', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ turns: c.turns }) }); }catch(e){}
+  if(!$('kaiHist').hidden) renderKaiHistory();
+}
+function drawKaiTurns(){
+  $('kaiThread').innerHTML = '';
+  for(const t of kaiChat.turns) kaiBubble(t.role === 'user' ? 'user' : 'kai', t.role === 'user' ? escapeHtml(t.text) : miniMarkdown(t.text));
+}
+async function newKaiChat(){
+  kaiChat = { personId: activePersonId, id: newChatId(), turns: [] };
+  $('kaiThread').innerHTML = '';
+  const opener = await kaiOpener();
+  kaiChat.turns.push({ role: 'kai', text: opener });
+  kaiBubble('kai', escapeHtml(opener));
+}
+async function openKaiChat(id){
+  try{
+    const res = await fetch('/api/chats/' + encodeURIComponent(id), { cache:'no-store' });
+    const d = await res.json();
+    if(!res.ok) throw new Error(d.error || 'Couldn’t open that chat.');
+    kaiChat = { personId: activePersonId, id: d.id, turns: d.turns };
+    drawKaiTurns();
+    toggleKaiHistory(false);
+    $('askInput').focus();
+  }catch(e){ alert(e.message); }
+}
+function toggleKaiHistory(show){
+  const el = $('kaiHist');
+  el.hidden = !show;
+  $('kaiHistBtn').setAttribute('aria-expanded', String(!!show));
+  if(show) renderKaiHistory();
+}
+async function renderKaiHistory(){
+  const el = $('kaiHist');
+  el.innerHTML = '<div class="hint">Loading your chats…</div>';
+  let chats = [];
+  try{ const res = await fetch('/api/chats', { cache:'no-store' }); chats = (await res.json()).chats || []; }catch(e){ el.innerHTML = '<div class="hint">Couldn’t load your chats.</div>'; return; }
+  const when = (t)=>{ const d = new Date(t), now = new Date(); return d.toDateString() === now.toDateString() ? d.toLocaleTimeString(undefined, { hour:'numeric', minute:'2-digit' }) : d.toLocaleDateString(undefined, { month:'short', day:'numeric', ...(d.getFullYear() !== now.getFullYear() ? { year:'numeric' } : {}) }); };
+  el.innerHTML = chats.length ? `<div class="kai-hist-list">${chats.map(c=> `<div class="kai-hist-row ${c.id === kaiChat.id ? 'on' : ''}"><button type="button" class="kai-hist-open" data-open="${escapeHtml(c.id)}"><b>${escapeHtml(c.title || 'Chat')}</b><span>${when(c.updated_at)} · ${c.n || 0} messages</span></button><button type="button" class="ghost sm-btn" data-del="${escapeHtml(c.id)}" aria-label="Delete chat">Delete</button></div>`).join('')}</div>`
+    : '<div class="hint">No saved chats yet. Each conversation is saved here once you send a message.</div>';
+  el.querySelectorAll('[data-open]').forEach(b=> b.onclick = ()=> openKaiChat(b.dataset.open));
+  el.querySelectorAll('[data-del]').forEach(b=> b.onclick = async ()=>{
+    if(!confirm('Delete this chat?')) return;
+    await fetch('/api/chats/' + encodeURIComponent(b.dataset.del), { method:'DELETE' }).catch(()=>{});
+    if(b.dataset.del === kaiChat.id) await newKaiChat();
+    renderKaiHistory();
+  });
+}
 
 function kaiBubble(role, html, saved, refused){
   const el = document.createElement('div');
@@ -4570,13 +4639,12 @@ async function startKaiChat(){
     $('kaiSuggest').innerHTML = ASK_SUGGESTIONS.map(q=>`<button type="button" class="chip" data-q="${escapeHtml(q)}">${escapeHtml(q)}</button>`).join('');
     $('kaiSuggest').querySelectorAll('[data-q]').forEach(b=> b.addEventListener('click', ()=>{ $('askInput').value = b.dataset.q; askCoachNow(); }));
   }
-  if(kaiChat.personId !== activePersonId){
-    kaiChat = { personId: activePersonId, turns: [] };
-    $('kaiThread').innerHTML = '';
-    const opener = await kaiOpener();
-    kaiChat.turns.push({ role: 'kai', text: opener });
-    kaiBubble('kai', escapeHtml(opener));
+  if(!$('kaiNewBtn').dataset.wired){
+    $('kaiNewBtn').dataset.wired = '1';
+    $('kaiNewBtn').onclick = ()=>{ toggleKaiHistory(false); newKaiChat(); };
+    $('kaiHistBtn').onclick = ()=> toggleKaiHistory($('kaiHist').hidden);
   }
+  if(kaiChat.personId !== activePersonId) await newKaiChat();
 }
 
 async function askCoachNow(){
@@ -4597,8 +4665,9 @@ async function askCoachNow(){
     kaiBubble('kai', escapeHtml(res?.error || 'Couldn’t reach Kestrel. Check your connection.'));
     return;
   }
-  kaiChat.turns.push({ role: 'kai', text: res.answer });
+  kaiChat.turns.push({ role: 'kai', text: res.answer, model: window.kestrelChatModel?.() || '' });
   kaiBubble('kai', miniMarkdown(res.answer), res.saved, res.refused);
+  saveKaiChat();
   // Anything Kestrel AI saved or changed shows up everywhere right away.
   if(res.saved?.length){
     kaiData = null; fitnessData = null;
@@ -6510,7 +6579,7 @@ async function renderKaiTab(){
     ['kaiChanges','kaiHealth','kaiLevel'].forEach(id=> $(id).innerHTML = '');
     return;
   }
-  if(off){ kaiChat = { personId: null, turns: [] }; $('kaiThread').innerHTML = ''; }
+  if(off){ kaiChat = { personId: null, id: null, turns: [] }; $('kaiThread').innerHTML = ''; }
   else await startKaiChat();
   if(kaiPending && !off){ $('askInput').value = kaiPending; kaiPending = ''; askCoachNow(); }
   renderPlanSide();

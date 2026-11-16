@@ -36,6 +36,7 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 - API keys for your own AI provider stay in your browser. Intervals.icu keys are encrypted at rest (AES-GCM).
 - The coach never diagnoses, and it sends lasting pain to a coach, parent or doctor. Plan changes always pass the guardrails, whichever model suggested them.
 - GPS routes are fetched from intervals.icu only when you open a run, cached for you alone, and never shown to teammates. Deleting your data removes them.
+- Kestrel AI chats are saved to your account (Coach → History) so they reopen on any device. Only you can read them; delete one there, or all of them with your data.
 - You → Settings → **Delete my Kestrel data** removes everything about you. Terms, privacy and a health notice are at `/legal`.
 
 ## How it is built

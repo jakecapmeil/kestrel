@@ -442,11 +442,17 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
       .bind(r.gps, r.gpsCourse, person.id, `intervals:${r.a.id}`)));
   }
 
-  // Workouts also go on the day log with their rep splits; Kai's day lines too.
-  for (const r of runs) {
-    if (!r.splits) continue;
+  // Workouts also go on the day log with their rep splits; Kai's day lines too. A day with a warm-up, a workout and
+  // a cool-down saved separately gets the workout's splits, not the warm-up's mile laps (which may have got there first).
+  const catOf = (r) => finalCat.get(String(r.a.id)) || r.category;
+  const hard = (r) => (catOf(r) === 'workout' || catOf(r) === 'race' ? 1 : 0);
+  const byDate = new Map();
+  for (const r of runs) if (r.splits) (byDate.get(r.date) || byDate.set(r.date, []).get(r.date)).push(r);
+  for (const list of byDate.values()) {
+    list.sort((x, y) => hard(y) - hard(x) || (y.laps?.length || 0) - (x.laps?.length || 0));
+    const r = list[0];
     const existing = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(person.id, r.date).first();
-    if (existing?.splits) continue;
+    if (existing?.splits && (existing.splits === r.splits || !list.slice(1).some((o) => o.splits === existing.splits))) continue;
     await saveDay(db, person.id, r.date, { splits: r.splits, types: dayTypes(finalCat.get(String(r.a.id)) || r.category, r.fast), ...(r.track ? { surface: 'track' } : {}) });
   }
   for (const d of ai?.days || []) {

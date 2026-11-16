@@ -8,6 +8,7 @@
 // Cross-training load is session RPE (minutes x effort 1-10, Foster 2001), the same unit coaches use for any sport.
 // Race goals read the runner's Fitness States estimate; equivalent times at other distances use Riegel (t2 = t1 (d2/d1)^1.06).
 import { parseTime, fmtTime } from '../events.js';
+import { EVENTS as FIT_EVENTS, EXTRA_EVENTS } from './fitness.js';
 
 export class TrackError extends Error {}
 
@@ -352,7 +353,40 @@ export const GOAL_EVENTS = [
 ];
 // Names the onboarding form and older profiles use.
 const EVENT_ALIAS = { '1600': '1600', mile: '1600', '3200': '3200', '5k': '5K', '10k': '10K', 'half marathon': 'half', half: 'half', marathon: 'marathon', '800': '800' };
-export const eventKey = (s) => EVENT_ALIAS[String(s || '').trim().toLowerCase()] || (GOAL_EVENTS.some((e) => e.key === s) ? s : '');
+// Any other distance is a custom event, 'm:<meters>' (100 m to 100 km), e.g. 'm:3000' or 'm:4828' (3 miles).
+const customMeters = (s) => { const m = String(s || '').match(/^m:(\d+(?:\.\d+)?)$/); const n = m ? Number(m[1]) : NaN; return n >= 100 && n <= 100000 ? n : null; };
+export const eventKey = (s) => EVENT_ALIAS[String(s || '').trim().toLowerCase()] || (GOAL_EVENTS.some((e) => e.key === s) ? s : customMeters(s) ? `m:${Math.round(customMeters(s))}` : '');
+function distanceLabel(m) {
+  const mi = m / MILE;
+  if (Math.abs(mi - Math.round(mi * 4) / 4) < 0.004 && mi >= 1) return `${Math.round(mi * 4) / 4} mi`;
+  if (m >= 10000 && m % 100 === 0) return `${m / 1000}K`;
+  return `${Math.round(m)}m`;
+}
+export function eventOf(key) {
+  const std = GOAL_EVENTS.find((e) => e.key === key);
+  if (std) return std;
+  const m = customMeters(key);
+  return m ? { key, label: distanceLabel(m), m, custom: true } : null;
+}
+// Today's estimate for an event: Fitness States' own for the standard ones; for a custom distance, scaled (Riegel,
+// 1.06) from the estimate at the nearest standard distance.
+function estimateFor(fitness, key) {
+  const ests = fitness?.estimates || [];
+  const own = ests.find((e) => e.event === key);
+  if (own) return own;
+  const ev = eventOf(key);
+  if (!ev?.custom) return null;
+  // Every flat distance Fitness States estimates (400 m to the marathon); steeple times aren't flat running.
+  const flat = [...FIT_EVENTS, ...EXTRA_EVENTS.filter((x) => x.group !== 'steeple' && x.m >= 400), ...GOAL_EVENTS];
+  let best = null;
+  for (const e of ests) {
+    const std = flat.find((x) => x.key === e.event);
+    if (!std || !(e.sec > 0)) continue;
+    const d = Math.abs(Math.log(std.m / ev.m));
+    if (!best || d < best.d) best = { d, std, e };
+  }
+  return best ? { event: key, sec: Math.round(best.e.sec * Math.pow(ev.m / best.std.m, 1.06)), from: best.std.label } : null;
+}
 const GOAL_KINDS = ['race', 'mileage', 'consistency', 'custom'];
 
 // What typical plans for a marathon or half goal build to. A guide, not a rule: the coach adapts to the runner.
@@ -371,9 +405,9 @@ function buildGuide(event, target) {
 const paceOf = (sec, m, per) => fmtTime((sec / m) * per);
 
 async function raceProgress(db, personId, g, fitness, today) {
-  const ev = GOAL_EVENTS.find((e) => e.key === g.event);
+  const ev = eventOf(g.event);
   if (!ev || !(g.target > 0)) return { state: 'incomplete' };
-  const est = (fitness?.estimates || []).find((e) => e.event === g.event);
+  const est = estimateFor(fitness, g.event);
   const current = est?.sec || null;
   const prTime = est?.pr?.time || (typeof est?.pr === 'string' ? est.pr : null);
   const prSec = prTime ? parseTime(prTime) : NaN;
@@ -383,6 +417,7 @@ async function raceProgress(db, personId, g, fitness, today) {
     equivalents: GOAL_EVENTS.filter((e) => e.key !== ev.key && e.m >= ev.m / 4.5 && e.m <= ev.m * 4.5 && e.m >= 1600)
       .map((e) => ({ event: e.key, label: e.label, time: fmtTime(g.target * Math.pow(e.m / ev.m, 1.06)) })),
     guide: buildGuide(g.event, g.target),
+    distance: ev.label, scaled_from: est?.from || null,
   };
   if (Number.isFinite(prSec) && prSec <= g.target) out.achieved = true;
   if (!current) {
@@ -424,7 +459,7 @@ export async function goalsView(db, personId, today, fitness) {
     if (g.target_date && isDate(g.target_date)) base.days_left = Math.round((Date.parse(g.target_date) - Date.parse(today)) / DAY);
     if (g.kind === 'race') {
       // A goal set before Kestrel had an estimate starts its progress bar at the first estimate it gets.
-      const est = (fitness?.estimates || []).find((e) => e.event === g.event)?.sec;
+      const est = estimateFor(fitness, g.event)?.sec;
       if (!(g.start_value > 0) && est) {
         await db.prepare('UPDATE goals SET start_value = ? WHERE id = ? AND person_id = ?').bind(est, g.id, personId).run();
         g.start_value = est;
@@ -466,7 +501,7 @@ export async function saveGoal(db, personId, b, fitness) {
     if (!event) throw new TrackError('Pick the race distance.');
     target = parseTime(str(b.target_time ?? b.target, 12));
     if (!(target > 0)) throw new TrackError('Goal time looks like 18:30 or 2:59:59.');
-    if (!title) title = `${GOAL_EVENTS.find((e) => e.key === event).label} in ${fmtTime(target)}`;
+    if (!title) title = `${eventOf(event).label} in ${fmtTime(target)}`;
   } else if (kind === 'mileage') {
     target = num(b.target, 1, 200);
     if (target === null) throw new TrackError('Miles a week, 1 to 200.');
@@ -485,7 +520,7 @@ export async function saveGoal(db, personId, b, fitness) {
     if (!old) throw new TrackError('That goal is gone.');
     // A new race target or event restarts the progress bar from today's estimate.
     const restart = kind === 'race' && (old.event !== event || old.kind !== 'race');
-    const start = restart ? (fitness?.estimates || []).find((e) => e.event === event)?.sec || null : old.start_value;
+    const start = restart ? estimateFor(fitness, event)?.sec || null : old.start_value;
     await db.prepare('UPDATE goals SET kind = ?, title = ?, event = ?, target = ?, target_date = ?, start_value = ?, progress = ?, priority = ?, why = ?, status = ?, done_at = ? WHERE id = ? AND person_id = ?')
       .bind(kind, title, event, target, date, start, progress, priority, why, status, status === 'done' ? old.done_at || Date.now() : null, old.id, personId).run();
     if (priority) await db.prepare('UPDATE goals SET priority = 0 WHERE person_id = ? AND id != ?').bind(personId, old.id).run();
@@ -494,7 +529,7 @@ export async function saveGoal(db, personId, b, fitness) {
   const { n } = await db.prepare("SELECT COUNT(*) AS n FROM goals WHERE person_id = ? AND status = 'active'").bind(personId).first();
   if (n >= 12) throw new TrackError('You have 12 active goals. Finish or archive one first.');
   const id = newId('g_');
-  const start = kind === 'race' ? (fitness?.estimates || []).find((e) => e.event === event)?.sec || null : null;
+  const start = kind === 'race' ? estimateFor(fitness, event)?.sec || null : null;
   await db.prepare('INSERT INTO goals (id, person_id, kind, title, event, target, target_date, start_value, progress, priority, why, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, personId, kind, title, event, target, date, start, progress, priority || (n === 0 ? 1 : 0), why, status, Date.now()).run();
   if (priority) await db.prepare('UPDATE goals SET priority = 0 WHERE person_id = ? AND id != ?').bind(personId, id).run();
@@ -530,7 +565,7 @@ export async function coachTracking(db, person, today) {
   ).bind(person.id, addDays(today, -6)).all();
   return {
     runner,
-    goals: goals.map((g) => ({ ...g, main: !!g.priority, priority: undefined, target: g.kind === 'race' ? fmtTime(g.target, false) : g.target })),
+    goals: goals.map((g) => ({ ...g, event: g.kind === 'race' ? eventOf(g.event)?.label || g.event : g.event, main: !!g.priority, priority: undefined, target: g.kind === 'race' ? fmtTime(g.target, false) : g.target })),
     cross_training_by_hand_last_14_days: xt.map((x) => ({ ...x, sport: sportLabel(x.sport) })),
     fuel_last_7_days: food.length ? { weight_kg: runner.weight_kg || null, days: food } : null,
   };

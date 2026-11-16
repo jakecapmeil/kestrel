@@ -166,7 +166,7 @@ const byEnd = (a, b) => {
 
 // A run before the day's hard effort is the warm-up, one after it the cool-down.
 const EASYISH = new Set(['easy', 'recovery', 'shakeout']);
-function rolesOf(rs) {
+export function rolesOf(rs) {
   const roles = new Map();
   const run = rs.filter((w) => w.category !== 'crosstrain' && endMin(w) !== null).sort(byEnd);
   const hard = run.filter((w) => HARD_CATS.has(w.category));
@@ -343,7 +343,8 @@ export async function getDays(db, personId, from, to) {
     const maxHrEffort = rs.reduce((m, w) => Math.max(m, w.hr_effort ?? w.effort ?? 0), 0);
     const track = e?.surface === 'track' || rs.some((w) => w.surface === 'track');
     const reps = parseSplitReps(e?.split_reps).map((r) => (track ? { ...r, m: snap100(r.m) } : r));
-    const laps = lapsOf(rs, track);
+    // The workout's laps, not a warm-up's mile laps, when the day was saved as separate activities.
+    const laps = lapsOf([...rs].sort((x, y) => (RANK[y.category] ?? 0) - (RANK[x.category] ?? 0)), track);
     return {
       date,
       track,

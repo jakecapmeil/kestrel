@@ -15,6 +15,8 @@ export const PROVIDERS = {
 };
 
 const KEY = 'kestrel.ai';
+// OpenAI's reasoning models (o1, o3, o4-mini, gpt-5…) take only the default temperature; sending one is an error.
+const REASONING = /^(o\d|gpt-5)/;
 
 // What each Kestrel AI job runs on. '' means the model chosen in Kestrel Lab (state.provider).
 export const TASKS = {
@@ -119,7 +121,7 @@ export async function complete(state, system, messages, { apiFetch }) {
       res = await fetch(`${base}/chat/completions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(c.key ? { Authorization: `Bearer ${c.key}` } : {}) },
-        body: JSON.stringify({ model: c.model, messages: [{ role: 'system', content: system }, ...messages.map((m) => (m.images?.length ? { role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] } : { role: m.role, content: m.content }))], temperature: 0.5 }),
+        body: JSON.stringify({ model: c.model, messages: [{ role: 'system', content: system }, ...messages.map((m) => (m.images?.length ? { role: m.role, content: [{ type: 'text', text: m.content }, ...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] } : { role: m.role, content: m.content }))], ...(REASONING.test(c.model.replace(/^.*\//, '')) ? {} : { temperature: 0.5 }) }),
       });
     }
   } catch (err) {

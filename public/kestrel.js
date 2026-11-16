@@ -134,12 +134,15 @@ async function googleInApp() {
   const browser = window.Capacitor?.Plugins?.Browser;
   if (browser) await browser.open({ url }); else window.open(url, '_blank');
 }
+// The sign-in client is made during boot; a code that arrives before then waits for it.
+let sbReady; const sbReadyP = new Promise((r) => { sbReady = r; });
 window.kestrelAuthCallback = async (url) => {
   try {
     const u = new URL(url);
     if (u.searchParams.get('error_description')) throw new Error(u.searchParams.get('error_description'));
     const code = u.searchParams.get('code');
-    if (!code || !K.sb) return;
+    if (!code) return;
+    if (!K.sb) await sbReadyP;
     const { error } = await K.sb.auth.exchangeCodeForSession(code);
     if (error) throw error;
   } catch (e) { toast(e.message, true); }
@@ -996,7 +999,7 @@ function renderPlanGrid(el, plans, lead, save) {
       return html`<button type="button" class="k-pc ${TYPE_CLASS[c.type] || ''}" data-l="${lvl}" data-w="${wi}" data-d="${di}" title="${tip}" aria-label="${tip}">${rest && !n ? '·' : fmtMi(n)}</button>`;
     });
     const total = (lvl, wi) => fmtMi(plans[lvl].days.reduce((a, d) => a + numOf(d.cells[wi]), 0));
-    el.innerHTML = html`${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
+    el.innerHTML = html`${lead ? html`<div class="k-row k-plan-tools"><button class="k-btn small" type="button" id="kLvlEdit">Edit level mileage</button><button class="k-btn small" type="button" id="kRefEdit">Edit workouts and notes</button></div>` : ''}${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
       <div class="k-pr k-ph" role="row"><span>Level</span>${DAYS7.map((d) => html`<span role="columnheader">${d}</span>`)}<span>Total</span></div>
       ${levels.map((lvl) => html`<div class="k-pr ${lvl === mine ? 'mine' : ''}" role="row"><button type="button" class="k-plvl" data-open="${lvl}" aria-expanded="${String(open.has(lvl))}"><i>${open.has(lvl) ? '▾' : '▸'}</i>${plans[lvl].weeks[0].miles}<small>${lvl === mine ? 'mi · you' : 'mi'}</small></button>${cellsOf(lvl, 0)}<span class="k-ptot">${total(lvl, 0)}</span></div>
         ${open.has(lvl) ? [1, 2].map((wi) => html`<div class="k-pr sub" role="row"><span class="k-pwk">${WEEKS[wi][1]}</span>${cellsOf(lvl, wi)}<span class="k-ptot">${total(lvl, wi)}</span></div>`) : ''}`)}
@@ -1004,6 +1007,77 @@ function renderPlanGrid(el, plans, lead, save) {
     <div class="k-pleg"><span class="easy">Easy</span><span class="wo">Workout</span><span class="lr">Long run</span><span class="race">Race</span><span class="rest">Rest · cross-train</span> <small>Miles per day. Race week and Taper are under each level.</small></div>`.s;
     el.querySelectorAll('[data-open]').forEach((b) => { b.onclick = () => { const l = Number(b.dataset.open); open.has(l) ? open.delete(l) : open.add(l); paint(); }; });
     el.querySelectorAll('.k-pc').forEach((b) => { b.onclick = () => openCell(Number(b.dataset.l), Number(b.dataset.w), Number(b.dataset.d)); });
+    if ($('kLvlEdit')) $('kLvlEdit').onclick = editLevels;
+    if ($('kRefEdit')) $('kRefEdit').onclick = editRef;
+  };
+  // Each level's weekly miles. Changing one scales every day of that level (normal, race week and taper) to match.
+  const scaleMiles = (txt, f) => String(txt).replace(/\d+(?:\.\d+)?/g, (n) => fmtMi(Math.max(0.5, Math.round(Number(n) * f * 2) / 2)));
+  const editLevels = () => {
+    const d = dialog();
+    d.innerHTML = html`<h2>Level mileage</h2><p class="k-small">Weekly miles for each level, lowest first. Changing a level scales all of its days, including its race week and taper, by the same amount. Athletes stay on their level.</p>
+      <form id="kLvlForm"><div class="k-lvls">${levels.map((l, i) => html`<div class="k-lvl"><span class="k-lname"><b>Level ${i + 1}</b><small>now ${plans[l].weeks[0].miles} mi</small></span><input class="k-input" type="number" min="1" max="150" step="1" name="l${l}" value="${plans[l].weeks[0].miles}" aria-label="Level ${i + 1} weekly miles" required></div>`)}</div>
+      <p class="k-small" id="kLvlWarn" role="status"></p>
+      <div class="k-row"><button class="k-btn primary" type="submit">Save levels</button><button class="k-link" type="button" id="kLvlClose">Cancel</button></div></form>`.s;
+    d.showModal();
+    $('kLvlClose').onclick = () => d.close();
+    $('kLvlForm').onsubmit = (e) => {
+      e.preventDefault();
+      const f = form(e.target);
+      const want = levels.map((l) => Number(f['l' + l]));
+      if (want.some((n, i) => i && n <= want[i - 1])) { $('kLvlWarn').textContent = 'Each level needs more miles than the one below it.'; return; }
+      const next = JSON.parse(JSON.stringify(plans));
+      levels.forEach((l, i) => {
+        const old = Number(plans[l].weeks[0].miles), k = want[i] / old;
+        if (!(k > 0) || k === 1) return;
+        next[l].weeks = next[l].weeks.map((w, wi) => ({ ...w, miles: wi === 0 ? want[i] : Math.max(1, Math.round(w.miles * k)) }));
+        // Each week column scales by k, rounded to half miles so the week still adds up to k times what it did.
+        for (let wi = 0; wi < 3; wi++) {
+          const cells = next[l].days.map((day) => day.cells[wi]).filter((c) => c.type !== 'Off' && c.type !== 'Cross-train' && numOf(c) > 0);
+          const plain = cells.filter((c) => /^\s*\d+(\.\d+)?\s*$/.test(c.miles));
+          cells.filter((c) => !plain.includes(c)).forEach((c) => { c.miles = scaleMiles(c.miles, k); });
+          const goal = Math.round(plain.reduce((a, c) => a + numOf(c), 0) * k * 2) / 2;
+          const raw = plain.map((c) => Math.max(0.5, numOf(c) * k));
+          const out = raw.map((x) => Math.max(0.5, Math.floor(x * 2) / 2));
+          const order = raw.map((x, i) => [x * 2 - Math.floor(x * 2), i]).sort((p, q) => q[0] - p[0]);
+          for (let j = 0; out.reduce((a, x) => a + x, 0) < goal - 0.01 && j < order.length; j++) out[order[j][1]] += 0.5;
+          plain.forEach((c, i) => { c.miles = fmtMi(out[i]); });
+        }
+      });
+      attempt(async () => { await save(next); d.close(); });
+    };
+  };
+  // The workout menu, core and gym notes that come with the plan: for every level, or one level.
+  const editRef = () => {
+    const same = levels.every((l) => JSON.stringify(plans[l].ref || {}) === JSON.stringify(plans[levels[0]].ref || {}));
+    let pick = same ? 'all' : String(mine || levels[0]);
+    const d = dialog();
+    const draw = () => {
+      const ref = plans[pick === 'all' ? levels[0] : Number(pick)].ref || {};
+      const ss = [...(ref.sessions || []), { title: '', desc: '', items: [] }].slice(0, 6);
+      d.innerHTML = html`<h2>Workouts and notes</h2>
+        <form id="kRefForm">
+          <div><label class="k-label" for="kRefLvl">For</label><select class="k-input" id="kRefLvl"><option value="all" ${pick === 'all' ? 'selected' : ''}>Every level</option>${levels.map((l, i) => html`<option value="${l}" ${pick === String(l) ? 'selected' : ''}>Level ${i + 1} (${plans[l].weeks[0].miles} mi)</option>`)}</select>${same ? '' : html`<p class="k-small">Levels have different notes now; saving for every level replaces them all.</p>`}</div>
+          ${ss.map((x, i) => html`<fieldset class="k-refset"><legend class="k-small"><b>${x.title ? `Workout menu ${i + 1}` : 'Add a workout menu'}</b></legend>
+            <input class="k-input" name="t${i}" maxlength="60" value="${x.title}" placeholder="e.g. Tuesday workouts">
+            <input class="k-input" name="d${i}" maxlength="120" value="${x.desc}" placeholder="e.g. Hard, race pace">
+            <textarea class="k-input" name="i${i}" rows="3" placeholder="One workout a line, e.g. 6x800 at 5k pace, 200 jog">${(x.items || []).join('\n')}</textarea></fieldset>`)}
+          <div><label class="k-label" for="kRefCore">Core</label><input class="k-input" id="kRefCore" name="core" maxlength="200" value="${ref.core || ''}"></div>
+          <div><label class="k-label" for="kRefGym">Gym</label><input class="k-input" id="kRefGym" name="gym" maxlength="200" value="${ref.gym || ''}"></div>
+          <div class="k-row"><button class="k-btn primary" type="submit">Save</button><button class="k-link" type="button" id="kRefClose">Cancel</button></div>
+        </form>`.s;
+      $('kRefClose').onclick = () => d.close();
+      $('kRefLvl').onchange = (e) => { pick = e.target.value; draw(); };
+      $('kRefForm').onsubmit = (e) => {
+        e.preventDefault();
+        const f = form(e.target);
+        const sessions = ss.map((_, i) => ({ title: (f['t' + i] || '').trim(), desc: (f['d' + i] || '').trim(), items: (f['i' + i] || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 8) })).filter((x) => x.title || x.items.length);
+        const next = JSON.parse(JSON.stringify(plans));
+        for (const l of pick === 'all' ? levels : [Number(pick)]) next[l].ref = { ...(next[l].ref || {}), sessions, core: (f.core || '').trim(), gym: (f.gym || '').trim() };
+        attempt(async () => { await save(next); d.close(); });
+      };
+    };
+    draw();
+    d.showModal();
   };
   // Tap a day: read it (everyone) or change it (captains and the owner).
   const openCell = (lvl, wi, di) => {
@@ -1583,9 +1657,52 @@ window.kestrelRenderSettings = async () => {
   }
 };
 
-window.kestrelRenderPower = (el) => {
+// The model picker above the chat: any provider that can run (the free default, or one with a key saved in Lab), then
+// that provider's models, listed live from its API. The choice is the chat job's model (Lab → AI per job shows it too).
+const modelCache = {};
+const CHAT_MODEL = {
+  // Only models that chat: OpenAI's list also has embeddings, speech, images and moderation.
+  openai: (id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/(embed|audio|tts|transcribe|realtime|image|search|moderation|instruct|dall-e|whisper|codex)/.test(id),
+  anthropic: (id) => /^claude-/.test(id),
+};
+// Shown when the provider's list can't be read (no network, or a key without list access).
+const FALLBACK_MODELS = { anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] };
+async function modelsFor(id) {
+  if (modelCache[id]) return modelCache[id];
+  let list = [];
+  try { list = await AI.listModels(K.ai, id); } catch { list = []; }
+  list = list.filter(CHAT_MODEL[id] || (() => true));
+  if (!list.length) list = FALLBACK_MODELS[id] || [];
+  return (modelCache[id] = list);
+}
+window.kestrelChatModel = () => AI.describe(AI.forTask(K.ai, 'chat'));
+window.kestrelRenderPower = async (el) => {
   if (!el) return;
-  el.innerHTML = html`<span>Powered by <b>${AI.describe(AI.forTask(K.ai, 'chat'))}</b></span> <a class="k-link" href="/lab#/providers">Customise in Lab</a>`.s;
+  const cur = AI.forTask(K.ai, 'chat');
+  const ids = AI.usable(K.ai);
+  const model = cur.provider === 'kestrel' ? '' : AI.configFor(K.ai, cur.provider).model;
+  const name = (id) => AI.PROVIDERS[id].label.replace(/ \(.*\)$/, '');
+  el.innerHTML = html`<label class="k-pick"><span>Model</span><select class="k-input k-sm" id="kChatProv" aria-label="Who powers Kestrel AI chat">${ids.map((id) => html`<option value="${id}" ${id === cur.provider ? 'selected' : ''}>${id === 'kestrel' ? 'Kestrel free' : name(id)}</option>`)}</select></label>
+    ${cur.provider === 'kestrel' ? '' : html`<select class="k-input k-sm" id="kChatModel" aria-label="Model"><option value="${model}">${model || 'Choose a model'}</option></select>`}
+    <a class="k-link" href="/lab#/providers">${ids.length > 1 ? 'Keys' : 'Add an API key'}</a>`.s;
+  const set = (provider, mdl) => {
+    const tasks = { ...(K.ai.tasks || {}) };
+    if (provider === K.ai.provider) delete tasks.chat; else tasks.chat = provider;
+    const configs = { ...K.ai.configs };
+    if (mdl && provider !== 'kestrel') configs[provider] = { ...(configs[provider] || {}), model: mdl };
+    K.ai = { ...K.ai, tasks, configs };
+    AI.saveAi(K.ai);
+    window.kestrelRenderPower(el);
+  };
+  $('kChatProv').onchange = (e) => set(e.target.value);
+  const sel = $('kChatModel');
+  if (sel) {
+    const list = await modelsFor(cur.provider);
+    if (!sel.isConnected || !list.length) return;
+    const all = [...new Set([model, ...list].filter(Boolean))];
+    sel.innerHTML = html`${model ? '' : html`<option value="">Choose a model</option>`}${all.map((m) => html`<option value="${m}" ${m === model ? 'selected' : ''}>${m}</option>`)}`.s;
+    sel.onchange = () => set(cur.provider, sel.value);
+  }
 };
 
 // ---------- Kestrel AI: the coach chat with whatever model the athlete picked
@@ -1632,12 +1749,16 @@ async function boot() {
   // Google sign-in started in an app runs in the system browser and finishes here: first mark the browser and go on to Google,
   // then, when Google sends the code back, pass it to the app.
   if (!SHELL) {
+    // The mark is { t, port }: when the sign-in started, and the Mac app's loopback port (none on iOS, Android or older
+    // Mac apps, which take the kestrel:// link instead). Older marks were just the time.
     const MARK = 'k-appauth';
-    let marked = false;
-    try { marked = Date.now() - Number(localStorage.getItem(MARK) || 0) < 10 * 60e3; } catch {}
+    let mark = null;
+    try { const raw = localStorage.getItem(MARK) || ''; mark = raw.startsWith('{') ? JSON.parse(raw) : raw ? { t: Number(raw) } : null; } catch {}
+    const marked = !!mark && Date.now() - Number(mark.t || 0) < 10 * 60e3;
+    const portOf = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1024 && n <= 65535 ? n : 0; };
     const to = params.get('to') || '';
     if (params.get('appauth') === 'start' && to.startsWith(K.cfg.supabaseUrl + '/auth/v1/authorize')) {
-      try { localStorage.setItem(MARK, String(Date.now())); } catch {}
+      try { localStorage.setItem(MARK, JSON.stringify({ t: Date.now(), port: portOf(params.get('port')) })); } catch {}
       gate(html`<div class="k-landing"><div class="k-auth"><h2>Continuing with Google…</h2></div></div>`);
       location.replace(to);
       return;
@@ -1645,13 +1766,15 @@ async function boot() {
     if (marked && (params.has('code') || params.has('error'))) {
       try { localStorage.removeItem(MARK); } catch {}
       const back = 'kestrel://auth-callback' + location.search;
+      const port = portOf(mark.port);
       gate(html`<div class="k-landing"><div class="k-auth"><h2>Opening Kestrel…</h2><p class="k-small">If the app doesn’t open, tap the button.</p><a class="k-btn primary wide" href="${back}">Open Kestrel</a></div></div>`);
-      location.replace(back);
+      location.replace(port ? `http://127.0.0.1:${port}/auth-callback${location.search}` : back);
       return;
     }
   }
   const fromLink = params.has('code');
   K.sb = createClient(K.cfg.supabaseUrl, K.cfg.supabaseKey, { auth: { flowType: 'pkce', detectSessionInUrl: true, persistSession: true } });
+  sbReady();
   K.sb.auth.onAuthStateChange((event, session) => {
     if (K.recovering || event === 'PASSWORD_RECOVERY') { if (session) renderNewPassword(); return; }
     // The app holds the signed-out person's data in memory; a fresh page is the clean way out.

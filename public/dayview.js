@@ -103,37 +103,49 @@
 
   // A workout's reps from its laps: how they group ("25 × 400 m", "1600 · 1200 · 800 · 400 m"), and the fastest,
   // slowest and average by pace. Only workouts get reps; an easy run's mile laps are splits.
+  // A session can hold more than one set (6 × 1 km, then 4 × 200 m): each set gets its own stats in R.sets.
   function repsOf(s){
     if(!s || s.category !== 'workout') return null;
     let laps = (s.splits || []).filter((l)=> l.m >= 100 && l.s > 0);
     if(laps.length < 2) return null;
     // One watch activity often holds the warm-up, the reps (with lapped jogs) and the cool-down. Keep the reps:
     // laps far slower than the fast half are recoveries, and slow laps at either end are the warm-up and cool-down.
+    // Paces are compared as if every lap were 1 km (short reps are run faster), so 200s don't make 1 km reps look slow.
     const pace = (l)=> l.s / (l.m / MI);
-    const sorted = laps.map(pace).sort((a, b)=> a - b), half = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
+    const norm = (l)=> pace(l) * Math.pow(1000 / Math.min(3200, Math.max(150, l.m)), 0.1);
+    const sorted = laps.map(norm).sort((a, b)=> a - b), half = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
     const ref = half[Math.floor(half.length / 2)];
     // Reps typed by hand are exactly what the runner ran: keep them all. Watch laps: a warm-up or cool-down runs at
     // easy pace (well over 20% slower than the reps), so a threshold mile before 800s at 3200 pace stays in.
     if(!s.splits_hand){
-      laps = laps.filter((l)=> pace(l) <= ref * 1.35);
-      while(laps.length > 2 && pace(laps[0]) > ref * 1.22) laps = laps.slice(1);
-      while(laps.length > 2 && pace(laps[laps.length - 1]) > ref * 1.22) laps = laps.slice(0, -1);
+      laps = laps.filter((l)=> norm(l) <= ref * 1.35);
+      while(laps.length > 2 && norm(laps[0]) > ref * 1.22) laps = laps.slice(1);
+      while(laps.length > 2 && norm(laps[laps.length - 1]) > ref * 1.22) laps = laps.slice(0, -1);
     }
     if(laps.length < 2) return null;
     const groups = [];
-    for(const l of laps){ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) g.n++; else groups.push({ m: l.m, n: 1 }); }
-    const label = groups.length === 1 ? `${groups[0].n} × ${distLabel(groups[0].m, s.track)}`
-      : groups.every((g)=> g.n === 1) && groups.length <= 6 && groups.every((g)=> g.m >= 200 && (s.track || Math.abs(g.m - MI) >= 40)) ? groups.map((g)=> Math.round(g.m / 100) * 100).join(' · ') + ' m'
-      : groups.map((g)=> g.n > 1 ? `${g.n} × ${distLabel(g.m, s.track)}` : distLabel(g.m, s.track)).join(' + ');
-    const same = groups.length === 1;
+    laps.forEach((l, i)=>{ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) { g.n++; g.to = i; } else groups.push({ m: l.m, n: 1, from: i, to: i }); });
     const rows = laps.map((l, i)=> ({ i, m: l.m, s: l.s, hr: l.hr || null, pace: l.s / (l.m / MI), rest: restLabel(l.rest) }));
+    const R = statsOf(rows, groups, !!s.track);
+    // Separate sets: two blocks of repeats (6 × 1 km + 4 × 200 m), or three or more blocks of 3+. A ladder stays one set.
+    const multi = groups.filter((g)=> g.n >= 2);
+    if(groups.length >= 2 && groups.length <= 6 && (multi.length >= 2 && (groups.length === 2 || groups.filter((g)=> g.n >= 3).length >= 2))){
+      R.sets = groups.map((g, k)=> ({ ...statsOf(rows.slice(g.from, g.to + 1), [g], !!s.track), n: k + 1 }));
+    }
+    return R;
+  }
+  function statsOf(rows, groups, track){
+    const label = groups.length === 1 ? `${groups[0].n} × ${distLabel(groups[0].m, track)}`
+      : groups.every((g)=> g.n === 1) && groups.length <= 6 && groups.every((g)=> g.m >= 200 && (track || Math.abs(g.m - MI) >= 40)) ? groups.map((g)=> Math.round(g.m / 100) * 100).join(' · ') + ' m'
+      : groups.map((g)=> g.n > 1 ? `${g.n} × ${distLabel(g.m, track)}` : distLabel(g.m, track)).join(' + ');
+    const same = groups.length === 1;
     const by = (a, b)=> a.pace - b.pace;
     const fast = [...rows].sort(by)[0], slow = [...rows].sort(by).pop();
     const avgS = rows.reduce((a, r)=> a + r.s, 0) / rows.length;
     const avgPace = rows.reduce((a, r)=> a + r.s, 0) / (rows.reduce((a, r)=> a + r.m, 0) / MI);
     const rests = [...new Set(rows.map((r)=> r.rest).filter(Boolean))];
     const hrs = rows.filter((r)=> r.hr);
-    return { track: !!s.track, rows, label, same, fast, slow, avgS, avgPace, rest: rests.length === 1 ? rests[0] : '', work: rows.reduce((a, r)=> a + r.m, 0),
+    return { track, rows, label, same, fast, slow, avgS, avgPace, rest: rests.length === 1 ? rests[0] : '', work: rows.reduce((a, r)=> a + r.m, 0),
       hr: hrs.length >= 2 ? { first: hrs[0].hr, last: hrs[hrs.length - 1].hr, max: Math.max(...hrs.map((r)=> r.hr)) } : null };
   }
   // What a rep reads as: its time when every rep is the same distance, its pace when they differ.
@@ -242,31 +254,36 @@
   }
 
   // ---------------------------------------------------------------- one session
-  function repCard(s, R){
+  // One card per set; set: { n, of } when the session has more than one.
+  function repCard(s, R, set){
     const lo = R.slow.pace, hi = R.fast.pace;
+    const no = (r)=> R.rows.indexOf(r) + 1;
     const h = (r)=> lo === hi ? 70 : Math.round(28 + (lo - r.pace) / (lo - hi) * 72);
     const work = R.work >= 1000 ? `${r1(R.work / 1000)} km of reps` : `${Math.round(R.work)} m of reps`;
     const fourth = R.hr ? `<div><b>${R.hr.first}→${R.hr.last}</b><span class="a">heart rate, bpm</span></div>`
       : `<div><b>${repClock(Math.round((R.same ? R.slow.s - R.fast.s : R.slow.pace - R.fast.pace) * 10) / 10)}</b><span class="a">spread</span></div>`;
-    return `<section class="card kr" aria-label="Reps">
-      <div class="kr-top"><div class="kr-tags"><em class="kr-badge">${esc(s.tag_label || 'Workout')}</em><span>${esc(work)}</span></div>
+    return `<section class="card kr" aria-label="${set ? `Set ${set.n} of ${set.of}` : 'Reps'}">
+      <div class="kr-top"><div class="kr-tags"><em class="kr-badge">${set ? `Set ${set.n} of ${set.of}` : esc(s.tag_label || 'Workout')}</em><span>${esc(work)}</span></div>
         <div class="kr-avg e${effortOf(R.avgPace, R)}"><span>Average</span><b>${repAvg(R)}</b></div></div>
       <div class="kr-title"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14.5" cy="4" r="2"/><path d="M8 21l3-6 3 2v5M6 11l3-3 4 1 2 4 3 1M11 15l-2-3"/></svg><b>${esc(R.label)}</b>${R.rest ? `<span>off ${esc(R.rest)} rest</span>` : ''}</div>
-      <div class="kr-plot"><div class="kr-tip" id="krTip" hidden></div>
-        <div class="kr-bars" style="--n:${R.rows.length}">${R.rows.map((r)=> `<button type="button" class="kr-bar e${effortOf(r.pace, R)}" data-i="${r.i}" aria-label="Rep ${r.i + 1}, ${distLabel(r.m, R.track)} in ${repVal(R, r)}, ${EFFORT[effortOf(r.pace, R)]}${r.hr ? ', ' + r.hr + ' bpm' : ''}"><i style="height:${h(r)}%"></i></button>`).join('')}</div></div>
+      <div class="kr-plot"><div class="kr-tip" hidden></div>
+        <div class="kr-bars" style="--n:${R.rows.length}">${R.rows.map((r, k)=> `<button type="button" class="kr-bar e${effortOf(r.pace, R)}" data-i="${k}" aria-label="Rep ${k + 1}, ${distLabel(r.m, R.track)} in ${repVal(R, r)}, ${EFFORT[effortOf(r.pace, R)]}${r.hr ? ', ' + r.hr + ' bpm' : ''}"><i style="height:${h(r)}%"></i></button>`).join('')}</div></div>
       <div class="kr-axis"><span>Rep 1</span><span>Rep ${R.rows.length}</span></div>
       <div class="kr-stats">
-        <div><b>${repVal(R, R.fast)}</b><span class="e${effortOf(R.fast.pace, R)}">fastest · rep ${R.fast.i + 1}</span></div>
+        <div><b>${repVal(R, R.fast)}</b><span class="e${effortOf(R.fast.pace, R)}">fastest · rep ${no(R.fast)}</span></div>
         <div><b>${repAvg(R)}</b><span class="e${effortOf(R.avgPace, R)}">average</span></div>
-        <div><b>${repVal(R, R.slow)}</b><span class="e${effortOf(R.slow.pace, R)}">slowest · rep ${R.slow.i + 1}</span></div>
+        <div><b>${repVal(R, R.slow)}</b><span class="e${effortOf(R.slow.pace, R)}">slowest · rep ${no(R.slow)}</span></div>
         ${fourth}</div>
     </section>`;
   }
+  // Every rep, set by set; each set's bars are scaled to that set, with its average under it.
   function repTable(R){
-    return `<h2 class="kv-ct">Every rep</h2>
-      <div class="kd-split hd kr-row"><span>Rep</span><span>${R.same ? 'Time' : 'Dist'}</span><span></span><span>Pace</span><span>HR</span></div>
-      ${R.rows.map((r)=> `<div class="kd-split kr-row"><span class="m">${r.i + 1}</span><b>${R.same ? repClock(r.s) : distLabel(r.m, R.track)}</b><span class="bar"><i style="width:${R.slow.pace === R.fast.pace ? 70 : Math.round(30 + (R.slow.pace - r.pace) / (R.slow.pace - R.fast.pace) * 65)}%"></i></span><span>${clock(r.pace)}</span><span class="m">${r.hr ?? ''}</span></div>`).join('')}`;
+    const block = (S, head)=> `${head ? `<div class="kr-sethd"><b>${esc(head)}</b><span>avg ${repAvg(S)}</span></div>` : ''}
+      <div class="kd-split hd kr-row"><span>Rep</span><span>${S.same ? 'Time' : 'Dist'}</span><span></span><span>Pace</span><span>HR</span></div>
+      ${S.rows.map((r, k)=> `<div class="kd-split kr-row"><span class="m">${k + 1}</span><b>${S.same ? repClock(r.s) : distLabel(r.m, S.track)}</b><span class="bar"><i style="width:${S.slow.pace === S.fast.pace ? 70 : Math.round(30 + (S.slow.pace - r.pace) / (S.slow.pace - S.fast.pace) * 65)}%"></i></span><span>${clock(r.pace)}</span><span class="m">${r.hr ?? ''}</span></div>`).join('')}`;
+    return `<h2 class="kv-ct">Every rep</h2>${R.sets ? R.sets.map((S)=> block(S, `Set ${S.n} · ${S.label}`)).join('') : block(R)}`;
   }
+  const repCards = (s, R)=> R.sets ? R.sets.map((S)=> repCard(s, S, { n: S.n, of: R.sets.length })).join('') : repCard(s, R);
   function sessionStats(s){
     return `<div class="kd-stats">
       ${stat('Distance', s.miles != null ? r2(s.miles) : null, ' mi')}
@@ -314,9 +331,10 @@
         ${more.length ? `<div class="kdd-chips">${more.map((p)=> `<span class="kdd-chip pr">PR · ${esc(p.label)} ${esc(p.time)}</span>`).join('')}</div>` : ''}
         ${sessionStats(s)}${notchesHtml(s.effort)}
       </section>
-      ${R ? repCard(s, R) : ''}
+      ${R ? repCards(s, R) : ''}
       ${partsHtml(s)}
       <section class="card kv-card kd-aicard" id="ksReport">${reportHtml(s)}</section>
+      <section class="card kv-card ks-shoes" id="ksShoes" hidden></section>
       </div><div class="ks-b">
       <div class="kd-map card" id="kdMap"${s.main_id && !s.track ? '' : ' hidden'}>
         <div class="kd-map-in" id="kdMap2d"><div class="kv-hint">Loading the route…</div></div>
@@ -334,6 +352,11 @@
     const box = document.querySelector('.ks');
     if(!s || !box) return;
     wireReps(box, repsOf(s));
+    // Which shoes each run counts toward (your own log only).
+    if(own){
+      const acts = (s.activities || []).filter((z)=> z.id && z.category !== 'crosstrain');
+      window.kShoes?.picker(document.getElementById('ksShoes'), acts.map((z)=> ({ id: z.id, label: `${acts.length > 1 ? (ROLE[z.role] || KIND[z.category] || 'Run') + ' · ' : ''}${r2(z.miles || 0)} mi` })));
+    }
     // Own model on summaries: write a missing report once, the first time the session opens.
     if(own && !s.report && window.kestrelAiTask?.('summary').own && !autoTried.has(s.key)){ autoTried.add(s.key); writeReport(x, s.key); }
     const splitsEl = document.getElementById('kdSplits');
@@ -354,12 +377,17 @@
   }
 
   // Tap (or point at) a rep to read it out above its bar.
-  function wireReps(box, R){
-    const tip = box.querySelector('#krTip'); if(!tip || !R) return;
+  function wireReps(box, all){
+    if(!all) return;
+    const cards = [...box.querySelectorAll('.kr')];
+    (all.sets || [all]).forEach((R, n)=> cards[n] && wireCard(cards[n], R));
+  }
+  function wireCard(box, R){
+    const tip = box.querySelector('.kr-tip'); if(!tip || !R) return;
     const show = (b)=>{
       const r = R.rows[+b.dataset.i]; if(!r) return;
       box.querySelectorAll('.kr-bar.on').forEach((x)=> x.classList.remove('on')); b.classList.add('on');
-      tip.innerHTML = `<b>Rep ${r.i + 1}</b> ${esc(distLabel(r.m, R.track))} · ${repClock(r.s)}${R.same ? '' : ` · ${clock(r.pace)}/mi`}${r.hr ? ` · ${r.hr} bpm` : ''}${r.rest ? ` · ${esc(r.rest)} rest` : ''}`;
+      tip.innerHTML = `<b>Rep ${+b.dataset.i + 1}</b> ${esc(distLabel(r.m, R.track))} · ${repClock(r.s)}${R.same ? '' : ` · ${clock(r.pace)}/mi`}${r.hr ? ` · ${r.hr} bpm` : ''}${r.rest ? ` · ${esc(r.rest)} rest` : ''}`;
       tip.hidden = false;
       const pb = b.parentNode.getBoundingClientRect(), bb = b.getBoundingClientRect(), tw = tip.offsetWidth;
       tip.style.left = Math.max(0, Math.min(pb.width - tw, bb.left - pb.left + bb.width / 2 - tw / 2)) + 'px';

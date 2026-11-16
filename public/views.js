@@ -325,11 +325,12 @@
       return card(`${esc(g.title)}${g.priority ? ' <span class="kv-pill">Main</span>' : ''}`, esc(when), body, `<div class="kv-ch-r">${st ? `<span class="kv-pill ${tone}">${st}</span>` : ''}<button type="button" data-a="goalEdit" data-v="${i}">Edit</button></div>`);
     };
     V.cache.goals = goals;
-    const ideas = card('Add a goal', 'Pick one, or write your own.', `<div class="kv-list">${(window.kTrack?.GOAL_TEMPLATES || []).map((t, i)=> `<button type="button" class="kv-li" data-a="goalNew" data-v="${i}"><div><b>${esc(t.label)}</b></div><i>+ Add</i></button>`).join('')}</div>`);
+    const ideas = card('Add a goal', 'Your own, at any distance, or one of these.', `<div class="kv-list"><button type="button" class="kv-li" data-a="goalCustom"><div><b>Custom goal</b><span class="kv-hint" style="display:block;margin:2px 0 0">Any distance in miles, meters or km, a time, and when</span></div><i>+ Add</i></button>${(window.kTrack?.GOAL_TEMPLATES || []).map((t, i)=> `<button type="button" class="kv-li" data-a="goalNew" data-v="${i}"><div><b>${esc(t.label)}</b></div><i>+ Add</i></button>`).join('')}</div>`);
     return `<div class="kv-row" style="--c:1.5fr 1fr"><div class="kv-stack">${goals.map(gcard).join('') || need('No goals yet. Pick one on the right.')}</div><div class="kv-stack">${ideas}</div></div>`;
   };
   ACT.goalEdit = (i)=> window.kTrack?.editGoal(V.cache.goals[+i]);
   ACT.goalNew = (i)=> window.kTrack?.editGoal(null, window.kTrack.GOAL_TEMPLATES[+i]);
+  ACT.goalCustom = ()=> window.kTrack?.editGoal(null, { kind:'race', event:'custom' });
 
   window.KV.screens = SCREENS; window.KV.has = (k)=> !!SCREENS[SCREEN_OF[k] || k]; window.KV.act = ACT; window.KV.state = V;
   window.KV._h = { esc, sec, card, tiles, need, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost };

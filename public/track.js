@@ -136,6 +136,7 @@
     const when = g.target_date ? (g.days_left > 0 ? `${g.days_left} days to go · ${new Date(g.target_date + 'T12:00:00').toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' })}` : g.days_left === 0 ? 'Today' : 'Date has passed') : '';
     let body = '';
     if(g.kind === 'race'){
+      if(g.scaled_from) body += `<div class="hint">Your estimate is scaled from your ${esc(g.scaled_from)} fitness.</div>`;
       body += `<div class="stat-grid gl-stats">${tile(g.estimate || '–', 'you now')}${tile(g.target_time, 'goal')}${tile(g.gap || '–', 'gap')}${tile(g.goal_pace_mi, 'goal pace /mi')}</div>`;
       if(g.state === 'no_estimate') body += `<p class="hint">${esc(g.message)}${g.hint_estimate ? ` From your shorter races you'd be around <b>${esc(g.hint_estimate)}</b> if the training is there.` : ''}</p>`;
       else body += `${bar(g.pct || 0)}<div class="hint">${g.state === 'on_track' ? `Your estimate (${esc(g.range || g.estimate)}) is already under your goal. Now prove it on race day.` : `${g.pct || 0}% of the way from ${esc(g.start)} when you set this goal.`} ${g.pr ? `PR ${esc(g.pr)}.` : ''} Goal pace is ${esc(g.goal_pace_km)}/km.</div>`;
@@ -182,14 +183,15 @@
     el.innerHTML = `<div class="stack-cards">
         <section class="card gl-head"><div class="section-head"><div><div class="card-title">${active.length ? 'Your goals' : 'Set a goal'}</div>
           <div class="hint">${active.length ? 'Progress updates on its own from your runs, PRs and Fitness States.' : 'A race time, a weekly mileage, a habit, or anything else. Kestrel tracks the progress from your training.'}</div></div>
-          <button type="button" id="glAdd">+ Goal</button></div>
-          ${active.length ? '' : `<div class="chip-scroll">${GOAL_TEMPLATES.map((t, i)=> `<button type="button" class="chip" data-tpl="${i}">${esc(t.label)}</button>`).join('')}</div>`}
+          <button type="button" id="glAdd">+ Custom goal</button></div>
+          <div class="chip-scroll"><button type="button" class="chip" data-custom>Any distance…</button>${GOAL_TEMPLATES.map((t, i)=> `<button type="button" class="chip" data-tpl="${i}">${esc(t.label)}</button>`).join('')}</div>
         </section>
         ${active.map(goalCard).join('')}
         ${past.length ? `<details class="card gl-past"><summary class="card-title">Done and archived (${past.length})</summary>${past.map(goalCard).join('')}</details>` : ''}
       </div>`;
     drawSparks();
-    $('glAdd').onclick = ()=> editGoal(null);
+    $('glAdd').onclick = ()=> editGoal(null, { kind:'race', event:'custom' });
+    el.querySelector('[data-custom]').onclick = ()=> editGoal(null, { kind:'race', event:'custom' });
     el.querySelectorAll('[data-tpl]').forEach(b=> b.onclick = ()=> editGoal(null, GOAL_TEMPLATES[+b.dataset.tpl]));
     const find = (id)=> d.goals.find(g=> g.id === id);
     const update = async (g, patch)=>{ try{ await send('/api/goals', { ...goalBody(g), ...patch }); renderGoals(el); }catch(err){ alert(err.message); } };
@@ -215,37 +217,69 @@
   function editGoal(g, tpl){
     const x = g ? { ...g } : { kind: tpl?.kind || 'race', event: tpl?.event || '', target_time: tpl?.t || '', target: tpl?.target || '', title: tpl?.title || '', why:'', target_date:'' };
     const events = T.goals?.events || [];
+    // A distance that isn't one of the standard events is stored as 'm:<meters>'; the form shows it in the unit picked.
+    const UNIT = { mi:1609.344, m:1, km:1000 };
+    const cm = String(x.event || '').match(/^m:(\d+)$/);
+    if(cm || x.event === 'custom'){
+      const m = cm ? +cm[1] : 0;
+      x.event = 'custom';
+      if(m && !x.dist){ const mi = m / UNIT.mi; Object.assign(x, Math.abs(mi - Math.round(mi * 4) / 4) < 0.004 && mi >= 1 ? { dist: Math.round(mi * 4) / 4, unit:'mi' } : m >= 10000 ? { dist: m / 1000, unit:'km' } : { dist: m, unit:'m' }); }
+    }
+    const metersOf = (f)=>{
+      if(f.event !== 'custom') return { '800':800, '1600':1609.344, '3200':3218.688, '5K':5000, '10K':10000, half:21097.5, marathon:42195 }[f.event];
+      const n = Number(f.dist); return n > 0 ? n * (UNIT[f.unit] || 1) : 0;
+    };
     const draw = (box)=>{
       const k = x.kind;
       box.innerHTML = `<div class="seg" role="tablist">${[['race','Race time'],['mileage','Weekly miles'],['consistency','Runs a week'],['custom','Other']].map(([v, l])=> `<button type="button" class="seg-btn ${k === v ? 'active' : ''}" data-kind="${v}">${l}</button>`).join('')}</div>
         <form id="glForm" class="stack">
           ${k === 'race' ? `<div class="field-grid">
-              <label class="field"><span>Distance</span><select name="event" required><option value="">Choose</option>${events.map(e=> `<option value="${e.key}" ${x.event === e.key ? 'selected' : ''}>${esc(e.label)}</option>`).join('')}</select></label>
-              <label class="field"><span>Goal time</span><input name="target_time" value="${esc(x.target_time || '')}" placeholder="e.g. 2:59:59" inputmode="numeric" required></label>
-            </div><p class="hint" id="glPace"></p>` : ''}
+              <label class="field"><span>Distance</span><select name="event" required><option value="">Choose</option>${events.map(e=> `<option value="${e.key}" ${x.event === e.key ? 'selected' : ''}>${esc(e.label)}</option>`).join('')}<option value="custom" ${x.event === 'custom' ? 'selected' : ''}>Any distance…</option></select></label>
+              <label class="field"><span>Goal time</span><input name="target_time" value="${esc(x.target_time || '')}" placeholder="e.g. 9:45 or 2:59:59" inputmode="numeric" required></label>
+            </div>
+            ${x.event === 'custom' ? `<div class="field-grid">
+              <label class="field"><span>How far</span><input name="dist" type="number" min="0.1" step="any" value="${esc(x.dist || '')}" placeholder="e.g. 3000 or 2" required></label>
+              <label class="field"><span>Unit</span><select name="unit">${[['m','meters'],['mi','miles'],['km','kilometers']].map(([v, l])=> `<option value="${v}" ${(x.unit || 'm') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+            </div>` : ''}
+            <p class="hint" id="glPace"></p>` : ''}
           ${k === 'mileage' ? `<label class="field"><span>Miles a week</span><input name="target" type="number" min="1" max="200" value="${esc(x.target || '')}" required></label>` : ''}
           ${k === 'consistency' ? `<label class="field"><span>Runs a week</span><input name="target" type="number" min="1" max="14" value="${esc(x.target || '')}" required></label>` : ''}
           <label class="field"><span>${k === 'custom' ? 'Your goal' : 'Name (optional)'}</span><input name="title" maxlength="80" value="${esc(x.title || '')}" placeholder="${k === 'custom' ? 'e.g. Finish my first marathon' : 'Kestrel names it for you'}" ${k === 'custom' ? 'required' : ''}></label>
-          <label class="field"><span>${k === 'race' ? 'Race date' : 'By when (optional)'}</span><input name="target_date" type="date" value="${esc(x.target_date || '')}"></label>
+          <div class="field-grid">
+            <label class="field"><span>${k === 'race' ? 'Race date' : 'By when (optional)'}</span><input name="target_date" type="date" value="${esc(x.target_date || '')}"></label>
+            <label class="field"><span>Or in how many weeks</span><input name="weeks" type="number" min="1" max="104" value="${esc(x.weeks || '')}" placeholder="e.g. 12"></label>
+          </div>
           <label class="field"><span>Why it matters to you (optional)</span><textarea name="why" rows="2" maxlength="300" placeholder="e.g. Qualify for Boston with my dad">${esc(x.why || '')}</textarea></label>
           <label class="check-row"><input type="checkbox" name="priority" ${x.priority || (!g && !(T.goals?.goals || []).some(z=> z.status === 'active')) ? 'checked' : ''}><span>This is my main goal</span></label>
           <div class="cluster"><button type="submit">${g ? 'Save' : 'Add goal'}</button>${g ? '<button type="button" class="ghost" id="glDelete">Delete</button>' : ''}</div>
         </form>`;
       box.querySelectorAll('[data-kind]').forEach(b=> b.onclick = ()=>{ Object.assign(x, Object.fromEntries(new FormData($('glForm')))); x.kind = b.dataset.kind; draw(box); });
+      const sel = box.querySelector('[name=event]');
+      if(sel) sel.onchange = ()=>{ const was = x.event; Object.assign(x, Object.fromEntries(new FormData($('glForm')))); if((was === 'custom') !== (x.event === 'custom')) draw(box); else pace(); };
+      // Weeks from now fills the date; picking a date clears the weeks.
+      const wk = box.querySelector('[name=weeks]'), dt = box.querySelector('[name=target_date]');
+      wk.oninput = ()=>{ const n = Number(wk.value); if(n > 0){ dt.value = shiftIso(todayIso(), Math.round(n * 7)); } };
+      dt.oninput = ()=>{ wk.value = ''; };
       const pace = ()=>{
         const p = $('glPace'); if(!p) return;
         const f = Object.fromEntries(new FormData($('glForm')));
-        const m = { '800':800, '1600':1609.344, '3200':3218.688, '5K':5000, '10K':10000, half:21097.5, marathon:42195 }[f.event];
+        const m = metersOf(f);
         const parts = String(f.target_time || '').split(':').map(Number);
         const sec = parts.every(n=> Number.isFinite(n)) ? parts.reduce((a, n)=> a * 60 + n, 0) : 0;
         if(!m || !(sec > 0)){ p.textContent = ''; return; }
         const fmt = (s)=>{ s = Math.round(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
         p.textContent = `That's ${fmt(sec / (m / 1609.344))}/mi (${fmt(sec / (m / 1000))}/km) the whole way.`;
       };
-      box.querySelectorAll('[name=event],[name=target_time]').forEach(i=> i.oninput = pace); pace();
+      box.querySelectorAll('[name=target_time],[name=dist],[name=unit]').forEach(i=> i.oninput = pace); pace();
       $('glForm').onsubmit = async (e)=>{
         e.preventDefault();
         const f = Object.fromEntries(new FormData(e.target));
+        if(f.event === 'custom'){
+          const m = Math.round(metersOf(f));
+          if(!(m >= 100 && m <= 100000)){ alert('Pick a distance between 100 m and 100 km.'); return; }
+          f.event = 'm:' + m;
+        }
+        delete f.dist; delete f.unit; delete f.weeks;
         const btn = e.submitter || e.target.querySelector('[type=submit]'); btn.disabled = true;
         try{
           await send('/api/goals', { id:g?.id, kind:x.kind, status:g?.status || 'active', progress:g?.pct, ...f, priority: !!f.priority });

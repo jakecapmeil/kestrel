@@ -34,7 +34,7 @@ import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, cre
 import { getTrack } from './train/tracks.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
 import { shareOf, cleanShare, ShareError, exportDataset } from './train/dataset.js';
-import { getDays } from './train/log.js';
+import { getDays, rolesOf } from './train/log.js';
 import { importModel, exportToGithub, exportToHuggingface, modelFile, SOURCES } from './labsync.js';
 
 class BadRequest extends Error {}
@@ -210,17 +210,57 @@ async function updateMe(db, me, b) {
   await db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE id = ?`).bind(...vals, me.id).run();
 }
 
-// Shoe tracker: shoes live in settings.shoes; miles are counted from synced and logged runs since the start date.
-async function shoesView(db, me) {
-  const shoes = Array.isArray(settingsOf(me).shoes) ? settingsOf(me).shoes : [];
-  const out = [];
-  for (const sh of shoes) {
-    const r = await db.prepare("SELECT COALESCE(SUM(distance_mi), 0) AS mi FROM workouts WHERE person_id = ? AND sport = 'Run' AND date >= ? AND date <= ?")
-      .bind(me.id, sh.since || '0000-00-00', sh.retired || '9999-12-31').first();
-    const miles = Math.round(((sh.start_mi || 0) + (r?.mi || 0)) * 10) / 10;
-    out.push({ ...sh, miles, left: Math.max(0, Math.round((sh.limit_mi - miles) * 10) / 10), status: sh.retired ? 'retired' : miles >= sh.limit_mi ? 'replace' : miles >= sh.limit_mi * 0.85 ? 'soon' : 'ok' });
+// Shoe tracker. Shoes live in settings.shoes, each with the kinds of run it is for (uses). Every run counts toward one
+// pair: the one picked by hand on the run (run_shoes), else the first active pair for that kind of run, else the first
+// active pair with no kinds set (worn for anything). Runs no pair covers are "unassigned".
+const SHOE_USES = ['easy', 'long', 'workout', 'race', 'warmup'];
+const shoeUseOf = (w, role) => (role === 'warmup' || role === 'cooldown' || w.category === 'shakeout' ? 'warmup' : { long: 'long', workout: 'workout', race: 'race' }[w.category] || 'easy');
+const activeOn = (sh, date) => (sh.since || '0000-00-00') <= date && (!sh.retired || date <= sh.retired);
+function pickShoe(shoes, date, use) {
+  const on = shoes.filter((sh) => activeOn(sh, date));
+  return on.find((sh) => sh.uses?.includes(use)) || on.find((sh) => !sh.uses?.length) || null;
+}
+// -> Map(workout id -> { shoe_id, auto, use, miles, date })
+async function shoeAssignments(db, me, shoes, ids = null) {
+  const from = shoes.reduce((m, sh) => (sh.since && sh.since < m ? sh.since : m), '9999-12-31');
+  const { results: runs } = ids
+    ? await db.prepare(`SELECT strava_id, date, category, distance_mi, start_local, elapsed_sec, moving_sec FROM workouts WHERE person_id = ? AND date IN (SELECT date FROM workouts WHERE person_id = ? AND strava_id IN (${ids.map(() => '?').join(',')}))`).bind(me.id, me.id, ...ids).all()
+    : await db.prepare("SELECT strava_id, date, category, distance_mi, start_local, elapsed_sec, moving_sec FROM workouts WHERE person_id = ? AND sport = 'Run' AND date >= ?").bind(me.id, shoes.every((sh) => sh.since) ? from : '0000-00-00').all();
+  const { results: picked } = await db.prepare('SELECT workout_id, shoe_id FROM run_shoes WHERE person_id = ?').bind(me.id).all();
+  const hand = new Map(picked.map((r) => [r.workout_id, r.shoe_id]));
+  const byDate = new Map();
+  for (const w of runs) (byDate.get(w.date) || byDate.set(w.date, []).get(w.date)).push(w);
+  const out = new Map();
+  for (const [date, rs] of byDate) {
+    const roles = rolesOf(rs);
+    for (const w of rs) {
+      if (w.category === 'crosstrain') continue;
+      const use = shoeUseOf(w, roles.get(w.strava_id));
+      const own = hand.has(w.strava_id) ? hand.get(w.strava_id) : undefined;
+      const shoe = own !== undefined ? shoes.find((sh) => sh.id === own) || null : pickShoe(shoes, date, use);
+      out.set(w.strava_id, { shoe_id: shoe?.id || '', auto: own === undefined, use, miles: w.distance_mi || 0, date });
+    }
   }
   return out;
+}
+async function shoesView(db, me) {
+  const shoes = Array.isArray(settingsOf(me).shoes) ? settingsOf(me).shoes : [];
+  const per = new Map(shoes.map((sh) => [sh.id, { mi: 0, runs: 0, last: '' }]));
+  let unassigned = 0, unassignedRuns = 0;
+  if (shoes.length) {
+    for (const a of (await shoeAssignments(db, me, shoes)).values()) {
+      const t = per.get(a.shoe_id);
+      if (t) { t.mi += a.miles; t.runs++; if (a.date > t.last) t.last = a.date; }
+      else if (a.date >= addDays(todayInTz(), -60)) { unassigned += a.miles; unassignedRuns++; }
+    }
+  }
+  const list = shoes.map((sh) => {
+    const t = per.get(sh.id);
+    const miles = Math.round(((sh.start_mi || 0) + t.mi) * 10) / 10;
+    return { ...sh, uses: sh.uses || [], miles, runs: t.runs, last_run: t.last || null, left: Math.max(0, Math.round((sh.limit_mi - miles) * 10) / 10), status: sh.retired ? 'retired' : miles >= sh.limit_mi ? 'replace' : miles >= sh.limit_mi * 0.85 ? 'soon' : 'ok' };
+  });
+  list.unassigned = { miles: Math.round(unassigned * 10) / 10, runs: unassignedRuns };
+  return list;
 }
 async function saveShoes(db, me, list) {
   if (!Array.isArray(list)) throw new BadRequest('shoes must be a list.');
@@ -229,10 +269,51 @@ async function saveShoes(db, me, list) {
     if (!name) throw new BadRequest('Name each pair of shoes.');
     const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : d; };
     const date = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(v || '') ? v : '');
-    return { id: str(x.id, 40) || 's_' + crypto.randomUUID().slice(0, 8), name, since: date(x.since), start_mi: num(x.start_mi, 0, 3000, 0), limit_mi: num(x.limit_mi, 50, 1500, 400), retired: date(x.retired) };
+    const uses = Array.isArray(x.uses) ? [...new Set(x.uses.filter((u) => SHOE_USES.includes(u)))] : [];
+    return { id: str(x.id, 40) || 's_' + crypto.randomUUID().slice(0, 8), name, since: date(x.since), start_mi: num(x.start_mi, 0, 3000, 0), limit_mi: num(x.limit_mi, 50, 1500, 400), retired: date(x.retired), uses };
   });
   await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...settingsOf(me), shoes }), me.id).run();
   return shoesView(db, { ...me, settings: JSON.stringify({ ...settingsOf(me), shoes }) });
+}
+// Which pair each of these runs counts toward (for a session's shoe picker).
+async function shoesForRuns(db, me, ids) {
+  const shoes = Array.isArray(settingsOf(me).shoes) ? settingsOf(me).shoes : [];
+  const want = ids.map((x) => str(x, 80)).filter(Boolean).slice(0, 20);
+  const runs = {};
+  if (shoes.length && want.length) {
+    const all = await shoeAssignments(db, me, shoes, want);
+    for (const id of want) if (all.has(id)) runs[id] = all.get(id);
+  }
+  return { shoes: shoes.map(({ id, name, retired, uses }) => ({ id, name, retired, uses: uses || [] })), runs };
+}
+// shoe_id: a pair's id, '' for none, or null to go back to the automatic pick.
+async function setRunShoe(db, me, workoutId, shoeId) {
+  const id = str(workoutId, 80);
+  if (!(await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND strava_id = ?').bind(me.id, id).first())) throw new NotFound('That run is not in your log.');
+  if (shoeId === null || shoeId === undefined) return db.prepare('DELETE FROM run_shoes WHERE person_id = ? AND workout_id = ?').bind(me.id, id).run();
+  const sid = str(shoeId, 40);
+  const shoes = Array.isArray(settingsOf(me).shoes) ? settingsOf(me).shoes : [];
+  if (sid && !shoes.some((sh) => sh.id === sid)) throw new BadRequest('Those shoes are not in your list.');
+  await db.prepare('INSERT INTO run_shoes (person_id, workout_id, shoe_id) VALUES (?, ?, ?) ON CONFLICT(person_id, workout_id) DO UPDATE SET shoe_id = excluded.shoe_id').bind(me.id, id, sid).run();
+}
+
+// Kestrel AI chats: kept per person so past conversations reopen on any device. Only text is kept (no photos).
+const CHAT_KEEP = 100;
+async function listChats(db, me) {
+  const { results } = await db.prepare('SELECT id, title, updated_at, json_array_length(turns) AS n FROM kai_chats WHERE person_id = ? ORDER BY updated_at DESC LIMIT ?').bind(me.id, CHAT_KEEP).all();
+  return results;
+}
+async function saveChat(db, me, id, b) {
+  if (!/^c_[A-Za-z0-9-]{6,40}$/.test(id)) throw new BadRequest('Bad chat id.');
+  const turns = (Array.isArray(b.turns) ? b.turns : []).slice(-200).map((t) => ({ role: t?.role === 'user' ? 'user' : 'kai', text: str(t?.text, 8000), ...(t?.model ? { model: str(t.model, 80) } : {}) })).filter((t) => t.text);
+  if (!turns.some((t) => t.role === 'user')) return { id, skipped: true }; // an opener alone isn't a chat
+  const title = str(b.title, 80) || str(turns.find((t) => t.role === 'user').text.replace(/\s+/g, ' '), 60);
+  const now = Date.now();
+  const r = await db.prepare('INSERT INTO kai_chats (id, person_id, title, turns, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title, turns = excluded.turns, updated_at = excluded.updated_at WHERE kai_chats.person_id = excluded.person_id')
+    .bind(id, me.id, title, JSON.stringify(turns), now, now).run();
+  if (!r.meta?.changes) throw new Forbidden('That chat belongs to someone else.');
+  await db.prepare('DELETE FROM kai_chats WHERE person_id = ? AND id NOT IN (SELECT id FROM kai_chats WHERE person_id = ? ORDER BY updated_at DESC LIMIT ?)').bind(me.id, me.id, CHAT_KEEP).run();
+  return { id, title };
 }
 
 // Everything about one person, removed. Teams they own pass to the longest-standing member.
@@ -242,7 +323,7 @@ async function deleteMe(db, me) {
   await db.prepare("UPDATE teams SET created_by = (SELECT person_id FROM team_members WHERE team_id = teams.id AND role = 'owner') WHERE created_by = ?").bind(me.id).run();
   await db.prepare('DELETE FROM api_keys WHERE person_id = ?').bind(me.id).run();
   await db.prepare('DELETE FROM ai_usage WHERE person_id = ?').bind(me.id).run();
-  for (const t of ['xtrain', 'food_log', 'goals']) await db.prepare(`DELETE FROM ${t} WHERE person_id = ?`).bind(me.id).run();
+  for (const t of ['xtrain', 'food_log', 'goals', 'run_shoes', 'kai_chats']) await db.prepare(`DELETE FROM ${t} WHERE person_id = ?`).bind(me.id).run();
   await db.prepare('DELETE FROM people WHERE id = ?').bind(me.id).run();
 }
 
@@ -1347,9 +1428,26 @@ async function route(request, env, url) {
     return json({ goal: await goalFromProfile(db, me.id, settingsOf(me).profile, await getFitness(db, me.id, today).catch(() => null)) });
   }
 
+  if (path === '/api/chats' && method === 'GET') return json({ chats: await listChats(db, me) });
+  const cm = path.match(/^\/api\/chats\/([^/]+)$/);
+  if (cm) {
+    if (method === 'GET') {
+      const row = await db.prepare('SELECT id, title, turns, updated_at FROM kai_chats WHERE id = ? AND person_id = ?').bind(cm[1], me.id).first();
+      if (!row) throw new NotFound('That chat is gone.');
+      return json({ ...row, turns: JSON.parse(row.turns || '[]') });
+    }
+    if (method === 'PUT') return json(await saveChat(db, me, cm[1], await readJson(request)));
+    if (method === 'DELETE') { await db.prepare('DELETE FROM kai_chats WHERE id = ? AND person_id = ?').bind(cm[1], me.id).run(); return json({ ok: true }); }
+  }
+  if (path === '/api/shoes/runs' && method === 'GET') return json(await shoesForRuns(db, me, (url.searchParams.get('ids') || '').split(',')));
+  if (path === '/api/shoes/run' && method === 'PUT') {
+    const b = await readJson(request);
+    await setRunShoe(db, me, b.workout_id, b.shoe_id);
+    return json({ ok: true, shoes: await shoesView(db, me) });
+  }
   if (path === '/api/shoes') {
-    if (method === 'GET') return json({ shoes: await shoesView(db, me) });
-    if (method === 'PUT') return json({ shoes: await saveShoes(db, me, (await readJson(request)).shoes) });
+    if (method === 'GET') { const list = await shoesView(db, me); return json({ shoes: list, unassigned: list.unassigned }); }
+    if (method === 'PUT') { const list = await saveShoes(db, me, (await readJson(request)).shoes); return json({ shoes: list, unassigned: list.unassigned }); }
   }
 
   // Kestrel Lab, signed in
