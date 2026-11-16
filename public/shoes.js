@@ -1,7 +1,7 @@
-// Shoes (You > Records): each pair, the kinds of run it is for, and its miles. Kestrel credits every run to one pair:
+// Shoes (You > Profile): each pair, the kinds of run it is for, and its miles. Kestrel credits every run to one pair:
 // the one picked on the run, else the pair for that kind of run (easy, long, workout, race, warm-up/cool-down), else a
 // pair set for "any run". Also the shoe picker on a session (window.kShoes.pickerHtml / wirePicker, used by dayview.js).
-// Runs after records.js, whose render() it follows. Uses $, escapeHtml from the main script.
+// You > Profile calls window.kShoes.load() when it shows. Uses $, escapeHtml from the main script.
 (function(){
   const esc = (s)=> escapeHtml(String(s ?? ''));
   let shoes = [], unassigned = null;
@@ -131,7 +131,6 @@
   }
 
   const btn = $('shoeAdd'); if(btn) btn.onclick = ()=> edit(null);
-  const orig = window.kRecords && window.kRecords.render;
-  if(orig) window.kRecords.render = async function(){ const r = await orig.apply(this, arguments); load(); return r; };
   window.kShoes = { load, picker };
+  if($('shoeList')?.offsetParent) load(); // Profile was already showing before this script ran.
 })();

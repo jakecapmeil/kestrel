@@ -45,7 +45,7 @@ export function rankForMiles(mpw, plans = PLANS) {
   const m = Number(mpw);
   if (!(m > 0)) return DEFAULT_RANK;
   let best = DEFAULT_RANK;
-  for (const r of RANKS) if (plans[r] && plans[r].weeks[0].miles <= m * 1.1) best = r;
+  for (const r of Object.keys(plans).map(Number).sort((a, b) => a - b)) if (plans[r].weeks[0].miles <= m * 1.1) best = r;
   return best;
 }
 
@@ -54,13 +54,18 @@ const TYPES = ['Easy', 'Recovery', 'Workout', 'LR', 'Long run', 'Race', 'Shakeou
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const txt = (v, max) => String(v ?? '').slice(0, max);
 
-// A team plan template, checked and cleaned. Same shape as PLANS: { "1": { weeks, days, ref }, ... "6": ... }.
+// A team plan template, checked and cleaned. Same shape as PLANS: { "1": { weeks, days, ref }, ... }. A captain can
+// add and remove levels, so there are 1 to MAX_LEVELS of them, numbered 1..N from the lightest with no gaps (the
+// coach moves athletes a level at a time by adding or taking one from that number).
+export const MAX_LEVELS = 15;
 export function validateTeamPlans(raw) {
-  if (!raw || typeof raw !== 'object') throw new PlanFormatError(`The plan must be an object with levels ${RANKS[0]}-${TOP_RANK}.`);
+  if (!raw || typeof raw !== 'object') throw new PlanFormatError(`The plan must be an object with levels 1 to ${MAX_LEVELS}.`);
+  const keys = Object.keys(raw).map(Number).sort((a, b) => a - b);
+  if (!keys.length || keys.length > MAX_LEVELS) throw new PlanFormatError(`A plan has 1 to ${MAX_LEVELS} levels.`);
+  if (keys.some((k, i) => k !== i + 1)) throw new PlanFormatError(`Levels must be numbered 1 to ${keys.length} with no gaps.`);
   const out = {};
-  for (const r of RANKS) {
+  for (const r of keys) {
     const p = raw[r];
-    if (!p) throw new PlanFormatError(`Level ${r} is missing.`);
     if (!Array.isArray(p.weeks) || p.weeks.length !== 3) throw new PlanFormatError(`Level ${r}: weeks must be [no race, race week, taper].`);
     const weeks = p.weeks.map((w, i) => {
       const miles = Number(w?.miles);
@@ -181,6 +186,39 @@ export function levelByMiles(plans, miles) {
 const numOf = (c) => parseFloat(c.miles) || 0;
 const fmtMi = (n) => String(Math.round(n * 10) / 10);
 const scaleMiles = (t, f) => String(t).replace(/\d+(?:\.\d+)?/g, (n) => fmtMi(Math.max(0.5, Math.round(Number(n) * f * 2) / 2)));
+
+// Levels in mileage order, renumbered 1..N, with old number -> new number for the levels that were already there.
+function renumber(levels) {
+  const sorted = levels.slice().sort((a, b) => Number(a.p.weeks[0].miles) - Number(b.p.weeks[0].miles));
+  const plans = {}, map = {};
+  sorted.forEach((x, i) => { plans[i + 1] = x.p; if (x.from) map[x.from] = i + 1; });
+  return { plans, map };
+}
+// A new level at `miles` a week: the nearest level's days, scaled to it. Used by the connector; the app's level
+// editor suggests from both neighbours instead.
+export function addLevel(plans, miles) {
+  const want = Math.round(Number(miles));
+  const keys = Object.keys(plans).map(Number);
+  if (!(want >= 1 && want <= 150)) throw new PlanFormatError('A level’s weekly miles must be 1-150.');
+  if (keys.length >= MAX_LEVELS) throw new PlanFormatError(`A plan has at most ${MAX_LEVELS} levels. Remove one first.`);
+  if (keys.some((k) => Number(plans[k].weeks[0].miles) === want)) throw new PlanFormatError(`There is already a ${want} mi level.`);
+  const near = keys.reduce((b, k) => (Math.abs(plans[k].weeks[0].miles - want) < Math.abs(plans[b].weeks[0].miles - want) ? k : b), keys[0]);
+  const fresh = scaleLevel({ 1: JSON.parse(JSON.stringify(plans[near])) }, 1, want)[1];
+  return { ...renumber([...keys.map((k) => ({ from: k, p: plans[k] })), { from: null, p: fresh }]), from_miles: plans[near].weeks[0].miles, miles: want };
+}
+// A level taken out. Its athletes go to the level at `moveToMiles` (a level by weekly miles), else the nearest one.
+export function removeLevel(plans, level, moveToMiles) {
+  const keys = Object.keys(plans).map(Number);
+  if (keys.length < 2) throw new PlanFormatError('A plan needs at least one level.');
+  const rest = keys.filter((k) => k !== Number(level));
+  const mi = Number(plans[level].weeks[0].miles);
+  const to = moveToMiles != null && moveToMiles !== '' ? levelByMiles(plans, moveToMiles)
+    : rest.reduce((b, k) => (Math.abs(plans[k].weeks[0].miles - mi) < Math.abs(plans[b].weeks[0].miles - mi) ? k : b), rest[0]);
+  if (to === Number(level)) throw new PlanFormatError('Move its athletes to a different level than the one being removed.');
+  const x = renumber(rest.map((k) => ({ from: k, p: plans[k] })));
+  x.map[level] = x.map[to];
+  return { ...x, to_miles: plans[to].weeks[0].miles };
+}
 
 // A level moved to new weekly miles: every day of all three weeks scales by the same factor, rounded to half miles so
 // each week still adds up to the factor times what it did (the same rule as Edit level mileage in Team → Plan).

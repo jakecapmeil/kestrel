@@ -10,7 +10,7 @@
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
-import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell } from './train/plans.js';
+import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell, addLevel, removeLevel } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { COACH_RUBRIC } from './train/coach.js';
@@ -386,9 +386,52 @@ async function teamPlansOf(db, teamId) {
   return JSON.parse(row.data);
 }
 // spec null = a hand edit of the cells: the AI's brief is kept so it can still be refined.
-async function saveTeamPlans(db, teamId, byId, plans, spec = null) {
-  await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, COALESCE(?, \'\'), ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = COALESCE(?, team_plans.spec), updated_by = excluded.updated_by, updated_at = excluded.updated_at')
-    .bind(teamId, JSON.stringify(validateTeamPlans(plans)), spec, byId, Date.now(), spec).run();
+// Levels are numbered 1..N from the lightest, so adding, removing or reordering them renumbers levels. Everyone who
+// trains from this team's plan moves with their level, in the same write: `map` is { old level: new level } from the
+// level editor (a removed level maps to wherever the captain sent its athletes). Without a map (Kestrel AI, the
+// connector), a level that still exists keeps its number and one that is gone goes to the nearest by weekly miles.
+async function saveTeamPlans(db, teamId, byId, plans, spec = null, map = null) {
+  const clean = validateTeamPlans(plans);
+  const row = await db.prepare('SELECT data FROM team_plans WHERE team_id = ?').bind(teamId).first();
+  const moves = row ? levelMoves(JSON.parse(row.data), clean, map) : null;
+  const stmts = [db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, COALESCE(?, \'\'), ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = COALESCE(?, team_plans.spec), updated_by = excluded.updated_by, updated_at = excluded.updated_at')
+    .bind(teamId, JSON.stringify(clean), spec, byId, Date.now(), spec)];
+  if (moves) {
+    const to = (r) => (r == null ? r : moves.get(Number(r)) ?? r);
+    for (const p of await teamPlanAthletes(db, teamId)) {
+      if (to(p.plan_rank) !== p.plan_rank || to(p.coach_rank) !== p.coach_rank) {
+        stmts.push(db.prepare('UPDATE people SET plan_rank = ?, coach_rank = ? WHERE id = ?').bind(to(p.plan_rank), to(p.coach_rank), p.id));
+      }
+      // Their level history names levels by number too; keep it pointing at the same weekly miles.
+      const cases = [...moves].map(() => 'WHEN ? THEN ?').join(' ');
+      const pairs = [...moves].flat();
+      stmts.push(db.prepare(`UPDATE level_changes SET from_rank = CASE from_rank ${cases} ELSE from_rank END, to_rank = CASE to_rank ${cases} ELSE to_rank END WHERE person_id = ?`).bind(...pairs, ...pairs, p.id));
+    }
+  }
+  await db.batch(stmts);
+}
+// old level -> new level for every level whose number changes, or null when none does.
+function levelMoves(old, next, map) {
+  const nextKeys = Object.keys(next).map(Number);
+  const miles = (plans, k) => Number(plans[k].weeks[0].miles);
+  const nearest = (mi) => nextKeys.reduce((best, k) => (Math.abs(miles(next, k) - mi) < Math.abs(miles(next, best) - mi) ? k : best), nextKeys[0]);
+  const out = new Map();
+  for (const k of Object.keys(old).map(Number)) {
+    const want = map ? Number(map[k]) : next[k] ? k : NaN;
+    const to = next[want] ? want : nearest(miles(old, k));
+    if (to !== k) out.set(k, to);
+  }
+  return out.size ? out : null;
+}
+// Who trains from this team's plan: members without a plan of their own whose first team with a plan is this one
+// (the same rule withPlans uses to pick a person's levels).
+async function teamPlanAthletes(db, teamId) {
+  const { results } = await db.prepare(
+    `SELECT p.id, p.plan_rank, p.coach_rank FROM team_members m JOIN people p ON p.id = m.person_id
+     WHERE m.team_id = ?1 AND json_extract(p.settings, '$.personal_plan.plans') IS NULL
+       AND NOT EXISTS (SELECT 1 FROM team_members o JOIN team_plans tp ON tp.team_id = o.team_id WHERE o.person_id = m.person_id AND o.team_id != ?1 AND o.joined_at < m.joined_at)`
+  ).bind(teamId).all();
+  return results;
 }
 // A captain puts an athlete on a level of the team plan. The AI's step limit (coach_rank) then counts from there.
 async function setTeamLevel(db, teamId, me, personId, to, reason = '') {
@@ -427,8 +470,19 @@ async function leadTeamFor(db, personId, wanted, onScreen) {
 async function teamPlanChange(db, me, teamId, c) {
   await requireLead(db, teamId, me.id);
   const plans = await teamPlansOf(db, teamId);
+  const list = (p) => Object.keys(p).map((k) => p[k].weeks[0].miles).join(', ');
+  if (c?.add_level_miles !== undefined && c?.add_level_miles !== null && c?.add_level_miles !== '') {
+    const x = addLevel(plans, c.add_level_miles);
+    await saveTeamPlans(db, teamId, me.id, x.plans, null, x.map);
+    return `team plan: added a ${x.miles} mi level, its days copied from the ${x.from_miles} mi level and scaled. Levels now: ${list(x.plans)} mi`;
+  }
   const level = levelByMiles(plans, c?.level_miles);
   const was = plans[level].weeks[0].miles;
+  if (c?.remove_level) {
+    const x = removeLevel(plans, level, c.move_to_level_miles);
+    await saveTeamPlans(db, teamId, me.id, x.plans, null, x.map);
+    return `team plan: removed the ${was} mi level; anyone on it is now on the ${x.to_miles} mi level. Levels now: ${list(x.plans)} mi`;
+  }
   if (c?.new_level_miles !== undefined && c?.new_level_miles !== null && c?.new_level_miles !== '') {
     const next = scaleLevel(plans, level, c.new_level_miles);
     await saveTeamPlans(db, teamId, me.id, next);
@@ -836,11 +890,15 @@ function checkedPlanReply(out) {
 }
 async function teamPlanScope(db, teamId) {
   const team = await db.prepare('SELECT name FROM teams WHERE id = ?').bind(teamId).first();
-  const row = await db.prepare('SELECT spec FROM team_plans WHERE team_id = ?').bind(teamId).first();
+  const row = await db.prepare('SELECT spec, data FROM team_plans WHERE team_id = ?').bind(teamId).first();
   const { results } = await db.prepare('SELECT p.class_year, p.plan_rank FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ?').bind(teamId).all();
   const grades = {};
   for (const r of results) grades[r.class_year || 'Not set'] = (grades[r.class_year || 'Not set'] || 0) + 1;
-  const levels = results.map((r) => PLANS[r.plan_rank]?.weeks[0].miles).filter(Boolean).sort((a, b) => a - b);
+  // Each athlete's level in miles, from the team's own levels (a captain may have added or removed some).
+  let own = null;
+  try { own = row?.data ? JSON.parse(row.data) : null; } catch { /* fall back to the built-in levels */ }
+  const lv = own || PLANS;
+  const levels = results.map((r) => (lv[r.plan_rank] || lv[1])?.weeks[0].miles).filter(Boolean).sort((a, b) => a - b);
   return { team: true, name: team?.name, roster: { athletes: results.length, grades, weekly_mile_levels: levels }, current: row?.spec ? JSON.parse(row.spec) : null };
 }
 
@@ -1337,14 +1395,17 @@ const PLAN_DAY_TYPES = ['Easy', 'Recovery', 'Workout', 'Long run', 'Race', 'Shak
 const TEAM_TOOLS = [
   { name: 'get_team_plan', description: "Only for a team owner or captain: each team they lead that has a plan, its levels by weekly miles with every day (normal week / race week / taper), and each athlete's level. Names and levels only; teammates' training and health are never shared.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   {
-    name: 'change_team_plan', description: "Owner or captain only: change one day of one level of the team plan, or a level's weekly miles (new_level_miles: every day of the level scales with it, and levels stay in order). Levels are named by their weekly miles now (get_team_plan). Kestrel says why if it refuses.",
-    inputSchema: { type: 'object', required: ['level_miles'], properties: {
+    name: 'change_team_plan', description: "Owner or captain only: change one day of one level of the team plan, or a level's weekly miles (new_level_miles: every day of the level scales with it, and levels stay in order), or add a level (add_level_miles) or remove one (level_miles + remove_level; its athletes move to move_to_level_miles or the nearest level). Levels are named by their weekly miles now (get_team_plan). Kestrel says why if it refuses.",
+    inputSchema: { type: 'object', properties: {
       team_id: { type: 'string', description: 'From get_team_plan; may be left out if they lead one team' },
-      level_miles: { type: 'number', description: 'Which level, by its weekly miles now' },
+      level_miles: { type: 'number', description: 'Which level, by its weekly miles now (needed for everything but add_level_miles)' },
       day: { type: 'string', enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
       week: { type: 'string', enum: ['normal', 'race', 'taper'], description: 'Which week of the level (default normal)' },
       type: { type: 'string', enum: PLAN_DAY_TYPES }, miles: { type: 'string', description: 'Like "6" or "6 (3 WO)"' }, notes: { type: 'string' },
       new_level_miles: { type: 'number', minimum: 1, maximum: 150, description: "Instead of a day: the level's new weekly miles" },
+      add_level_miles: { type: 'number', minimum: 1, maximum: 150, description: 'Instead: add a new level at these weekly miles (up to 15 levels). Its days are copied from the nearest level and scaled.' },
+      remove_level: { type: 'boolean', description: 'Instead: remove the level at level_miles' },
+      move_to_level_miles: { type: 'number', description: 'With remove_level: the level its athletes move to (default: the nearest)' },
     }, additionalProperties: false },
   },
   {
@@ -1699,7 +1760,7 @@ async function serveMcp(request, tools, call, key = '') {
       const asked = params?.protocolVersion;
       return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.3.0' },
         instructions: 'Kestrel is the athlete\'s running coach. Call get_coach_context first every time. Use get_profile before asking the athlete anything, and set_profile to save what they tell you. Plan changes are checked by fixed guardrails and may be refused with a reason; pass that reason on. '
-          + 'Team owners and captains can also change their team\'s plan: call get_team_plan first, then change_team_plan to change one day of a level or a level\'s weekly miles, or change_team_level to put a teammate on another level. Name levels by weekly miles (for example "the 35 mi level"). Kestrel refuses anyone who is not the owner or a captain and says why; pass that on. The team schedule works the same way: get_events or get_team_state first, then create_event, update_event or delete_event for practices and meets (anyone adds; whoever added it, a captain or the owner changes it), apply_week_template for a week of practices, and create_post for the feed. '
+          + 'Team owners and captains can also change their team\'s plan: call get_team_plan first, then change_team_plan to change one day of a level or a level\'s weekly miles, or to add or remove a level (confirm before removing one), or change_team_level to put a teammate on another level. Name levels by weekly miles (for example "the 35 mi level"). Kestrel refuses anyone who is not the owner or a captain and says why; pass that on. The team schedule works the same way: get_events or get_team_state first, then create_event, update_event or delete_event for practices and meets (anyone adds; whoever added it, a captain or the owner changes it), apply_week_template for a week of practices, and create_post for the feed. '
           + 'RSVPs, availability, day notes, health and body marks are always the athlete\'s own. Athletes join with their own account, so to add someone use invite_athlete and send them the link. Confirm before deleting anything. Never pass one teammate\'s training or health to another.' });
     }
     if (method === 'ping') return ok({});
@@ -2082,7 +2143,7 @@ async function route(request, env, url) {
         let plans, spec = null; // null = a hand edit of the cells: keep the AI's brief so it can still be refined
         if (b.plan) { const x = expandPlanSpec(b.plan); plans = x.plans; spec = JSON.stringify(x.spec); }
         else plans = b.plans;
-        await saveTeamPlans(db, teamId, me.id, plans, spec);
+        await saveTeamPlans(db, teamId, me.id, plans, spec, b.plan ? null : (b.level_map && typeof b.level_map === 'object' ? b.level_map : null));
         return json({ ok: true });
       }
       if (sub === 'plan' && method === 'DELETE') { await db.prepare('DELETE FROM team_plans WHERE team_id = ?').bind(teamId).run(); return json({ ok: true }); }
