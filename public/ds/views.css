@@ -248,10 +248,10 @@
 .kv-trendbars .tb i{width:12px;border-radius:5px 5px 2px 2px;display:block;}
 .kv-trendbars .tb i.f{background:var(--accent);} .kv-trendbars .tb i.s{background:var(--info);}
 .kv-trendbars span{font-size:12px;color:var(--text-2);}
-.kv-bodymap{background:linear-gradient(180deg,#1a1720,#100e14);border-radius:20px;padding:16px 12px 14px;display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:12px;}
+.kv-bodymap{background:linear-gradient(180deg in oklch,#1a1720,#100e14);border-radius:20px;padding:16px 12px 14px;display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:12px;}
 #kvBodyMount{width:100%;display:flex;justify-content:center;}
 #kvBodyMount .body-chart-container{padding:0 !important;}
-#kvBodyMount svg{max-height:min(460px,calc(100vh - 430px)) !important;width:auto !important;}
+#kvBodyMount svg{max-height:min(460px,calc(100dvh - 430px)) !important;width:auto !important;}
 @media (max-width:1023px){ #kvBodyMount svg{max-height:340px !important;} }
 .kv-bmchips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;}
 .kv-bmchips:empty{display:none;}
@@ -291,7 +291,7 @@ body.kv-spoke #navSegs{display:none;}
 .kv-trendbars .tb{height:60px;}
 /* Desktop: everything in one window; long feeds scroll inside their card */
 @media (min-width:1024px){
-  #kvActivities .k-acts{max-height:calc(100vh - 430px);min-height:220px;overflow-y:auto;}
+  #kvActivities .k-acts{max-height:calc(100dvh - 430px);min-height:220px;overflow-y:auto;}
   .kv-day{padding:9px 0;}
   .kv-day .kv-lanes{margin-top:4px;}
   .kvs-plan .kv-day .kv-hint{margin-top:2px;}
@@ -301,13 +301,13 @@ body.kv-spoke #navSegs{display:none;}
   .kvs-recovery .kv-tiles > div{padding:9px 12px;}
 }
 @media (min-width:1024px){
-  #kvActivities .k-acts{max-height:calc(100vh - 560px);min-height:150px;}
+  #kvActivities .k-acts{max-height:calc(100dvh - 560px);min-height:150px;}
   .kvs-recovery .kv-trendbars .tb{height:48px;}
   #kvPersonalPlan > .card{margin:0;}
 }
 @media (min-width:1024px){
-  #kvActivities .k-acts{max-height:calc(100vh - 580px);}
-  #kvBodyMount svg{max-height:min(440px,calc(100vh - 470px)) !important;}
+  #kvActivities .k-acts{max-height:calc(100dvh - 580px);}
+  #kvBodyMount svg{max-height:min(440px,calc(100dvh - 470px)) !important;}
 }
 
 /* ---------- Calendar › Training: the day card, borrowed from the training log */
@@ -333,10 +333,8 @@ body.kv-spoke #navSegs{display:none;}
 
 /* ---------- Team › Plan: on desktop the levels table and who is on each level sit side by side, and the table is tighter */
 @media (min-width:1024px){
-  #kvTeamPlan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:14px;align-items:start;}
+  #kvTeamPlan{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:var(--s-4);align-items:start;}
   #kvTeamPlan > section.card{margin:0;}
-  #kvTeamPlan .seg{overflow-x:auto;max-width:100%;flex-wrap:nowrap;}
-  #kvTeamPlan .seg .seg-btn{flex:none;white-space:nowrap;}
   #kvTeamPlan .k-lvl{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);}
   #kvTeamPlan > section.card:first-child{grid-row:1 / span 2;}
   #kvTeamPlan > section.card:only-child{grid-column:1 / -1;}
@@ -344,9 +342,7 @@ body.kv-spoke #navSegs{display:none;}
   #kvTeamPlan .k-pr{gap:2px;}
   #kvTeamPlan .k-pc{height:30px;min-height:0;padding:0;font-size:13px;border-radius:8px;}
   #kvTeamPlan .k-plvl{height:30px;min-height:0;padding:0 2px;font-size:14px;align-items:center;}
-  #kvTeamPlan .k-pwk{padding-left:14px;}
   #kvTeamPlan .k-small{margin:6px 0;}
-  #kvTeamPlan .k-lvl{padding:6px 0;}
 }
 
 /* ---------- Today: even gaps between its sections */

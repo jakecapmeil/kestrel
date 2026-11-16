@@ -397,7 +397,63 @@ body:has(.ka-screen){padding:0;}
   .ka-hello{padding-top:8px;}
   .ka-bottom{padding-top:32px;}
 }
-/* Captain tools on the team plan */
-.k-plan-tools{margin:0 0 10px;gap:8px;flex-wrap:wrap;}
 .k-refset{border:1px solid var(--line,rgba(127,127,127,.25));border-radius:10px;padding:8px 10px;margin:10px 0;display:flex;flex-direction:column;gap:6px;}
 .k-refset legend{padding:0 4px;}
+
+/* ---------- Team: toolbars, roster, invites (spacing pass)
+   Nested corners follow inner radius = outer radius - padding. Icon strokes match the weight of the label beside them. */
+.k-ico{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:2.25;stroke-linecap:round;stroke-linejoin:round;}
+.k-btn.small .k-ico{width:14px;height:14px;}
+
+/* One row of actions: wraps cleanly, every button the same height, the destructive link pushed to the end. */
+.k-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);margin:var(--s-4) 0;}
+.k-toolbar .k-btn{height:40px;padding:0 var(--s-4);font-size:14px;}
+.k-toolbar-slot{display:contents;}
+.k-toolbar-end{margin-left:auto;padding:0 var(--s-1);}
+#kPlanGrid > .k-small:first-child{margin-top:0;}
+
+/* Section heads with a trailing action: the button sits on the title line and never squeezes the hint. */
+.k-roster-head{align-items:center;flex-wrap:wrap;row-gap:var(--s-3);}
+.k-roster-head > div{flex:1 1 280px;min-width:0;}
+.k-roster-head .k-add{flex:none;}
+.k-roster-empty{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:var(--s-3);margin-top:var(--s-4);padding:var(--s-3) var(--s-3) var(--s-3) var(--s-4);border-radius:var(--r-md);background:var(--surface-2);}
+.k-roster-empty .k-small{margin:0;flex:1 1 240px;}
+.k-tr{padding:12px 0;}
+.k-tr .k-link{padding:6px 0;}
+
+/* Invite dialog: the code and link in one tinted box (24px corners, 8px in, so the parts inside get 16px). */
+.k-dialog > .k-small{line-height:1.45;}
+.k-invite-box{display:grid;gap:var(--s-2);margin:var(--s-4) 0 var(--s-3);padding:var(--s-2);border-radius:var(--r-lg);background:var(--surface-2);}
+.k-invite-code{display:flex;align-items:center;justify-content:space-between;gap:var(--s-3);padding:var(--s-2) var(--s-2) var(--s-1) var(--s-3);}
+.k-invite-code .k-small{margin:0;font-weight:600;}
+.k-invite-code .k-code{background:var(--surface);border-radius:calc(var(--r-lg) - var(--s-2) - var(--s-2));padding:6px 14px;font-size:22px;}
+.k-invite-link{display:flex;gap:var(--s-2);}
+.k-invite-link .k-input{flex:1;min-width:0;height:44px;border-radius:var(--r-md);font:500 14px var(--font-mono);color:var(--text-2);}
+.k-invite-link .k-btn{height:44px;border-radius:var(--r-md);flex:none;}
+.k-invite-share{display:flex;flex-wrap:wrap;gap:var(--s-2);margin-bottom:var(--s-2);}
+.k-invite-share .k-btn{height:40px;padding:0 var(--s-4);font-size:14px;}
+.k-dialog-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:var(--s-2);margin-top:var(--s-4);}
+.k-dialog form .k-dialog-foot{margin-top:var(--s-1);}
+.k-dialog-foot .k-link{margin-right:auto;}
+.k-dialog-foot .k-btn{height:40px;padding:0 var(--s-5);font-size:14px;}
+
+/* Team plan lists: lighter controls inside rows, steady row rhythm. */
+.k-lvl{padding:10px 0;gap:var(--s-2) var(--s-3);}
+.k-lvl select.k-input{height:40px;font-size:15px;border-radius:var(--r-sm);padding:0 var(--s-3);}
+.k-lname b{font-weight:600;}
+.k-lname small{font-size:12.5px;margin-top:1px;}
+.k-rec{padding-top:2px;}
+.k-weekpick{display:flex;width:100%;margin:var(--s-1) 0 var(--s-2);}
+.k-weekpick .seg-btn{flex:1 1 0;min-width:0;padding:0 var(--s-2);white-space:nowrap;}
+.k-pr{grid-template-columns:minmax(76px,1.1fr) repeat(7,minmax(0,1fr)) minmax(34px,.7fr);}
+.k-pwk{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:12px;}
+.k-pleg{gap:6px 8px;margin-top:var(--s-3);}
+.k-pleg span{padding:3px 10px;}
+.k-pleg small{margin-top:2px;}
+@media (max-width:480px){
+  /* Phones: the buttons share the row evenly; a destructive link drops below them instead of squeezing them. */
+  .k-dialog-foot .k-btn{flex:1 1 0;}
+  .k-dialog-foot .k-link{order:3;flex-basis:100%;margin:var(--s-1) 0 0;text-align:center;}
+  .k-toolbar .k-btn{flex:1 1 auto;}
+  .k-toolbar-end{flex-basis:100%;margin:var(--s-1) 0 0;text-align:left;}
+}

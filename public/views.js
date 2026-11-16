@@ -42,18 +42,29 @@
   async function saveDayFields(date, fields){ const r = await post('/api/log/day', { personId:activePersonId, date, fields }); if(r?.error) alert(r.error); else { fitnessData = null; V.cache = {}; } return r; }
 
   // ---------------------------------------------------------------- shell
-  async function draw(){
+  // A screen marked selfFed fills itself from its own API calls in .after (Team plan, Roster). Redrawing one that is
+  // already on show refreshes it in place instead of blanking it first, so the page neither flashes nor jumps.
+  async function draw(opts = {}){
     const el = host(); if(!el) return;
     const key = V.stack.length ? V.stack[V.stack.length - 1] : V.key;
     const [k, arg] = key.split('|');
     const name = SCREEN_OF[k] || k;
     const fn = SCREENS[name]; if(!fn) return;
+    const shown = el.dataset.key === key && el.childElementCount > 0;
+    if(fn.selfFed && shown){
+      if(opts.poll) return; // nothing it shows comes from the background refresh
+      V.token = {};
+      fn.after?.(el, arg);
+      window.renderNav?.();
+      return;
+    }
     const token = V.token = {};
     const top = window.scrollY;
     const html = await fn(arg);
     if(V.token !== token || currentPage !== 'v') return;
     window.KV.park?.();
     el.className = 'kv kvs-' + name;
+    el.dataset.key = key;
     el.innerHTML = html;
     // Every Run view ends with the way to choose which Run views show (the phone's view bar has no room for it).
     if(!V.stack.length && V.key.startsWith('run/') && V.key !== 'run/plan') el.insertAdjacentHTML('beforeend', `<div class="kv-runviews">${runViewsBtn()}</div>`);
@@ -61,7 +72,7 @@
     window.renderNav?.();
     if(V.keepScroll) window.scrollTo(0, top); V.keepScroll = false;
   }
-  const redraw = ()=>{ V.keepScroll = true; return draw(); };
+  const redraw = (opts)=>{ V.keepScroll = true; return draw(opts); };
   window.kvRefresh = ()=>{ if(currentPage === 'v') redraw(); };
   window.KV = {
     show(key){ V.key = key; V.stack = []; window.scrollTo(0, 0); return draw(); },

@@ -91,6 +91,16 @@ body .wrap [id^="page"] > .page-head{display:none;}
 .nav-head .seg{flex:0 1 auto;max-width:100%;overflow-x:auto;scrollbar-width:none;}
 .nav-head .seg::-webkit-scrollbar{display:none;}
 .nav-head .seg[hidden]{display:none;}
+/* Desktop: the views sit on the title's line, so they don't jump when a page has (or loses) a subtitle. */
+@media (min-width:1024px){
+  .nav-head{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"back back" "title segs" "sub sub";align-items:center;column-gap:var(--s-5);row-gap:0;}
+  .nav-titles{display:contents;}
+  .nav-back{grid-area:back;justify-self:start;}
+  .nav-back[hidden]{display:none;}
+  .nav-head .page-title{grid-area:title;}
+  .nav-sub{grid-area:sub;}
+  .nav-head .seg{grid-area:segs;}
+}
 .nav-head .seg-btn{white-space:nowrap;}
 @media (min-width:1024px){
   .nav-head .seg{min-width:0;max-width:100%;}
@@ -200,7 +210,7 @@ body[data-nav="record"]{overflow:hidden;}
   /* Recovery: how you feel beside the body map */
   #youBodyView{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start;max-width:none;}
   #youBodyView > .card{margin:0;}
-  #youBodyView #bodyMapMount svg{max-height:min(520px,calc(100vh - 470px)) !important;width:auto !important;}
+  #youBodyView #bodyMapMount svg{max-height:min(520px,calc(100dvh - 470px)) !important;width:auto !important;}
   /* Cross-train and Fuel: summary and the form side by side, the tips in their own column */
   #tpXtrainView .split-fit,#tpFoodView .split-fit{grid-template-columns:minmax(0,2.1fr) minmax(0,1fr);align-items:start;}
   #tpXtrainView .stack-cards,#tpFoodView .stack-cards{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:20px;align-items:start;}
@@ -217,6 +227,6 @@ body[data-nav="record"]{overflow:hidden;}
 }
 @media (min-width:1024px){
   body{padding-bottom:8px;}
-  #youBodyView #bodyMapMount svg{max-height:min(500px,calc(100vh - 500px)) !important;}
+  #youBodyView #bodyMapMount svg{max-height:min(500px,calc(100dvh - 500px)) !important;}
   #tpFoodView .stack-cards > :nth-child(2) .cluster{gap:6px;}
 }

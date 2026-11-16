@@ -375,8 +375,10 @@
   // ---------------------------------------------------------------- Team › Plan and Roster (the team's own editors)
   SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its plan.'); if(own()) await loadKai(); setSub(''); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
   SCREENS.teamplan.after = ()=> window.kestrelRenderTeamTraining?.($('kvTeamPlan'));
+  SCREENS.teamplan.selfFed = true;
   SCREENS.roster = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its roster.'); setSub(''); return '<div id="kvRoster" class="kv-stack"></div>'; };
   SCREENS.roster.after = ()=> window.kestrelRenderRoster?.($('kvRoster'));
+  SCREENS.roster.selfFed = true;
 
   function own(){ return isRealPerson(); }
   function setSub(s){ V.cache['sub:' + V.key] = s; }

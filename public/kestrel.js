@@ -810,20 +810,22 @@ const isLead = () => K.role === 'owner' || K.role === 'captain';
 
 window.kestrelRenderRoster = async (el) => {
   if (!el || !K.teamId) return;
+  const teamId = K.teamId;
   const [r, mi] = await Promise.all([
-    attempt(() => api(`/api/teams/${K.teamId}/roster`)),
+    attempt(() => api(`/api/teams/${teamId}/roster`)),
     api('/api/team').catch(() => null),
   ]);
-  if (!r) return;
+  if (!r || K.teamId !== teamId || !el.isConnected) return;
   const miles = new Map((mi?.athletes || []).map((a) => [a.id, a]));
   const me = K.me.user.id;
   const lead = r.role === 'owner' || r.role === 'captain';
   const owner = r.role === 'owner';
+  const again = () => window.kestrelRenderRoster(el);
   el.innerHTML = html`<section class="card">
-      <div class="section-head"><div>
+      <div class="section-head k-roster-head"><div>
         <div class="card-title">Roster</div>
         <div class="hint">${r.members.length} on the team. Everyone sees name, number, grade and events. ${lead ? 'Age is shown only to you and the person.' : 'Your age is shown only to you, the owner and captains.'}</div>
-      </div></div>
+      </div><button class="k-btn small primary k-add" type="button" id="kRosterAdd">${raw(ICON_ADD)}<span>${lead ? 'Add athletes' : 'Invite'}</span></button></div>
       <div class="k-table" role="table" aria-label="Team roster">
         <div class="k-tr k-th" role="row"><span role="columnheader">#</span><span role="columnheader">Name</span><span role="columnheader">Grade</span><span role="columnheader">Age</span><span role="columnheader">Events</span><span role="columnheader">Week</span><span></span></div>
         ${r.members.map((m) => html`<div class="k-tr" role="row">
@@ -836,12 +838,57 @@ window.kestrelRenderRoster = async (el) => {
           <span>${lead || m.id === me ? html`<button class="k-link" type="button" data-edit="${m.id}">Edit</button>` : ''}</span>
         </div>`)}
       </div>
-      ${r.members.length < 2 ? html`<p class="k-small">Invite teammates with the code on the Miles tab.</p>` : ''}
+      ${r.members.length < 2 ? html`<div class="k-roster-empty"><p class="k-small">It’s just you so far. Send teammates the invite link and they join as soon as they sign in.</p><button class="k-btn small" type="button" id="kRosterAdd2">Invite teammates</button></div>` : ''}
     </section>`.s;
+  $('kRosterAdd').onclick = () => openInvite(again);
+  if ($('kRosterAdd2')) $('kRosterAdd2').onclick = () => openInvite(again);
   el.querySelectorAll('[data-edit]').forEach((b) => {
-    b.onclick = () => editRosterEntry(r.members.find((m) => m.id === b.dataset.edit), { lead, owner }, () => window.kestrelRenderRoster(el));
+    b.onclick = () => editRosterEntry(r.members.find((m) => m.id === b.dataset.edit), { lead, owner }, again);
   });
 };
+
+const ICON_ADD = '<svg class="k-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
+
+// Adding athletes: everyone has their own Kestrel account, so a teammate is added by sending them the team's invite.
+// They open the link (or type the code under + Team), sign in, and land on the roster.
+async function openInvite(done) {
+  const team = await attempt(() => api(`/api/teams/${K.teamId}`));
+  if (!team) return;
+  const owner = team.role === 'owner';
+  const d = dialog();
+  const paint = (t) => {
+    const link = `${location.origin}/join/${t.invite_code}`;
+    const msg = `Join ${t.name} on Kestrel: ${link}`;
+    d.innerHTML = html`<h2>Add athletes</h2>
+      <p class="k-small">Send this link to your teammates. When they open it and sign in, they join ${t.name} and show up on the roster.</p>
+      <div class="k-invite-box">
+        <div class="k-invite-code"><span class="k-small">Invite code</span><span class="k-code" id="kInvCode">${t.invite_code}</span></div>
+        <div class="k-invite-link"><input class="k-input" id="kInvLink" readonly value="${link}" aria-label="Invite link"><button class="k-btn primary" type="button" id="kInvCopy" autofocus>Copy link</button></div>
+      </div>
+      <div class="k-invite-share">
+        ${typeof navigator.share === 'function' ? html`<button class="k-btn" type="button" id="kInvShare">Share…</button>` : ''}
+        <a class="k-btn" href="${'sms:?&body=' + encodeURIComponent(msg)}">Text</a>
+        <a class="k-btn" href="${'mailto:?subject=' + encodeURIComponent(`Join ${t.name} on Kestrel`) + '&body=' + encodeURIComponent(msg)}">Email</a>
+      </div>
+      <p class="k-small">They can also tap <b>+ Team</b> and type the code. Anyone with it can join, so share it only with your team.${owner ? ' Make a new code if it gets out: the old one stops working.' : ''}</p>
+      <div class="k-row k-dialog-foot">${owner ? html`<button class="k-link" type="button" id="kInvNew">Make a new code</button>` : ''}<button class="k-btn" type="button" id="kInvClose">Done</button></div>`.s;
+    $('kInvClose').onclick = () => d.close();
+    $('kInvLink').onfocus = (e) => e.target.select();
+    $('kInvCopy').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(link); } catch { $('kInvLink').select(); document.execCommand?.('copy'); }
+      const b = e.currentTarget; b.textContent = 'Copied'; setTimeout(() => { if (b.isConnected) b.textContent = 'Copy link'; }, 1600);
+    };
+    if ($('kInvShare')) $('kInvShare').onclick = () => navigator.share({ title: `Join ${t.name} on Kestrel`, text: `Join ${t.name} on Kestrel`, url: link }).catch(() => {});
+    if ($('kInvNew')) $('kInvNew').onclick = (e) => attempt(async () => {
+      if (!confirm('Make a new invite code? The old code and link stop working.')) return;
+      paint(await api(`/api/teams/${K.teamId}/code`, { method: 'POST' }));
+      toast('New invite code made.');
+    }, e.currentTarget);
+  };
+  paint(team);
+  d.onclose = () => { d.onclose = null; done?.(); };
+  if (!d.open) d.showModal();
+}
 
 function editRosterEntry(m, perms, done) {
   const d = dialog();
@@ -852,10 +899,24 @@ function editRosterEntry(m, perms, done) {
       <div><label class="k-label" for="kRAge">Age</label><input class="k-input" id="kRAge" name="age" type="number" min="8" max="99" value="${m.age ?? ''}"><p class="k-small">Optional. Only you, the owner and captains see it.</p></div>
       <div><label class="k-label" for="kREvents">Events</label><input class="k-input" id="kREvents" name="events" maxlength="80" value="${m.events}" placeholder="e.g. 800, 1600, 4x400"></div>
       ${perms.owner && m.role !== 'owner' ? html`<label class="k-check"><input type="checkbox" name="leader" ${m.role === 'captain' ? 'checked' : ''}><span>Team captain. Captains can edit the roster, manage the calendar and build the team training plan.</span></label>` : ''}
-      <div class="k-row"><button class="k-btn primary" type="submit">Save</button><button class="k-link" type="button" id="kRClose">Cancel</button></div>
+      <div class="k-row k-dialog-foot">${self ? html`<button class="k-link danger" type="button" id="kRLeave">Leave team</button>` : perms.owner ? html`<button class="k-link danger" type="button" id="kRRemove">Remove from team</button>` : ''}<button class="k-btn" type="button" id="kRClose">Cancel</button><button class="k-btn primary" type="submit">Save</button></div>
     </form>`.s;
+  d.onclose = null;
   d.showModal();
   $('kRClose').onclick = () => d.close();
+  if ($('kRRemove')) $('kRRemove').onclick = (e) => attempt(async () => {
+    if (!confirm(`Remove ${m.name || 'them'} from the team? They can rejoin with the invite code.`)) return;
+    await api(`/api/teams/${K.teamId}/members/${m.id}`, { method: 'DELETE' });
+    d.close(); toast(`${m.name || 'They'} left the roster.`); done();
+  }, e.currentTarget);
+  if ($('kRLeave')) $('kRLeave').onclick = (e) => attempt(async () => {
+    const n = (await api(`/api/teams/${K.teamId}/roster`)).members.length;
+    if (!confirm(n === 1 ? 'You are the last member. Leaving deletes the team and its calendar. Leave?' : 'Leave this team?')) return;
+    await api(`/api/teams/${K.teamId}/members/${K.me.user.id}`, { method: 'DELETE' });
+    d.close();
+    K.teamId = null; store.del('kestrel.team');
+    await refreshMe(); renderHeader(); await window.kestrelReload();
+  }, e.currentTarget);
   $('kRosterForm').onsubmit = (e) => {
     e.preventDefault();
     const f = e.target;
@@ -870,12 +931,20 @@ function editRosterEntry(m, perms, done) {
 
 // ---------- Team tab: training plan (owner and captains build it with Kestrel AI)
 
+// Everything is fetched first and swapped in at once, so a refresh never empties the page (no flash, no scroll jump).
 window.kestrelRenderTeamTraining = async (el) => {
   if (!el || !K.teamId) return;
-  const r = await attempt(() => api(`/api/teams/${K.teamId}/plan`));
+  const teamId = K.teamId;
+  const r = await attempt(() => api(`/api/teams/${teamId}/plan`));
   if (!r) return;
   const lead = isLead();
-  const lv = lead && r.custom ? await attempt(() => api(`/api/teams/${K.teamId}/plan/levels`)) : null;
+  // Your own plan marks your level on the table; any reload clears it, so it is fetched alongside.
+  const [lv, wk] = await Promise.all([
+    lead && r.custom ? attempt(() => api(`/api/teams/${teamId}/plan/levels`)) : null,
+    lead && r.custom ? attempt(() => api(`/api/teams/${teamId}/plan/weeks`)) : null,
+    r.custom ? window.kestrelLoadKai?.().catch(() => null) : null,
+  ]);
+  if (K.teamId !== teamId || !el.isConnected) return;
   const again = () => window.kestrelRenderTeamTraining(el);
   el.innerHTML = html`<section class="card">
       <div class="section-head"><div>
@@ -885,7 +954,7 @@ window.kestrelRenderTeamTraining = async (el) => {
       ${r.custom
         ? html`${r.spec?.summary ? html`<p class="k-small">${r.spec.summary}</p>` : ''}<p class="k-small">Each row is a level, by weekly miles. Every athlete trains from the level you put them on, and their own Kestrel AI coach adapts it day to day.${lead ? ' Tap a number to change that day.' : ' Tap a number to see that day.'}</p>`
         : html`<p class="k-small">Nothing is preloaded. ${lead ? 'Talk it through with Kestrel AI: tell it your season, how many days you run, workout days and race days, or attach the plan you use now (PDF, Word, Excel, CSV). Refine it until it is right. It scales to every runner on the roster.' : 'Your captain or coach can build one. Until then you can build your own in Train → Plan.'}</p>`}
-      ${lead ? html`<div class="k-row"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<button class="k-link danger" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
+      ${lead ? html`<div class="k-toolbar"><button class="k-btn primary" type="button" id="kPlanBuild">${r.custom ? 'Refine with Kestrel AI' : 'Build with Kestrel AI'}</button>${r.custom ? html`<span class="k-toolbar-slot" id="kPlanTools"></span><button class="k-link danger k-toolbar-end" type="button" id="kPlanReset">Remove team plan</button>` : ''}</div>` : ''}
       ${r.custom ? html`<div id="kPlanGrid"></div>` : ''}
       <p class="k-small">Plans are general guidance, not medical advice, and are not checked by Kestrel for any one runner.</p>
     </section>
@@ -894,20 +963,18 @@ window.kestrelRenderTeamTraining = async (el) => {
   if ($('kPlanReset')) $('kPlanReset').onclick = (e) => attempt(async () => {
     if (!confirm('Remove the team plan? Everyone on the team goes back to having no plan until they build their own.')) return;
     await api(`/api/teams/${K.teamId}/plan`, { method: 'DELETE' });
-    await window.kestrelReload();
+    await window.kestrelReload({ keepScreen: true });
     again();
   }, e.currentTarget);
   if (r.custom) renderPlanGrid($('kPlanGrid'), r.plans, lead, async (plans) => {
     await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
-    await window.kestrelReload();
+    await window.kestrelReload({ keepScreen: true });
     toast('Plan saved.');
     again();
   });
-  if (lv) {
-    renderLevels($('kLevels'), lv, again);
-    const wk = await attempt(() => api(`/api/teams/${K.teamId}/plan/weeks`));
-    if (wk && $('kWeekTypes')) renderWeekTypes($('kWeekTypes'), wk);
-  }
+  if (lv) renderLevels($('kLevels'), lv);
+  if (wk && $('kWeekTypes')) renderWeekTypes($('kWeekTypes'), wk);
+  else if ($('kWeekTypes')) $('kWeekTypes').remove();
 };
 
 // What kind of week each athlete is on: normal, race week or taper. Automatic means race week when a meet is on the
@@ -916,14 +983,16 @@ const WEEK_LABEL = { normal: 'Normal', race: 'Race week', taper: 'Taper' };
 let weekPick = 0;
 function renderWeekTypes(el, wk) {
   const i = Math.min(weekPick, wk.weeks.length - 1);
-  const label = (w, n) => `${n === 0 ? 'This week' : n === 1 ? 'Next week' : 'In ' + n + ' weeks'} · ${new Date(w + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  const day = (w) => new Date(w + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const label = (w, n) => (n === 0 ? 'This week' : day(w));
+  const full = (w, n) => `${n === 0 ? 'This week' : n === 1 ? 'Next week' : 'In ' + n + ' weeks'}, week of ${day(w)}`;
   const eligible = wk.athletes.filter((a) => !a.locked);
   const opts = (cur, auto) => html`<option value="auto" ${cur === 'auto' ? 'selected' : ''}>Automatic (${WEEK_LABEL[auto]})</option>${['normal', 'race', 'taper'].map((k) => html`<option value="${k}" ${cur === k ? 'selected' : ''}>${WEEK_LABEL[k]}</option>`)}`;
   el.innerHTML = html`<div class="section-head"><div>
       <div class="card-title">Week type</div>
       <div class="hint">Choose what each athlete is doing that week. Their days follow the plan's normal, race-week or taper column. Automatic means race week when a meet is on the calendar.</div>
     </div></div>
-    <div class="seg seg-sm" role="tablist" aria-label="Week">${wk.weeks.map((w, n) => html`<button type="button" class="seg-btn ${n === i ? 'active' : ''}" role="tab" data-wk="${n}">${label(w, n)}</button>`)}</div>
+    <div class="seg seg-sm k-weekpick" role="tablist" aria-label="Week">${wk.weeks.map((w, n) => html`<button type="button" class="seg-btn ${n === i ? 'active' : ''}" role="tab" aria-selected="${String(n === i)}" data-wk="${n}" title="${full(w, n)}" aria-label="${full(w, n)}">${label(w, n)}</button>`)}</div>
     ${eligible.length ? html`<div class="k-lvl"><span class="k-lname"><b>Everyone</b><small>${eligible.length} on the team plan</small></span>
       <select class="k-input" id="kWeekAll" aria-label="Set everyone's week type"><option value="">Set everyone to…</option><option value="auto">Automatic</option>${['normal', 'race', 'taper'].map((k) => html`<option value="${k}">${WEEK_LABEL[k]}</option>`)}</select></div>` : ''}
     <div class="k-lvls">${wk.athletes.map((a) => { const c = a.weeks[i]; return html`<div class="k-lvl">
@@ -936,8 +1005,8 @@ function renderWeekTypes(el, wk) {
   const save = (body, ctl) => attempt(async () => {
     const out = await api(`/api/teams/${K.teamId}/plan/weeks`, { method: 'PUT', body: JSON.stringify({ week_of: wk.weeks[i], ...body }) });
     toast('Week type saved.');
-    await window.kestrelReload?.();
     renderWeekTypes(el, out);
+    await window.kestrelReload?.({ keepScreen: true });
   }, ctl);
   el.querySelectorAll('[data-wk]').forEach((b) => { b.onclick = () => { weekPick = Number(b.dataset.wk); renderWeekTypes(el, wk); }; });
   el.querySelectorAll('select[data-who]').forEach((sel) => { sel.onchange = () => save({ person_id: sel.dataset.who, kind: sel.value }, sel); });
@@ -946,7 +1015,7 @@ function renderWeekTypes(el, wk) {
 
 
 // Who is on which level. Kestrel AI recommends a move up when an athlete has earned it; the captain decides.
-function renderLevels(el, lv, again) {
+function renderLevels(el, lv) {
   const rows = lv.athletes;
   el.innerHTML = html`<div class="section-head"><div>
       <div class="card-title">Who’s on what</div>
@@ -961,9 +1030,11 @@ function renderLevels(el, lv, again) {
     </div>`)}</div>
     ${rows.length ? '' : html`<p class="k-small">No one has joined the team yet.</p>`}`.s;
   const move = (id, level, btn) => attempt(async () => {
-    await api(`/api/teams/${K.teamId}/plan/levels/${id}`, { method: 'PUT', body: JSON.stringify({ level }) });
+    const out = await api(`/api/teams/${K.teamId}/plan/levels/${id}`, { method: 'PUT', body: JSON.stringify({ level }) });
     toast('Level changed.');
-    again();
+    renderLevels(el, { ...lv, athletes: out.athletes });
+    // Your own level feeds your plan everywhere else; the rest of the app picks it up without redrawing this screen.
+    if (id === K.me.user.id) await window.kestrelReload({ keepScreen: true });
   }, btn);
   el.querySelectorAll('select[data-who]').forEach((sel) => { sel.onchange = () => move(sel.dataset.who, Number(sel.value), sel); });
   el.querySelectorAll('[data-up]').forEach((b) => { b.onclick = () => move(b.dataset.up, Number(b.dataset.to), b); });
@@ -984,12 +1055,15 @@ function dayLine(day, c) {
   return c.type === 'Off' ? `${day}: rest${c.notes ? ` (${c.notes})` : ''}` : `${day}: ${c.miles ? c.miles + ' mi ' : ''}${t.toLowerCase()}${c.notes ? `. ${c.notes}` : ''}`;
 }
 
+const planOpen = { team: null, set: new Set() };
 function renderPlanGrid(el, plans, lead, save) {
   const levels = Object.keys(plans).map(Number).sort((a, b) => a - b);
   // The level this athlete trains from is marked and starts open.
   const myMiles = window.kestrelMyLevelMiles?.();
   const mine = levels.find((l) => myMiles && Number(plans[l].weeks[0].miles) === Number(myMiles));
-  const open = new Set(mine ? [mine] : []);
+  // Which levels are open survives a redraw (a save, a refresh) for the same team.
+  if (planOpen.team !== K.teamId) { planOpen.team = K.teamId; planOpen.set = new Set(mine ? [mine] : []); }
+  const open = planOpen.set;
   const paint = () => {
     const cellsOf = (lvl, wi) => plans[lvl].days.map((d, di) => {
       const c = d.cells[wi];
@@ -999,7 +1073,11 @@ function renderPlanGrid(el, plans, lead, save) {
       return html`<button type="button" class="k-pc ${TYPE_CLASS[c.type] || ''}" data-l="${lvl}" data-w="${wi}" data-d="${di}" title="${tip}" aria-label="${tip}">${rest && !n ? '·' : fmtMi(n)}</button>`;
     });
     const total = (lvl, wi) => fmtMi(plans[lvl].days.reduce((a, d) => a + numOf(d.cells[wi]), 0));
-    el.innerHTML = html`${lead ? html`<div class="k-row k-plan-tools"><button class="k-btn small" type="button" id="kLvlEdit">Edit level mileage</button><button class="k-btn small" type="button" id="kRefEdit">Edit workouts and notes</button></div>` : ''}${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
+    // The captain's edit buttons sit in the plan's toolbar when there is one, else above the table.
+    const tools = lead ? html`<button class="k-btn" type="button" id="kLvlEdit">Edit level mileage</button><button class="k-btn" type="button" id="kRefEdit">Edit workouts and notes</button>` : '';
+    const slot = $('kPlanTools');
+    if (slot) slot.innerHTML = tools.s ?? tools;
+    el.innerHTML = html`${lead && !slot ? html`<div class="k-toolbar">${tools}</div>` : ''}${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
       <div class="k-pr k-ph" role="row"><span>Level</span>${DAYS7.map((d) => html`<span role="columnheader">${d}</span>`)}<span>Total</span></div>
       ${levels.map((lvl) => html`<div class="k-pr ${lvl === mine ? 'mine' : ''}" role="row"><button type="button" class="k-plvl" data-open="${lvl}" aria-expanded="${String(open.has(lvl))}"><i>${open.has(lvl) ? '▾' : '▸'}</i>${plans[lvl].weeks[0].miles}<small>${lvl === mine ? 'mi · you' : 'mi'}</small></button>${cellsOf(lvl, 0)}<span class="k-ptot">${total(lvl, 0)}</span></div>
         ${open.has(lvl) ? [1, 2].map((wi) => html`<div class="k-pr sub" role="row"><span class="k-pwk">${WEEKS[wi][1]}</span>${cellsOf(lvl, wi)}<span class="k-ptot">${total(lvl, wi)}</span></div>`) : ''}`)}
@@ -1294,7 +1372,7 @@ function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
     await api(base, { method: 'PUT', body: JSON.stringify({ plan: st.plan }) });
     d.close();
     toast(team ? 'Team plan saved. Everyone trains from it now.' : 'Plan saved. Your coach uses it from today.');
-    await window.kestrelReload();
+    await window.kestrelReload(team && onSaved ? { keepScreen: true } : undefined);
     if (onSaved) onSaved();
   }, e.currentTarget);
 }
