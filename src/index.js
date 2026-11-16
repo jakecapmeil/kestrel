@@ -1366,8 +1366,9 @@ async function serveMcp(request, tools, call, key = '') {
     if (limited && method === 'tools/call') return ok({ content: [{ type: 'text', text: 'Too many requests. Wait a minute and try again.' }], isError: true });
     if (method === 'initialize') {
       const asked = params?.protocolVersion;
-      return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.1.0' },
-        instructions: 'Kestrel is the athlete\'s running coach. Call get_coach_context first every time. Use get_profile before asking the athlete anything, and set_profile to save what they tell you. Plan changes are checked by fixed guardrails and may be refused with a reason; pass that reason on.' });
+      return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.2.0' },
+        instructions: 'Kestrel is the athlete\'s running coach. Call get_coach_context first every time. Use get_profile before asking the athlete anything, and set_profile to save what they tell you. Plan changes are checked by fixed guardrails and may be refused with a reason; pass that reason on. '
+          + 'Team owners and captains can also change their team\'s plan: call get_team_plan first, then change_team_plan to change one day of a level or a level\'s weekly miles, or change_team_level to put a teammate on another level. Name levels by weekly miles (for example "the 35 mi level"). Kestrel refuses anyone who is not the owner or a captain and says why; pass that on. Never pass one teammate\'s training or health to another.' });
     }
     if (method === 'ping') return ok({});
     if (method === 'tools/list') return ok({ tools: toolList });
