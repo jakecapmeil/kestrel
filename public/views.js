@@ -51,17 +51,18 @@
     const name = SCREEN_OF[k] || k;
     const fn = SCREENS[name]; if(!fn) return;
     const shown = el.dataset.key === key && el.childElementCount > 0;
-    if(fn.selfFed && shown){
-      if(opts.poll) return; // nothing it shows comes from the background refresh
-      V.token = {};
-      fn.after?.(el, arg);
-      window.renderNav?.();
-      return;
-    }
+    if(fn.selfFed && shown && opts.poll) return; // nothing it shows comes from the background refresh
     const token = V.token = {};
     const top = window.scrollY;
     const html = await fn(arg);
     if(V.token !== token || currentPage !== 'v') return;
+    // Same shell as on show (same team, still on one): refresh what is inside it in place.
+    if(fn.selfFed && shown && html === V.shownHtml){
+      fn.after?.(el, arg);
+      window.renderNav?.();
+      return;
+    }
+    V.shownHtml = html;
     window.KV.park?.();
     el.className = 'kv kvs-' + name;
     el.dataset.key = key;

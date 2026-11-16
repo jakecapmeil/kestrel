@@ -457,3 +457,10 @@ body:has(.ka-screen){padding:0;}
   .k-toolbar .k-btn{flex:1 1 auto;}
   .k-toolbar-end{flex-basis:100%;margin:var(--s-1) 0 0;text-align:left;}
 }
+@media (max-width:480px){
+  /* Phones: give the day cells the room; the level column only needs "Race week" at a smaller size. */
+  .k-pr{grid-template-columns:minmax(58px,.9fr) repeat(7,minmax(0,1fr)) minmax(28px,.6fr);}
+  .k-pwk{padding-left:4px;font-size:10.5px;}
+  .k-plvl{flex-wrap:wrap;align-content:center;line-height:1.1;}
+  .k-toolbar-end{padding:0;}
+}

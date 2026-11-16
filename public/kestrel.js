@@ -776,6 +776,7 @@ function activityCard(a) {
   </article>`;
 }
 
+const actsShown = { team: null, html: '' };
 window.kestrelRenderActivities = async (el) => {
   if (!el || !K.teamId) return;
   const teamId = K.teamId;
@@ -784,7 +785,7 @@ window.kestrelRenderActivities = async (el) => {
         <div class="card-title">Activities</div>
         <div class="hint">Recent runs from teammates who share them, newest first, going back through their training. Turn yours off in You → Profile.</div>
       </div></div>
-      <div class="k-acts" id="kActs"><p class="k-small">Loading…</p></div>
+      <div class="k-acts" id="kActs">${raw(actsShown.team === teamId ? actsShown.html : html`<p class="k-small">Loading…</p>`.s)}</div>
       <div class="k-row"><button class="k-btn" type="button" id="kActsMore" hidden>Load older activities</button></div>
     </section>`.s;
   const list = $('kActs'), more = $('kActsMore');
@@ -792,10 +793,13 @@ window.kestrelRenderActivities = async (el) => {
   const load = async () => {
     const out = await attempt(() => api('/api/team/activities' + (next ? '?before=' + encodeURIComponent(next) : '')), more);
     if (K.teamId !== teamId || !list.isConnected) return;
-    if (!out) { if (first) list.innerHTML = html`<p class="k-small">Couldn’t load activities. Check your connection.</p>`.s; return; }
-    if (first) list.innerHTML = '';
-    if (first && !out.activities.length) list.innerHTML = html`<p class="k-small">No activities yet. They appear when teammates connect a watch or log their runs.</p>`.s;
-    list.insertAdjacentHTML('beforeend', out.activities.map((a) => activityCard(a).s).join(''));
+    if (!out) { if (first && actsShown.team !== teamId) list.innerHTML = html`<p class="k-small">Couldn’t load activities. Check your connection.</p>`.s; return; }
+    // The first page replaces the last one shown in a single swap (shown meanwhile, so a redraw never empties the list).
+    const cards = out.activities.map((a) => activityCard(a).s).join('');
+    if (first) {
+      list.innerHTML = out.activities.length ? cards : html`<p class="k-small">No activities yet. They appear when teammates connect a watch or log their runs.</p>`.s;
+      actsShown.team = teamId; actsShown.html = list.innerHTML;
+    } else list.insertAdjacentHTML('beforeend', cards);
     first = false;
     next = out.next;
     more.hidden = !next;
@@ -1033,8 +1037,8 @@ function renderLevels(el, lv) {
     const out = await api(`/api/teams/${K.teamId}/plan/levels/${id}`, { method: 'PUT', body: JSON.stringify({ level }) });
     toast('Level changed.');
     renderLevels(el, { ...lv, athletes: out.athletes });
-    // Your own level feeds your plan everywhere else; the rest of the app picks it up without redrawing this screen.
-    if (id === K.me.user.id) await window.kestrelReload({ keepScreen: true });
+    // Your own level feeds your plan everywhere else, and moves the "you" mark on the table.
+    if (id === K.me.user.id) { await window.kestrelReload({ keepScreen: true }); const host = el.closest('#kvTeamPlan, #teamTrainView'); if (host) window.kestrelRenderTeamTraining(host); }
   }, btn);
   el.querySelectorAll('select[data-who]').forEach((sel) => { sel.onchange = () => move(sel.dataset.who, Number(sel.value), sel); });
   el.querySelectorAll('[data-up]').forEach((b) => { b.onclick = () => move(b.dataset.up, Number(b.dataset.to), b); });

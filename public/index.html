@@ -6661,6 +6661,17 @@ async function init(){
     if(!(await loadState({ ifChanged:true }))) return;
     renderAll({ poll:true });
   }, 20000);
+  // Coming back after a while (runs may have synced elsewhere): one full refresh, unless someone is mid-edit.
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.hidden){ hiddenAt = Date.now(); return; }
+    if(!hiddenAt || Date.now() - hiddenAt < 60000) return;
+    hiddenAt = 0;
+    if(editMode || document.querySelector('dialog[open], .modal-overlay.show') || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    planCache = {}; kaiData = null; fitnessData = null;
+    await loadState();
+    renderAll();
+  });
 }
 
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
