@@ -1426,34 +1426,90 @@ const PLACE_KIND_LABEL = { meet: 'Meet venue', practice: 'Practice' };
 const isLeadRole = () => ['owner', 'captain'].includes(K.role);
 const localToday = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; };
 
-// A meet (or practice, or other event) from the Meets tab: the same fields as the day panel, plus the date.
-window.kestrelAddEvent = ({ type = 'meet', date, places = [] } = {}) => {
+// A practice, meet or other event: add one, or (passing `event`) change or delete it. Whoever added it, a captain or the owner can edit.
+const EV_TYPES = [['practice', 'Practice'], ['meet', 'Meet'], ['other', 'Other']];
+const EV_KINDS = [['', 'Not set'], ['easy', 'Easy'], ['workout', 'Workout'], ['long_run', 'Long run']];
+window.kestrelEventForm = ({ event = null, type = 'practice', date, places = [] } = {}) => {
+  const ev = event || {};
+  const t = ev.type || type;
   const d = dialog();
-  d.innerHTML = html`<h2>${type === 'meet' ? 'Add a meet' : 'Add an event'}</h2>
+  d.innerHTML = html`<h2>${event ? `Edit ${t === 'meet' ? 'meet' : t === 'practice' ? 'practice' : 'event'}` : 'Add to the schedule'}</h2>
     <form id="kEvForm" class="k-stack">
-      <label class="k-label" for="kEvTitle">Name</label><input class="k-input" id="kEvTitle" name="title" maxlength="200" required placeholder="e.g. County Invitational">
+      <label class="k-label" for="kEvTitle">Name</label><input class="k-input" id="kEvTitle" name="title" maxlength="200" required value="${ev.title || ''}" placeholder="${t === 'meet' ? 'e.g. County Invitational' : 'e.g. Practice'}">
       <div class="k-row">
-        <div class="grow"><label class="k-label" for="kEvDate">Date</label><input class="k-input" id="kEvDate" name="date" type="date" required value="${date || localToday()}"></div>
-        <div class="grow"><label class="k-label" for="kEvType">Type</label><select class="k-input" id="kEvType" name="type">${[['meet', 'Meet'], ['practice', 'Practice'], ['other', 'Other']].map(([v, l]) => html`<option value="${v}" ${v === type ? 'selected' : ''}>${l}</option>`)}</select></div>
+        <div class="grow"><label class="k-label" for="kEvDate">Date</label><input class="k-input" id="kEvDate" name="date" type="date" required value="${ev.date || date || localToday()}"></div>
+        <div class="grow"><label class="k-label" for="kEvType">Type</label><select class="k-input" id="kEvType" name="type">${EV_TYPES.map(([v, l]) => html`<option value="${v}" ${v === t ? 'selected' : ''}>${l}</option>`)}</select></div>
       </div>
+      <div id="kEvKindRow" ${t === 'practice' ? '' : 'hidden'}><label class="k-label" for="kEvKind">Practice</label><select class="k-input" id="kEvKind" name="kind">${EV_KINDS.map(([v, l]) => html`<option value="${v}" ${v === (ev.kind || '') ? 'selected' : ''}>${l}</option>`)}</select></div>
       <div class="k-row">
-        <div class="grow"><label class="k-label" for="kEvTime">Start time</label><input class="k-input" id="kEvTime" name="time" maxlength="40" placeholder="e.g. 9:00 AM"></div>
-        <div class="grow"><label class="k-label" for="kEvEnd">End time</label><input class="k-input" id="kEvEnd" name="endTime" maxlength="40" placeholder="optional"></div>
+        <div class="grow"><label class="k-label" for="kEvTime">Start time</label><input class="k-input" id="kEvTime" name="time" maxlength="40" value="${ev.time || ''}" placeholder="e.g. 4:00 PM"></div>
+        <div class="grow"><label class="k-label" for="kEvEnd">End time</label><input class="k-input" id="kEvEnd" name="endTime" maxlength="40" value="${ev.endTime || ''}" placeholder="optional"></div>
       </div>
-      <label class="k-label" for="kEvPlace">Place</label><input class="k-input" id="kEvPlace" name="location" list="kEvPlaces" maxlength="200" placeholder="A saved place, or any name or address">
+      <label class="k-label" for="kEvPlace">Place</label><input class="k-input" id="kEvPlace" name="location" list="kEvPlaces" maxlength="200" value="${ev.location || ''}" placeholder="A saved place, or any name or address">
       <datalist id="kEvPlaces">${places.map((p) => html`<option value="${p.name}">`)}</datalist>
-      <label class="k-label" for="kEvBring">What to bring</label><input class="k-input" id="kEvBring" name="checklist" maxlength="1000" placeholder="e.g. spikes, singlet, water">
-      <label class="k-label" for="kEvDesc">Details</label><textarea class="k-input" id="kEvDesc" name="desc" maxlength="2000" rows="2" placeholder="Who is expected, notes"></textarea>
-      <div class="k-row"><button class="k-btn primary" type="submit">Add to calendar</button><button class="k-btn" type="button" id="kEvClose">Cancel</button></div>
+      <label class="k-label" for="kEvBring">What to bring</label><input class="k-input" id="kEvBring" name="checklist" maxlength="1000" value="${ev.checklist || ''}" placeholder="e.g. spikes, singlet, water">
+      <label class="k-label" for="kEvDesc">Details</label><textarea class="k-input" id="kEvDesc" name="desc" maxlength="2000" rows="2" placeholder="Who is expected, bus time, notes">${ev.desc || ''}</textarea>
+      ${event ? html`<div id="kEvResRow" ${t === 'meet' ? '' : 'hidden'}><label class="k-label" for="kEvRes">Results</label><textarea class="k-input" id="kEvRes" name="results" maxlength="2000" rows="2" placeholder="Placings and times, after the meet">${ev.results || ''}</textarea></div>` : ''}
+      <div class="k-row k-dialog-foot">${event ? html`<button class="k-link danger" type="button" id="kEvDel">Delete</button>` : ''}<button class="k-btn" type="button" id="kEvClose">Cancel</button><button class="k-btn primary" type="submit">${event ? 'Save' : 'Add'}</button></div>
     </form>`.s;
   d.showModal();
+  const typeSel = $('kEvType');
+  typeSel.onchange = () => { $('kEvKindRow').hidden = typeSel.value !== 'practice'; if ($('kEvResRow')) $('kEvResRow').hidden = typeSel.value !== 'meet'; };
   $('kEvClose').onclick = () => d.close();
   $('kEvForm').onsubmit = (e) => { e.preventDefault(); attempt(async () => {
     const f = form(e.currentTarget);
-    await api('/api/events', { method: 'POST', body: JSON.stringify({ ...f, kind: '' }) });
-    d.close(); toast('Added to the calendar.');
+    if (f.type !== 'practice') f.kind = '';
+    if (event && f.date !== ev.date && Object.keys(ev.rsvps || {}).length && !confirm('Moving it to another day clears the RSVPs so everyone answers again. Move it?')) return;
+    if (event) await api('/api/events/update', { method: 'POST', body: JSON.stringify({ ...f, eventId: ev.id, results: f.results ?? ev.results }) });
+    else await api('/api/events', { method: 'POST', body: JSON.stringify(f) });
+    d.close(); toast(event ? 'Saved.' : 'Added to the schedule.');
     await window.kestrelReload();
   }, e.submitter); };
+  if (event) $('kEvDel').onclick = (e) => attempt(async () => {
+    if (!confirm(`Delete ${ev.title}? Everyone's RSVPs to it go too.`)) return;
+    await api('/api/events/delete', { method: 'POST', body: JSON.stringify({ eventId: ev.id }) });
+    d.close(); toast('Deleted.');
+    await window.kestrelReload();
+  }, e.currentTarget);
+};
+window.kestrelAddEvent = (o = {}) => window.kestrelEventForm({ type: 'meet', ...o });
+
+// Owner and captains: a week of practices in one go (Monday to Friday), or take a filled-in week back off.
+const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+const WEEK_KINDS = [['easy', 'Easy'], ['workout', 'Workout'], ['long_run', 'Long run'], ['off', 'No practice']];
+window.kestrelPracticeWeek = ({ places = [] } = {}) => {
+  const n = new Date(); n.setDate(n.getDate() - ((n.getDay() + 6) % 7) + (n.getDay() === 0 || n.getDay() === 6 ? 7 : 0));
+  const monday = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  const rhythm = ['easy', 'workout', 'easy', 'workout', 'easy'];
+  const d = dialog();
+  d.innerHTML = html`<h2>Add a week of practices</h2>
+    <form id="kPwForm" class="k-stack">
+      <p class="k-small">Fills Monday to Friday. Days that already have one of these practices are skipped, and nothing anyone added by hand changes.</p>
+      <label class="k-label" for="kPwWeek">Week of</label><input class="k-input" id="kPwWeek" name="weekStart" type="date" required value="${monday}">
+      <div class="k-pw-days">${WEEK_DAYS.map((day, i) => html`<label class="k-pw-day"><span>${day}</span><select class="k-input" name="k${i}" aria-label="${day}">${WEEK_KINDS.map(([v, l]) => html`<option value="${v}" ${v === rhythm[i] ? 'selected' : ''}>${l}</option>`)}</select></label>`)}</div>
+      <div class="k-row">
+        <div class="grow"><label class="k-label" for="kPwTime">Start time</label><input class="k-input" id="kPwTime" name="time" maxlength="40" value="4:00 PM"></div>
+        <div class="grow"><label class="k-label" for="kPwEnd">End time</label><input class="k-input" id="kPwEnd" name="endTime" maxlength="40" placeholder="optional"></div>
+      </div>
+      <label class="k-label" for="kPwPlace">Place</label><input class="k-input" id="kPwPlace" name="location" list="kPwPlaces" maxlength="200" placeholder="optional">
+      <datalist id="kPwPlaces">${places.map((p) => html`<option value="${p.name}">`)}</datalist>
+      <div class="k-row k-dialog-foot"><button class="k-link danger" type="button" id="kPwClear">Take this week's off</button><button class="k-btn" type="button" id="kPwClose">Cancel</button><button class="k-btn primary" type="submit">Add practices</button></div>
+    </form>`.s;
+  d.showModal();
+  $('kPwClose').onclick = () => d.close();
+  $('kPwForm').onsubmit = (e) => { e.preventDefault(); attempt(async () => {
+    const f = form(e.currentTarget);
+    const r = await api('/api/schedule/week', { method: 'POST', body: JSON.stringify({ weekStart: f.weekStart, time: f.time, endTime: f.endTime, location: f.location, kinds: WEEK_DAYS.map((_, i) => f['k' + i]) }) });
+    d.close(); toast(r.added.length ? `Added ${r.added.length} ${r.added.length === 1 ? 'practice' : 'practices'}.` : 'That week already has its practices.');
+    await window.kestrelReload();
+  }, e.submitter); };
+  $('kPwClear').onclick = (e) => attempt(async () => {
+    const week = $('kPwWeek').value;
+    if (!confirm('Remove the practices added this way that week? Ones someone edited, and anything added by hand, stay.')) return;
+    const r = await api('/api/schedule/week', { method: 'POST', body: JSON.stringify({ weekStart: week, clear: true }) });
+    d.close(); toast(r.removed ? `Removed ${r.removed} ${r.removed === 1 ? 'practice' : 'practices'}.` : 'Nothing to remove that week.');
+    await window.kestrelReload();
+  }, e.currentTarget);
 };
 
 // A place from the Places tab. Passing `place` edits it (captains and the owner), with a delete.

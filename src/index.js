@@ -698,6 +698,115 @@ async function addPlace(db, teamId, b, geocodeIt = true) {
   return place;
 }
 
+// ---- Team schedule and team posts, shared by the app's routes and the /mcp tools.
+// Any member adds an event; whoever added it, a captain or the owner changes or deletes it.
+const eventOut = (e) => ({
+  id: e.id, date: e.date, title: e.title, time: e.time || '', endTime: e.end_time || '', desc: e.description || '', type: e.type, kind: e.kind || '',
+  auto: !!e.auto, location: e.location || '', locationId: e.location_id || '', checklist: e.checklist || '', results: e.results || '', createdBy: e.created_by,
+});
+async function createEvent(db, teamId, me, b, auto = false) {
+  const date = str(b.date, 10);
+  const title = str(b.title, 200);
+  if (!isDate(date) || !title) throw new BadRequest('Missing date or title.');
+  const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
+  const place = await placeFor(db, teamId, b.locationId, b.location);
+  const ev = { id: 'e_' + crypto.randomUUID(), date, title, time: str(b.time, 40), endTime: str(b.endTime, 40), desc: str(b.desc, 2000), type, kind: kindFor(type, b.kind),
+    location: str(b.location, 200) || place?.name || '', locationId: place?.id || '', checklist: str(b.checklist, 1000), results: '', auto, createdBy: me.id };
+  await db.prepare('INSERT INTO events (id, team_id, date, title, time, end_time, description, type, kind, auto, location, location_id, checklist, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(ev.id, teamId, date, title, ev.time, ev.endTime, ev.desc, type, ev.kind, auto ? 1 : 0, ev.location, place?.id || null, ev.checklist, me.id, Date.now()).run();
+  return ev;
+}
+// merge: fields left out keep their value (the connector). Without it, left-out text fields are cleared (the app's form sends them all).
+async function updateEvent(db, teamId, me, role, b, merge = false) {
+  const e = await eventIn(db, teamId, b.eventId);
+  if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can change it.');
+  const keep = (k, col) => (b[k] === undefined && merge ? e[col] : b[k]);
+  const title = str(keep('title', 'title'), 200);
+  if (!title) throw new BadRequest('Missing title.');
+  const date = b.date === undefined || b.date === '' ? e.date : str(b.date, 10);
+  if (!isDate(date)) throw new BadRequest('Dates are YYYY-MM-DD.');
+  const type = EVENT_TYPES.includes(b.type) ? b.type : merge ? e.type : 'practice';
+  // The venue link follows the location text: a known place links to it, new text unlinks, a blank field keeps what was there.
+  const location = str(keep('location', 'location'), 200);
+  const place = await placeFor(db, teamId, b.locationId, location);
+  const locationId = place ? place.id : location && location !== e.location ? null : e.location_id;
+  // An edited practice is no longer the week template's, so clearing the template leaves it alone.
+  await db.prepare('UPDATE events SET date = ?, title = ?, time = ?, end_time = ?, description = ?, type = ?, kind = ?, auto = 0, location = ?, location_id = ?, checklist = ?, results = ? WHERE id = ?')
+    .bind(date, title, str(keep('time', 'time'), 40), str(keep('endTime', 'end_time'), 40), str(keep('desc', 'description'), 2000), type, kindFor(type, b.kind === undefined && merge ? e.kind : b.kind),
+      location, locationId, b.checklist !== undefined ? str(b.checklist, 1000) : e.checklist, b.results !== undefined ? str(b.results, 2000) : e.results, e.id).run();
+  if (date !== e.date) await db.prepare('DELETE FROM rsvps WHERE event_id = ?').bind(e.id).run(); // a new day: people answer again
+  return eventOut(await eventIn(db, teamId, e.id));
+}
+async function deleteEvent(db, teamId, me, role, eventId) {
+  const e = await eventIn(db, teamId, eventId);
+  if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can delete it.');
+  await db.prepare('DELETE FROM rsvps WHERE event_id = ?').bind(e.id).run();
+  await db.prepare('DELETE FROM events WHERE id = ?').bind(e.id).run();
+  return { deleted: e.title, date: e.date };
+}
+
+// The week template: a lead fills Monday to Friday with practices in one go (easy, workout, easy, workout, easy).
+// They are marked auto, so clearing the week removes only these and never an event someone added or edited by hand.
+const WEEK_TEMPLATE = ['easy', 'workout', 'easy', 'workout', 'easy'];
+const KIND_TITLE = { easy: 'Easy practice', workout: 'Workout practice', long_run: 'Long run' };
+function mondayOf(d) {
+  const date = str(d, 10);
+  if (!isDate(date)) throw new BadRequest('Give the week as a date, YYYY-MM-DD.');
+  const dow = new Date(date + 'T12:00:00Z').getUTCDay();
+  return addDays(date, dow === 0 ? -6 : 1 - dow);
+}
+async function applyWeekTemplate(db, teamId, me, role, b) {
+  if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can fill in a practice week.');
+  const monday = mondayOf(b.weekStart);
+  // 'off' leaves that day without a practice.
+  const kinds = Array.isArray(b.kinds) && b.kinds.length === 5 ? b.kinds.map((k) => (k === 'off' || (k && EVENT_KINDS.includes(k)) ? k : 'easy')) : WEEK_TEMPLATE;
+  const { results } = await db.prepare("SELECT date FROM events WHERE team_id = ? AND auto = 1 AND type = 'practice' AND date BETWEEN ? AND ?").bind(teamId, monday, addDays(monday, 4)).all();
+  const had = new Set(results.map((r) => r.date));
+  const added = [];
+  for (let i = 0; i < 5; i++) {
+    const date = addDays(monday, i);
+    const kind = kinds[i] || 'easy';
+    if (had.has(date) || kind === 'off') continue;
+    added.push(await createEvent(db, teamId, me, { date, title: KIND_TITLE[kind] || 'Practice', type: 'practice', kind, time: str(b.time, 40) || '4:00 PM', endTime: b.endTime, location: b.location, locationId: b.locationId }, true));
+  }
+  return { week_of: monday, added: added.map((e) => ({ id: e.id, date: e.date, title: e.title, time: e.time })), already_there: had.size };
+}
+async function clearWeekTemplate(db, teamId, me, role, b) {
+  if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can clear a practice week.');
+  const monday = mondayOf(b.weekStart);
+  const sunday = addDays(monday, 6);
+  await db.prepare('DELETE FROM rsvps WHERE event_id IN (SELECT id FROM events WHERE team_id = ? AND auto = 1 AND date BETWEEN ? AND ?)').bind(teamId, monday, sunday).run();
+  const r = await db.prepare('DELETE FROM events WHERE team_id = ? AND auto = 1 AND date BETWEEN ? AND ?').bind(teamId, monday, sunday).run();
+  return { week_of: monday, removed: r.meta?.changes ?? 0 };
+}
+
+async function createPost(db, teamId, me, b) {
+  const text = str(b.text, 2000);
+  if (!text) throw new BadRequest('Write something first.');
+  const post = { id: 'post_' + crypto.randomUUID(), personId: me.id, text, header: str(b.header, 80), createdAt: Date.now() };
+  await db.prepare('INSERT INTO posts (id, team_id, person_id, text, header, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(post.id, teamId, me.id, text, post.header, post.createdAt).run();
+  return post;
+}
+async function deletePost(db, teamId, me, role, postId) {
+  const p = await db.prepare('SELECT person_id FROM posts WHERE id = ? AND team_id = ?').bind(str(postId, 100), teamId).first();
+  if (!p) throw new NotFound('Post not found.');
+  if (p.person_id !== me.id && !isLead(role)) throw new Forbidden('Only the author, a captain or the team owner can delete a post.');
+  await db.prepare('DELETE FROM posts WHERE id = ?').bind(str(postId, 100)).run();
+}
+async function saveComment(db, teamId, me, b) {
+  const date = str(b.date, 10);
+  const text = str(b.text, 2000);
+  if (!isDate(date)) throw new BadRequest('Missing date.');
+  if (text) await db.prepare('INSERT INTO comments (team_id, date, person_id, text) VALUES (?, ?, ?, ?) ON CONFLICT(team_id, date, person_id) DO UPDATE SET text = excluded.text').bind(teamId, date, me.id, text).run();
+  else await db.prepare('DELETE FROM comments WHERE team_id = ? AND date = ? AND person_id = ?').bind(teamId, date, me.id).run();
+}
+async function saveRsvp(db, teamId, me, eventId, status) {
+  const e = await eventIn(db, teamId, eventId);
+  if (['available', 'unavailable'].includes(status)) await db.prepare('INSERT INTO rsvps (event_id, person_id, status) VALUES (?, ?, ?) ON CONFLICT(event_id, person_id) DO UPDATE SET status = excluded.status').bind(e.id, me.id, status).run();
+  else await db.prepare('DELETE FROM rsvps WHERE event_id = ? AND person_id = ?').bind(e.id, me.id).run();
+  return { event: e.title, date: e.date, status: ['available', 'unavailable'].includes(status) ? status : 'unknown' };
+}
+
 // ---- plan builder helpers
 function previewSpec(spec) {
   const { plans, spec: clean } = expandPlanSpec(spec);
@@ -1260,6 +1369,226 @@ async function callTeamTool(db, person, name, args) {
 }
 
 class McpToolError extends Error {}
+
+// The team side of the app for the athlete's own AI: the schedule, posts, the roster and their own status.
+// Everyone acts as themselves: an athlete changes only their own RSVPs, availability, health and notes; the
+// owner and captains also run the calendar and the roster. Teammates' training and health are never returned.
+const TEAM_ID = { type: 'string', description: 'Which team, by id or name (get_my_teams). May be left out when they are on one team.' };
+const EVENT_FIELDS = {
+  title: { type: 'string' },
+  date: { type: 'string', description: 'YYYY-MM-DD' },
+  type: { type: 'string', enum: EVENT_TYPES, description: 'practice (default), meet or other' },
+  kind: { type: 'string', enum: ['easy', 'workout', 'long_run'], description: 'Practices only' },
+  time: { type: 'string', description: 'Start, like "4:00 PM"' },
+  endTime: { type: 'string', description: 'Like "5:30 PM", optional' },
+  location: { type: 'string', description: 'A saved place by name (get_team_state lists them), or any name or address' },
+  locationId: { type: 'string', description: 'A saved place id, optional' },
+  desc: { type: 'string', description: 'Details' },
+  checklist: { type: 'string', description: 'What to bring, like "spikes, singlet"' },
+};
+const WEEK_ARGS = { team_id: TEAM_ID, weekStart: { type: 'string', description: 'Any date in the week (YYYY-MM-DD); the week runs Monday to Sunday' } };
+const WHO = { person_id: { type: 'string', description: 'From get_roster' }, athlete: { type: 'string', description: 'Or their name' } };
+const noArgs = (extra = {}) => ({ type: 'object', properties: { team_id: TEAM_ID, ...extra }, additionalProperties: false });
+const SCHEDULE_TOOLS = [
+  { name: 'get_my_teams', description: 'The teams this athlete is on, with their role on each (owner, captain or member) and how many are on it.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'get_events', description: "The team's calendar (practices, meets and other events), optionally between two dates, with who said they are coming. Each event says whether this athlete can edit it.",
+    inputSchema: noArgs({ from: { type: 'string', description: 'YYYY-MM-DD, inclusive' }, to: { type: 'string', description: 'YYYY-MM-DD, inclusive' } }) },
+  { name: 'get_team_state', description: "One snapshot of the team: who is on it, the calendar from two weeks ago on, the latest posts, saved places (with ids), day notes, and this athlete's own statuses and body marks.", inputSchema: noArgs() },
+  { name: 'create_event', description: 'Add a practice, meet or other event to the team calendar. Any member can add one.',
+    inputSchema: { type: 'object', required: ['date', 'title'], properties: { team_id: TEAM_ID, ...EVENT_FIELDS }, additionalProperties: false } },
+  { name: 'update_event', description: 'Change an event: only the fields you send change, the date included (moving it to another day clears its RSVPs). results logs how a meet went. Whoever added it, a captain or the owner can change it.',
+    inputSchema: { type: 'object', required: ['eventId'], properties: { team_id: TEAM_ID, eventId: { type: 'string', description: 'From get_events' }, ...EVENT_FIELDS, results: { type: 'string', description: 'Results or placings after a meet' } }, additionalProperties: false } },
+  { name: 'delete_event', description: 'Delete an event and its RSVPs for good. Whoever added it, a captain or the owner can. Confirm with the athlete first.',
+    inputSchema: { type: 'object', required: ['eventId'], properties: { team_id: TEAM_ID, eventId: { type: 'string' } }, additionalProperties: false } },
+  { name: 'apply_week_template', description: "Owner or captain: fill Monday to Friday of a week with practices (easy, workout, easy, workout, easy unless kinds says otherwise). Days that already have one of these practices are skipped; events added by hand are left alone.",
+    inputSchema: { type: 'object', required: ['weekStart'], properties: { ...WEEK_ARGS, time: { type: 'string', description: 'Default "4:00 PM"' }, endTime: { type: 'string' }, location: { type: 'string' },
+      kinds: { type: 'array', minItems: 5, maxItems: 5, items: { type: 'string', enum: ['easy', 'workout', 'long_run', 'off'] }, description: 'Monday to Friday; off skips that day' } }, additionalProperties: false } },
+  { name: 'clear_week_template', description: 'Owner or captain: remove the practices apply_week_template added in a week. Practices someone edited and events added by hand stay.',
+    inputSchema: { type: 'object', required: ['weekStart'], properties: WEEK_ARGS, additionalProperties: false } },
+  { name: 'save_place', description: 'Save a place (a course, track or meet venue) so events can link to it for the map and forecast. With place_id, the owner or a captain edits that place.',
+    inputSchema: { type: 'object', required: ['name'], properties: { team_id: TEAM_ID, place_id: { type: 'string' }, name: { type: 'string' }, address: { type: 'string' }, kind: { type: 'string', enum: PLACE_KINDS } }, additionalProperties: false } },
+  { name: 'create_post', description: 'Post to the team feed as this athlete.',
+    inputSchema: { type: 'object', required: ['text'], properties: { team_id: TEAM_ID, text: { type: 'string' }, header: { type: 'string', description: 'Optional short title' } }, additionalProperties: false } },
+  { name: 'delete_post', description: 'Delete a post for good. The author, a captain or the owner can.',
+    inputSchema: { type: 'object', required: ['postId'], properties: { team_id: TEAM_ID, postId: { type: 'string', description: 'From get_team_state' } }, additionalProperties: false } },
+  { name: 'save_comment', description: "This athlete's note on a calendar day the team sees (like \"can only stay till 5\"). Empty text clears it.",
+    inputSchema: { type: 'object', required: ['date', 'text'], properties: { team_id: TEAM_ID, date: { type: 'string' }, text: { type: 'string' } }, additionalProperties: false } },
+  { name: 'save_rsvp', description: "This athlete's answer for an event: available = coming, unavailable = not coming, unknown clears it.",
+    inputSchema: { type: 'object', required: ['eventId', 'status'], properties: { team_id: TEAM_ID, eventId: { type: 'string' }, status: { type: 'string', enum: ['available', 'unavailable', 'unknown'] } }, additionalProperties: false } },
+  { name: 'set_availability', description: 'Whether this athlete can make it on one date, over their usual default. default clears the override.',
+    inputSchema: { type: 'object', required: ['date', 'status'], properties: { date: { type: 'string' }, status: { type: 'string', enum: ['available', 'unavailable', 'default'] } }, additionalProperties: false } },
+  { name: 'set_default_status', description: "This athlete's usual availability, used on days without an override.",
+    inputSchema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['available', 'unavailable'] } }, additionalProperties: false } },
+  { name: 'set_health_status', description: "This athlete's health: healthy, injured or sick. It stays private to them.",
+    inputSchema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['healthy', 'injured', 'sick'] } }, additionalProperties: false } },
+  { name: 'set_training_status', description: 'What this athlete is doing now: running, crosstraining or resting.',
+    inputSchema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['resting', 'running', 'crosstraining'] } }, additionalProperties: false } },
+  { name: 'set_body_mark', description: "Mark soreness or pain on one body part for this athlete (none clears it). Private to them.",
+    inputSchema: { type: 'object', required: ['part', 'status'], properties: { part: { type: 'string', enum: Object.keys(BODY_PARTS) }, status: { type: 'string', enum: ['none', 'sore', 'pain'] } }, additionalProperties: false } },
+  { name: 'get_roster', description: 'Everyone on the team: name, role, class year, jersey number and events. Ages only for the owner, captains and the athlete themself.', inputSchema: noArgs() },
+  { name: 'update_roster_entry', description: "Change a roster entry: jersey, events, age. Athletes can change their own; the owner and captains anyone's. captain: true or false names or removes a captain (owner only).",
+    inputSchema: { type: 'object', properties: { team_id: TEAM_ID, ...WHO, jersey: { type: 'string' }, events: { type: 'string', description: 'Like "800, 1600"' }, age: { type: ['integer', 'null'] }, captain: { type: 'boolean' } }, additionalProperties: false } },
+  { name: 'invite_athlete', description: "Everyone on a Kestrel team has their own account, so athletes are added by invitation: this returns the team's invite link and code to send them. new_code: true (owner only) makes a new code and the old one stops working.",
+    inputSchema: noArgs({ new_code: { type: 'boolean' } }) },
+  { name: 'remove_from_team', description: 'The owner removes someone from the team; anyone can remove themself (leave). Their RSVPs and notes on this team go too. Confirm with the athlete first.',
+    inputSchema: { type: 'object', properties: { team_id: TEAM_ID, ...WHO }, additionalProperties: false } },
+  { name: 'get_team_miles', description: 'Team mileage: this week and the last eight weeks, and each teammate who chose to share their weekly miles. Nobody else\'s runs, scores or health.', inputSchema: noArgs() },
+  { name: 'get_team_changes', description: "Owner or captain: plan level moves in the last N days (default 30) for athletes on this team's plan, from what to what and who made them. The reason is shown only for moves a captain made.",
+    inputSchema: noArgs({ days: { type: 'integer', minimum: 1, maximum: 120 } }) },
+];
+
+// Which team a tool call means: the one named (id or name), else their only team.
+async function mcpTeam(db, personId, wanted) {
+  const { results } = await db.prepare(
+    "SELECT t.id, t.name, t.invite_code, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role FROM team_members m JOIN teams t ON t.id = m.team_id WHERE m.person_id = ? ORDER BY m.joined_at"
+  ).bind(personId).all();
+  if (!results.length) throw new McpToolError('Not on a team yet. Join one in Kestrel > Team with an invite link or code.');
+  const w = str(wanted, 120).toLowerCase();
+  if (w) {
+    const part = results.filter((r) => r.name.toLowerCase().includes(w));
+    const t = results.find((r) => r.id === wanted || r.name.toLowerCase() === w) || (part.length === 1 ? part[0] : null);
+    if (!t) throw new McpToolError(`Not on a team called "${wanted}". Teams: ${results.map((r) => r.name).join(', ')}.`);
+    return t;
+  }
+  if (results.length === 1) return results[0];
+  throw new McpToolError(`On more than one team (${results.map((r) => `${r.name} = ${r.id}`).join('; ')}). Say which with team_id.`);
+}
+// A teammate by id or by a unique part of their name.
+async function teammate(db, teamId, a, me) {
+  const { results } = await db.prepare('SELECT p.id, p.name FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ?').bind(teamId).all();
+  if (!a?.person_id && !a?.athlete) return results.find((r) => r.id === me.id);
+  const byId = results.find((r) => r.id === a.person_id);
+  if (byId) return byId;
+  const n = str(a.athlete || a.person_id, 80).toLowerCase();
+  const hits = results.filter((r) => (r.name || '').toLowerCase() === n);
+  const loose = hits.length ? hits : results.filter((r) => (r.name || '').toLowerCase().includes(n));
+  if (loose.length === 1) return loose[0];
+  throw new McpToolError(loose.length ? `More than one teammate matches "${n}": ${loose.map((r) => r.name).join(', ')}.` : `Nobody on the team matches "${n}".`);
+}
+
+async function callScheduleTool(db, person, name, args, origin) {
+  const me = await loadMe(db, person);
+  try {
+    // Your own status: not about any one team.
+    if (name === 'set_availability') {
+      const date = str(args.date, 10);
+      if (!isDate(date)) throw new BadRequest('Dates are YYYY-MM-DD.');
+      if (args.status === 'default' || args.status === me.default_status) await db.prepare('DELETE FROM availability_overrides WHERE person_id = ? AND date = ?').bind(me.id, date).run();
+      else await db.prepare('INSERT INTO availability_overrides (person_id, date, status) VALUES (?, ?, ?) ON CONFLICT(person_id, date) DO UPDATE SET status = excluded.status').bind(me.id, date, args.status).run();
+      return { date, status: args.status === 'default' ? me.default_status : args.status };
+    }
+    if (name === 'set_default_status') { await db.prepare('UPDATE people SET default_status = ? WHERE id = ?').bind(args.status, me.id).run(); return { default_status: args.status }; }
+    if (name === 'set_health_status') { await db.prepare('UPDATE people SET health_status = ?, health_updated_at = ? WHERE id = ?').bind(args.status, Date.now(), me.id).run(); return { health_status: args.status }; }
+    if (name === 'set_training_status') { await db.prepare('UPDATE people SET training_status = ? WHERE id = ?').bind(args.status, me.id).run(); return { training_status: args.status }; }
+    if (name === 'set_body_mark') {
+      if (args.status === 'none') await db.prepare('DELETE FROM body_marks WHERE person_id = ? AND part = ?').bind(me.id, args.part).run();
+      else await db.prepare('INSERT INTO body_marks (person_id, part, status, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, part) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at').bind(me.id, args.part, args.status, Date.now()).run();
+      return { part: BODY_PARTS[args.part], status: args.status };
+    }
+    if (name === 'get_my_teams') {
+      const { results } = await db.prepare(
+        "SELECT t.id, t.name, t.school, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role, (SELECT COUNT(*) FROM team_members x WHERE x.team_id = t.id) AS members FROM team_members m JOIN teams t ON t.id = m.team_id WHERE m.person_id = ? ORDER BY m.joined_at"
+      ).bind(me.id).all();
+      return { teams: results };
+    }
+
+    const team = await mcpTeam(db, me.id, args.team_id);
+    const teamId = team.id, role = team.role;
+    const names = async () => Object.fromEntries((await db.prepare('SELECT p.id, p.name FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ?').bind(teamId).all()).results.map((r) => [r.id, r.name]));
+    const withRsvps = (e, rsvps, who) => {
+      const r = rsvps[e.id] || {};
+      const by = (st) => Object.keys(r).filter((pid) => r[pid] === st).map((pid) => who[pid] || 'someone who left');
+      return { ...e, coming: by('available'), not_coming: by('unavailable'), my_rsvp: r[me.id] || 'unknown', can_edit: e.createdBy === me.id || isLead(role), added_by: who[e.createdBy] || '' };
+    };
+
+    if (name === 'get_events' || name === 'get_team_state') {
+      const st = await teamState(db, me, teamId);
+      const who = Object.fromEntries(st.people.map((p) => [p.id, p.name]));
+      const from = name === 'get_events' ? str(args.from, 10) : addDays(todayInTz(), -14);
+      const to = name === 'get_events' ? str(args.to, 10) : '';
+      const events = Object.values(st.events).flat().filter((e) => (!from || e.date >= from) && (!to || e.date <= to))
+        .sort((a, b) => a.date.localeCompare(b.date) || String(a.time).localeCompare(String(b.time))).slice(0, 200).map((e) => withRsvps(e, st.rsvps, who));
+      if (name === 'get_events') return { team: team.name, your_role: role, today: todayInTz(), events };
+      const soon = addDays(todayInTz(), -14);
+      return {
+        team: team.name, your_role: role, today: todayInTz(),
+        people: st.people.map((p) => ({ id: p.id, name: p.name })),
+        events,
+        posts: st.posts.slice(0, 20).map((p) => ({ ...p, author: who[p.personId] || '', created: new Date(p.createdAt).toISOString().slice(0, 10) })),
+        places: st.locations.map((l) => ({ id: l.id, name: l.name, address: l.address, kind: l.kind })),
+        day_notes: Object.entries(st.comments).filter(([d]) => d >= soon).map(([date, byPerson]) => ({ date, notes: Object.entries(byPerson).map(([pid, text]) => ({ who: who[pid] || '', text })) })),
+        unavailable_days: Object.entries(st.overrides).flatMap(([pid, days]) => Object.entries(days).filter(([d, s]) => d >= todayInTz() && s === 'unavailable').map(([d]) => ({ who: who[pid] || '', date: d }))),
+        me: { ...st.me, body_marks: Object.entries(st.body[me.id] || {}).map(([part, status]) => ({ part, label: BODY_PARTS[part] || part, status })) },
+      };
+    }
+    if (name === 'create_event') { const { team_id, ...b } = args; return { added: await createEvent(db, teamId, me, b) }; }
+    if (name === 'update_event') { const { team_id, ...b } = args; return { saved: await updateEvent(db, teamId, me, role, b, true) }; }
+    if (name === 'delete_event') return await deleteEvent(db, teamId, me, role, args.eventId);
+    if (name === 'apply_week_template') return await applyWeekTemplate(db, teamId, me, role, args);
+    if (name === 'clear_week_template') return await clearWeekTemplate(db, teamId, me, role, args);
+    if (name === 'save_place') {
+      if (!args.place_id) return { place: await addPlace(db, teamId, args) };
+      if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change a place.');
+      const loc = await placeFor(db, teamId, args.place_id, null);
+      if (!loc) throw new McpToolError('Place not found.');
+      const nm = str(args.name, 120);
+      const address = args.address === undefined ? loc.address : str(args.address, 200);
+      const geo = address !== loc.address ? (address ? await geocode(address) : null) : { lat: loc.lat, lng: loc.lng };
+      await db.prepare('UPDATE locations SET name = ?, address = ?, kind = ?, lat = ?, lng = ? WHERE id = ?').bind(nm, address, PLACE_KINDS.includes(args.kind) ? args.kind : loc.kind, geo?.lat ?? null, geo?.lng ?? null, loc.id).run();
+      if (nm !== loc.name) await db.prepare('UPDATE events SET location = ? WHERE location_id = ?').bind(nm, loc.id).run();
+      return { place: { id: loc.id, name: nm, address } };
+    }
+    if (name === 'create_post') return { post: await createPost(db, teamId, me, args) };
+    if (name === 'delete_post') { await deletePost(db, teamId, me, role, args.postId); return { deleted: true }; }
+    if (name === 'save_comment') { await saveComment(db, teamId, me, args); return { date: args.date, note: str(args.text, 2000) || null }; }
+    if (name === 'save_rsvp') return await saveRsvp(db, teamId, me, args.eventId, args.status);
+    if (name === 'get_roster') return { team: team.name, your_role: role, roster: await teamRoster(db, teamId, me, role) };
+    if (name === 'update_roster_entry') {
+      const who = await teammate(db, teamId, args, me);
+      const { jersey, events, age, captain } = args;
+      await saveRosterEntry(db, teamId, me, role, who.id, { jersey, events, age, leader: captain });
+      return { saved: (await teamRoster(db, teamId, me, role)).find((r) => r.id === who.id) };
+    }
+    if (name === 'invite_athlete') {
+      let code = team.invite_code;
+      if (args.new_code) {
+        if (role !== 'owner') throw new Forbidden('Only the team owner can make a new invite code.');
+        code = inviteCode();
+        await db.prepare('UPDATE teams SET invite_code = ? WHERE id = ?').bind(code, teamId).run();
+      }
+      return { team: team.name, code, link: `${origin}/join/${code}`, how: 'They open the link (or tap + Team in Kestrel and type the code), sign in or make an account, and join.' };
+    }
+    if (name === 'remove_from_team') {
+      const who = await teammate(db, teamId, args, me);
+      if (who.id !== me.id && role !== 'owner') throw new Forbidden('Only the team owner can remove someone.');
+      await removeMember(db, teamId, who.id);
+      return { removed: who.name, left_yourself: who.id === me.id };
+    }
+    if (name === 'get_team_miles') return { team: team.name, ...(await teamMileage(db, teamId)) };
+    if (name === 'get_team_changes') {
+      if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can see plan level changes.');
+      const since = Date.now() - (args.days || 30) * 86400000;
+      const { results } = await db.prepare(
+        `SELECT c.person_id, c.from_rank, c.to_rank, c.reason, c.source, c.created_at FROM level_changes c JOIN people p ON p.id = c.person_id
+         JOIN team_members m ON m.person_id = p.id AND m.team_id = ? WHERE c.created_at >= ? ORDER BY c.created_at DESC LIMIT 100`
+      ).bind(teamId, since).all();
+      const people = new Map();
+      const out = [];
+      for (const c of results) {
+        if (!people.has(c.person_id)) people.set(c.person_id, await loadPerson(db, c.person_id));
+        const p = people.get(c.person_id);
+        if (p?.plan_source !== 'team' || p.plan_team_id !== teamId) continue; // only athletes on this team's plan
+        out.push({ athlete: p?.name || '', date: new Date(c.created_at).toISOString().slice(0, 10), from_miles: milesOfRank(p, c.from_rank), to_miles: milesOfRank(p, c.to_rank),
+          by: c.source === 'captain' ? 'a captain or the owner' : c.source === 'auto' ? 'Kestrel AI' : 'the athlete, with Kestrel AI', reason: c.source === 'captain' ? c.reason : undefined });
+      }
+      return { team: team.name, days: args.days || 30, level_moves: out };
+    }
+  } catch (err) {
+    if (err instanceof BadRequest || err instanceof Forbidden || err instanceof NotFound) throw new McpToolError(err.message);
+    throw err;
+  }
+  throw new McpToolError(`Unknown tool: ${name}`);
+}
 async function callWatchTool(env, person, name, args) {
   try {
     if (name === 'watch_status') return await icuStatus(env.DB, person.id);
@@ -1336,7 +1665,7 @@ function checkArgs(schema, args, at = '') {
 const isUserError = (err) => err instanceof McpToolError || err instanceof BadRequest || err instanceof LogError || err instanceof IntervalsError
   || err instanceof PlanError || err instanceof CourseError || err instanceof CalcError || err instanceof AiError || err instanceof CoachError;
 
-const readOnlyTool = (name) => /^(get_|find_|watch_status)/.test(name);
+const readOnlyTool = (name) => /^(get_|find_|watch_status|invite_athlete)/.test(name);
 
 async function serveMcp(request, tools, call, key = '') {
   const reply = (status, body) => json(body, status);
@@ -1366,9 +1695,10 @@ async function serveMcp(request, tools, call, key = '') {
     if (limited && method === 'tools/call') return ok({ content: [{ type: 'text', text: 'Too many requests. Wait a minute and try again.' }], isError: true });
     if (method === 'initialize') {
       const asked = params?.protocolVersion;
-      return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.2.0' },
+      return ok({ protocolVersion: MCP_VERSIONS.includes(asked) ? asked : MCP_VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'kestrel', title: 'Kestrel AI', version: '1.3.0' },
         instructions: 'Kestrel is the athlete\'s running coach. Call get_coach_context first every time. Use get_profile before asking the athlete anything, and set_profile to save what they tell you. Plan changes are checked by fixed guardrails and may be refused with a reason; pass that reason on. '
-          + 'Team owners and captains can also change their team\'s plan: call get_team_plan first, then change_team_plan to change one day of a level or a level\'s weekly miles, or change_team_level to put a teammate on another level. Name levels by weekly miles (for example "the 35 mi level"). Kestrel refuses anyone who is not the owner or a captain and says why; pass that on. Never pass one teammate\'s training or health to another.' });
+          + 'Team owners and captains can also change their team\'s plan: call get_team_plan first, then change_team_plan to change one day of a level or a level\'s weekly miles, or change_team_level to put a teammate on another level. Name levels by weekly miles (for example "the 35 mi level"). Kestrel refuses anyone who is not the owner or a captain and says why; pass that on. The team schedule works the same way: get_events or get_team_state first, then create_event, update_event or delete_event for practices and meets (anyone adds; whoever added it, a captain or the owner changes it), apply_week_template for a week of practices, and create_post for the feed. '
+          + 'RSVPs, availability, day notes, health and body marks are always the athlete\'s own. Athletes join with their own account, so to add someone use invite_athlete and send them the link. Confirm before deleting anything. Never pass one teammate\'s training or health to another.' });
     }
     if (method === 'ping') return ok({});
     if (method === 'tools/list') return ok({ tools: toolList });
@@ -1437,9 +1767,10 @@ async function route(request, env, url) {
     const person = await personForToken(db, mcp[1]);
     // 404, not 401: a 401 makes connectors go looking for an OAuth sign-in service, which this link does not use.
     if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 404);
-    return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS, ...TEAM_TOOLS], (name, args) =>
+    return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS, ...TEAM_TOOLS, ...SCHEDULE_TOOLS], (name, args) =>
       (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args)
-        : TEAM_TOOLS.some((t) => t.name === name) ? callTeamTool(db, person, name, args) : callCoachTool(db, person, name, args)), mcp[1]);
+        : TEAM_TOOLS.some((t) => t.name === name) ? callTeamTool(db, person, name, args)
+          : SCHEDULE_TOOLS.some((t) => t.name === name) ? callScheduleTool(db, person, name, args, url.origin) : callCoachTool(db, person, name, args)), mcp[1]);
   }
 
   // ---- Kestrel Lab: public reads, downloads and the developer API
@@ -1864,51 +2195,11 @@ async function route(request, env, url) {
   }
 
   // Team calendar (Kestrel paths, scoped to the X-Kestrel-Team team)
-  if (path === '/api/comment') {
-    needTeam();
-    const date = str(b.date, 10);
-    const text = str(b.text, 2000);
-    if (!isDate(date)) throw new BadRequest('Missing date.');
-    if (text) await db.prepare('INSERT INTO comments (team_id, date, person_id, text) VALUES (?, ?, ?, ?) ON CONFLICT(team_id, date, person_id) DO UPDATE SET text = excluded.text').bind(teamId, date, me.id, text).run();
-    else await db.prepare('DELETE FROM comments WHERE team_id = ? AND date = ? AND person_id = ?').bind(teamId, date, me.id).run();
-    return json({ ok: true });
-  }
-  if (path === '/api/events') {
-    needTeam();
-    const date = str(b.date, 10);
-    const title = str(b.title, 200);
-    if (!isDate(date) || !title) throw new BadRequest('Missing date or title.');
-    const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
-    const id = 'e_' + crypto.randomUUID();
-    const place = await placeFor(db, teamId, b.locationId, b.location);
-    const ev = { id, date, title, time: str(b.time, 40), endTime: str(b.endTime, 40), desc: str(b.desc, 2000), type, kind: kindFor(type, b.kind), location: str(b.location, 200) || place?.name || '', locationId: place?.id || '', checklist: str(b.checklist, 1000), results: '', auto: false, createdBy: me.id };
-    await db.prepare('INSERT INTO events (id, team_id, date, title, time, end_time, description, type, kind, location, location_id, checklist, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, teamId, date, title, ev.time, ev.endTime, ev.desc, type, ev.kind, ev.location, place?.id || null, ev.checklist, me.id, Date.now()).run();
-    return json({ event: ev });
-  }
-  if (path === '/api/events/update') {
-    needTeam();
-    const e = await eventIn(db, teamId, b.eventId);
-    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can change it.');
-    const title = str(b.title, 200);
-    if (!title) throw new BadRequest('Missing title.');
-    const type = EVENT_TYPES.includes(b.type) ? b.type : 'practice';
-    // The venue link follows the location text: a known place links to it, new text unlinks, a blank field keeps what was there.
-    const location = str(b.location, 200);
-    const place = await placeFor(db, teamId, b.locationId, location);
-    const locationId = place ? place.id : location && location !== e.location ? null : e.location_id;
-    await db.prepare('UPDATE events SET title = ?, time = ?, end_time = ?, description = ?, type = ?, kind = ?, location = ?, location_id = ?, checklist = ?, results = ? WHERE id = ?')
-      .bind(title, str(b.time, 40), str(b.endTime, 40), str(b.desc, 2000), type, kindFor(type, b.kind), location, locationId, 
-        b.checklist !== undefined ? str(b.checklist, 1000) : e.checklist, b.results !== undefined ? str(b.results, 2000) : e.results, e.id).run();
-    return json({ ok: true });
-  }
-  if (path === '/api/events/delete') {
-    needTeam();
-    const e = await eventIn(db, teamId, b.eventId);
-    if (!canEdit(e, me, role)) throw new Forbidden('Only whoever added the event, a captain or the team owner can delete it.');
-    await db.prepare('DELETE FROM events WHERE id = ?').bind(e.id).run();
-    return json({ ok: true });
-  }
+  if (path === '/api/comment') { needTeam(); await saveComment(db, teamId, me, b); return json({ ok: true }); }
+  if (path === '/api/events') { needTeam(); return json({ event: await createEvent(db, teamId, me, b) }); }
+  if (path === '/api/events/update') { needTeam(); return json({ ok: true, event: await updateEvent(db, teamId, me, role, b) }); }
+  if (path === '/api/events/delete') { needTeam(); await deleteEvent(db, teamId, me, role, b.eventId); return json({ ok: true }); }
+  if (path === '/api/schedule/week') { needTeam(); return json(b.clear ? await clearWeekTemplate(db, teamId, me, role, b) : await applyWeekTemplate(db, teamId, me, role, b)); }
   if (path === '/api/locations') {
     needTeam();
     return json({ place: await addPlace(db, teamId, b) });
@@ -1970,29 +2261,9 @@ async function route(request, env, url) {
     }
     return json({ addedPlaces, addedEvents, skipped });
   }
-  if (path === '/api/rsvp') {
-    needTeam();
-    const e = await eventIn(db, teamId, b.eventId);
-    if (['available', 'unavailable'].includes(b.status)) await db.prepare('INSERT INTO rsvps (event_id, person_id, status) VALUES (?, ?, ?) ON CONFLICT(event_id, person_id) DO UPDATE SET status = excluded.status').bind(e.id, me.id, b.status).run();
-    else await db.prepare('DELETE FROM rsvps WHERE event_id = ? AND person_id = ?').bind(e.id, me.id).run();
-    return json({ ok: true });
-  }
-  if (path === '/api/posts') {
-    needTeam();
-    const text = str(b.text, 2000);
-    if (!text) throw new BadRequest('Write something first.');
-    const post = { id: 'post_' + crypto.randomUUID(), personId: me.id, text, header: str(b.header, 80), createdAt: Date.now() };
-    await db.prepare('INSERT INTO posts (id, team_id, person_id, text, header, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(post.id, teamId, me.id, text, post.header, post.createdAt).run();
-    return json({ post });
-  }
-  if (path === '/api/posts/delete') {
-    needTeam();
-    const p = await db.prepare('SELECT person_id FROM posts WHERE id = ? AND team_id = ?').bind(str(b.postId, 100), teamId).first();
-    if (!p) throw new NotFound('Post not found.');
-    if (p.person_id !== me.id && !isLead(role)) throw new Forbidden('Only the author, a captain or the team owner can delete a post.');
-    await db.prepare('DELETE FROM posts WHERE id = ?').bind(str(b.postId, 100)).run();
-    return json({ ok: true });
-  }
+  if (path === '/api/rsvp') { needTeam(); await saveRsvp(db, teamId, me, b.eventId, b.status); return json({ ok: true }); }
+  if (path === '/api/posts') { needTeam(); return json({ post: await createPost(db, teamId, me, b) }); }
+  if (path === '/api/posts/delete') { needTeam(); await deletePost(db, teamId, me, role, b.postId); return json({ ok: true }); }
   // Your own training (Kestrel paths)
   if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await kaiState(db, me.id)); }
   if (path === '/api/log/session-splits') {

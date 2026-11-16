@@ -3950,7 +3950,7 @@ const NAV = {
   run:{ segs:[['plan','Plan'],['library','Workouts'],['fitness','Fitness'],['goals','Goals'],['kai','Coach']] },
   calendar:{ segs:[['log','Training'],['team','Team']] },
   body:{ segs:[['recovery','Recovery'],['xtrain','Cross-train'],['food','Fuel']] },
-  team:{ segs:[['feed','Feed'],['training','Plan'],['meets','Meets & places'],['roster','Roster']] },
+  team:{ segs:[['feed','Feed'],['meets','Schedule'],['training','Plan'],['roster','Roster']] },
   you:{ segs:[['profile','Profile'],['records','Records'],['integrations','Integrate'],['settings','Settings']] },
   record:{ segs:[] },
 };
@@ -4803,6 +4803,8 @@ EVERY TIME I SAY "coach me" (or when this runs as a scheduled task):
 6. Reply with a short coach's report: a table of the new sessions (date, type, miles, pace, avg HR), this week's miles vs plan, tomorrow's session with my rep targets, any change you made and why, and one or two things to focus on.
 
 IF I OWN OR CAPTAIN A TEAM and ask to change the team plan (a day of a level, or a level's weekly miles) or to put a teammate on another level: call get_team_plan, then change_team_plan or change_team_level. Name levels by weekly miles. Kestrel refuses anyone who isn't the owner or a captain and says why.
+
+FOR MY TEAM'S SCHEDULE (practices, meets, posts): call get_events or get_team_state first. Add with create_event, change with update_event (send only what changes) or delete_event; owners and captains can fill a week of practices with apply_week_template. My RSVPs, availability, day notes, health and body marks are mine to set with save_rsvp, set_availability, save_comment, set_health_status and set_body_mark. To add an athlete, use invite_athlete and give me the link to send: everyone joins with their own account. Ask me before deleting anything.
 
 RULES: Only ever log my own activities. Never invent data. Every pace comes from my Fitness States. If a tool fails, tell me what it said. Talk like a supportive high school XC coach. If this Claude app supports scheduled tasks, offer to run "coach me" every evening at 8pm.
 

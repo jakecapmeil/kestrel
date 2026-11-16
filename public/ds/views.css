@@ -641,3 +641,26 @@ body.kv-spoke #navSegs{display:none;}
   .ks .ks-head .kd-stat:nth-child(-n+3) b,.ks .ks-head .kd-stat b{font-size:18px;letter-spacing:-.04em;}
 }
 .kv-runviews{display:flex;justify-content:center;margin:8px 0 24px;}
+
+/* Team › Schedule */
+.kv-schedbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s-3);margin-bottom:var(--kv-gap);}
+.kv-schedbar .kv-btns{margin-top:0;}
+.kv-evrow{align-items:flex-start;}
+.kv-evrow > div:not(.kv-evact){padding-top:2px;}
+.kv-evd{flex:none;width:44px;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 0;border-radius:12px;background:var(--surface-2);}
+.kv-evd i{font:600 11px var(--font-ui);font-style:normal;text-transform:uppercase;letter-spacing:.04em;color:var(--text-2);}
+.kv-evd b{font:600 18px/1.1 var(--font-ui);font-variant-numeric:tabular-nums;}
+.kv-evd.now{background:var(--accent);color:var(--on-accent);}
+.kv-evd.now i{color:inherit;opacity:.85;}
+.kv-li > .kv-evact{flex:none;flex-direction:row;align-items:center;gap:var(--s-2);}
+.kv-iconbtn{width:36px;height:36px;padding:0;border:0;border-radius:999px;background:var(--surface-2);color:var(--text);box-shadow:none;display:inline-grid;place-items:center;flex:none;}
+.kv-iconbtn .kv-ico{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+button.kv-link-sm{background:none;border:0;box-shadow:none;height:auto;padding:4px;margin:-4px 0;}
+@media (max-width:480px){
+  .kv-evrow{flex-wrap:wrap;}
+  .kv-evrow > div:not(.kv-evact){flex-basis:calc(100% - 54px);}
+  .kv-li > .kv-evact{width:100%;padding-left:54px;}
+  .kv-li > .kv-evact:empty{display:none;}
+  .kv-schedbar .kv-btns{width:100%;}
+  .kv-schedbar .kv-btns button{flex:1 1 auto;}
+}

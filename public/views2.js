@@ -356,21 +356,49 @@
   SCREENS.feed.after = ()=>{ const p = $('kvPosts'); if(p && typeof wirePostItems === 'function') wirePostItems(p, redraw); if($('kvActivities')) window.kestrelRenderActivities?.($('kvActivities')); };
   ACT.post = async (_, f)=>{ const text = f.elements.text.value.trim(); if(!text) return; const r = await createPostRemote(activePersonId, text, ''); posts.push(r?.post || { id:'post_' + Date.now(), personId:activePersonId, text, header:'', createdAt:Date.now() }); redraw(); };
 
-  // ---------------------------------------------------------------- Team › Meets & places
+  // ---------------------------------------------------------------- Team › Schedule (practices, meets, places)
+  // Anyone adds to the schedule; whoever added an event, a captain or the owner changes it. Leads also fill a week of practices.
+  const ICON_EDIT = '<svg class="kv-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
+  const lead = ()=> ['owner', 'captain'].includes(window.KESTREL?.role);
+  const canEditEv = (e)=> lead() || (e.createdBy && e.createdBy === activePersonId);
+  const allEvents = ()=> Object.entries(events).flatMap(([d, list])=> list.map(e=> ({ ...e, date:d }))).sort((a, b)=> a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')));
+  const evById = (id)=> allEvents().find(e=> e.id === id);
   SCREENS.meets = async ()=>{
-    if(!window.KESTREL?.teamId) return need('Join a team to see its meets.');
-    const today = todayKey();
-    const all = Object.entries(events).flatMap(([d, list])=> list.filter(e=> e.type === 'meet').map(e=> ({ ...e, date:d }))).sort((a, b)=> a.date.localeCompare(b.date));
-    const up = all.filter(e=> e.date >= today), past = all.filter(e=> e.date < today).reverse();
-    setSub(up[0] ? `Next: ${up[0].title}, ${nice(up[0].date)}` : 'No meets coming up');
-    const meet = (e)=>{ const st = own() ? getRsvp(e.id) : null, loc = (locations || []).find(l=> l.id === e.locationId);
-      return card(esc(e.title), esc(`${nice(e.date, { weekday:'short', month:'short', day:'numeric' })}${e.time ? ' · ' + e.time : ''}`), `${e.location ? `<div class="kv-li" style="border:0;padding:8px 0 0"><div><b>${esc(e.location)}</b><span>${esc(loc?.address || '')}</span></div><a class="kv-link-sm" href="${mapsSearchLink(loc?.address || e.location)}" target="_blank" rel="noopener">Map</a></div>` : ''}${e.desc ? `<div class="kv-hint">${esc(e.desc)}</div>` : ''}`,
-        st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(rsvpLabel[st])}</button>` : ''); };
-    const results = card('Results', 'Past meets.', `<div class="kv-list">${past.slice(0, 6).map(e=> `<div class="kv-li"><div><b>${esc(e.title)}</b><span>${esc(nice(e.date))}${e.location ? ' · ' + esc(e.location) : ''}</span>${e.results ? `<span style="color:var(--text)">${esc(e.results)}</span>` : ''}</div></div>`).join('') || '<div class="kv-hint">No past meets yet.</div>'}</div>`);
-    const places = card('Places', 'Courses, tracks and meeting spots.', `<div class="kv-list">${(locations || []).map(l=> `<div class="kv-li"><div><b>${esc(l.name)}</b><span>${esc(l.address || '')}</span></div><a class="kv-link-sm" href="${mapsSearchLink(l.address || l.name)}" target="_blank" rel="noopener">Map</a></div>`).join('') || '<div class="kv-hint">No places saved yet.</div>'}</div><div class="kv-btns"><button type="button" data-a="oldPlaces">Add or edit places</button></div>`);
-    return `<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${up.map(meet).join('') || need('No meets coming up.')}</div><div class="kv-stack">${results}${places}</div></div>`;
+    if(!window.KESTREL?.teamId) return need('Join a team to see its schedule.');
+    const today = todayKey(), all = allEvents(), type = V.schedType || 'all';
+    const up = all.filter(e=> e.date >= today && (type === 'all' || e.type === type));
+    const past = all.filter(e=> e.date < today && e.type === 'meet').reverse();
+    const nextMeet = all.find(e=> e.date >= today && e.type === 'meet');
+    setSub(nextMeet ? `Next meet: ${nextMeet.title}, ${nice(nextMeet.date)}` : 'No meets coming up');
+    const mon = iso(weekStart(new Date(today + 'T12:00:00')));
+    const weekName = (m)=>{ const w = Math.round((Date.parse(m) - Date.parse(mon)) / 6048e5); return w === 0 ? 'This week' : w === 1 ? 'Next week' : 'Week of ' + nice(m, { month:'short', day:'numeric' }); };
+    const limit = V.schedAll ? Infinity : 8;
+    const weeks = [];
+    for(const e of up){ const m = iso(weekStart(new Date(e.date + 'T12:00:00'))); const last = weeks[weeks.length - 1]; if(last?.m === m) last.list.push(e); else weeks.push({ m, list:[e] }); }
+    const row = (e)=>{
+      const st = own() ? getRsvp(e.id) : null, et = eventStyle(e), d = new Date(e.date + 'T12:00:00');
+      const meta = [et.label, formatEventTimeRange(e), e.location].filter(Boolean).join(' · ');
+      return `<div class="kv-li kv-evrow"><span class="kv-evd${e.date === today ? ' now' : ''}"><i>${esc(d.toLocaleDateString(undefined, { weekday:'short' }))}</i><b>${d.getDate()}</b></span>
+        <div><b>${esc(e.title)}</b><span>${esc(meta)}</span>${e.checklist ? `<span>Bring: ${esc(e.checklist)}</span>` : ''}${e.desc ? `<span>${esc(e.desc)}</span>` : ''}</div>
+        <div class="kv-evact">${st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(rsvpLabel[st])}</button>` : ''}${canEditEv(e) ? `<button type="button" class="kv-iconbtn" data-a="evEdit" data-v="${e.id}" aria-label="Edit ${esc(e.title)}" title="Edit">${ICON_EDIT}</button>` : ''}</div></div>`;
+    };
+    const filters = `<div class="kv-chips" role="group" aria-label="Show">${[['all', 'All'], ['practice', 'Practices'], ['meet', 'Meets'], ['other', 'Other']].map(([v, l])=> `<button type="button" class="kv-chip ${type === v ? 'on' : ''}" aria-pressed="${type === v}" data-a="schedType" data-v="${v}">${l}</button>`).join('')}</div>`;
+    const tools = `<div class="card kv-card kv-schedbar">${filters}<div class="kv-btns"><button type="button" class="pri" data-a="evAdd">Add</button>${lead() ? '<button type="button" data-a="evWeek">Week of practices</button>' : ''}<button type="button" data-a="evAi">Import with Kestrel AI</button></div></div>`;
+    const list = weeks.length ? weeks.slice(0, limit).map(w=> card(esc(weekName(w.m)), '', `<div class="kv-list">${w.list.map(row).join('')}</div>`)).join('')
+      + (weeks.length > limit ? `<div class="kv-btns" style="margin-top:0"><button type="button" data-a="schedMore">Show ${weeks.length - limit} more ${weeks.length - limit === 1 ? 'week' : 'weeks'}</button></div>` : '')
+      : card('', '', `<div class="kv-hint">${type === 'all' ? 'Nothing on the schedule yet.' : `No ${type === 'other' ? 'other events' : type + 's'} coming up.`} Add practices and meets here, or let Kestrel AI read a schedule you paste or attach.</div>`);
+    const results = card('Results', 'Past meets.', `<div class="kv-list">${past.slice(0, 6).map(e=> `<div class="kv-li"><div><b>${esc(e.title)}</b><span>${esc(nice(e.date))}${e.location ? ' · ' + esc(e.location) : ''}</span>${e.results ? `<span style="color:var(--text)">${esc(e.results)}</span>` : ''}</div>${canEditEv(e) ? `<button type="button" class="kv-link-sm" data-a="evEdit" data-v="${e.id}">${e.results ? 'Edit' : 'Add results'}</button>` : ''}</div>`).join('') || '<div class="kv-hint">No past meets yet.</div>'}</div>`);
+    const places = card('Places', 'Courses, tracks and meeting spots.', `<div class="kv-list">${(locations || []).map(l=> `<div class="kv-li"><div><b>${esc(l.name)}</b><span>${esc(l.address || '')}</span></div><a class="kv-link-sm" href="${mapsSearchLink(l.address || l.name)}" target="_blank" rel="noopener">Map</a>${lead() ? `<button type="button" class="kv-link-sm" data-a="placeEdit" data-v="${l.id}">Edit</button>` : ''}</div>`).join('') || '<div class="kv-hint">No places saved yet.</div>'}</div><div class="kv-btns"><button type="button" data-a="placeAdd">Add a place</button></div>`);
+    return `${tools}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${list}</div><div class="kv-stack">${results}${places}</div></div>`;
   };
-  ACT.oldPlaces = ()=>{ scheduleView = 'places'; setPage('schedule'); };
+  ACT.schedType = (v)=>{ V.schedType = v; V.schedAll = false; redraw(); };
+  ACT.schedMore = ()=>{ V.schedAll = true; redraw(); };
+  ACT.evAdd = ()=> window.kestrelEventForm?.({ type: V.schedType === 'meet' || V.schedType === 'other' ? V.schedType : 'practice', places: locations || [] });
+  ACT.evEdit = (id)=>{ const e = evById(id); if(e) window.kestrelEventForm?.({ event:{ ...e, rsvps: rsvps[id] || {} }, places: locations || [] }); };
+  ACT.evWeek = ()=> window.kestrelPracticeWeek?.({ places: locations || [] });
+  ACT.evAi = ()=> window.kestrelScheduleAi?.({ places: locations || [] });
+  ACT.placeAdd = ()=> window.kestrelPlaceForm?.();
+  ACT.placeEdit = (id)=>{ const l = (locations || []).find(x=> x.id === id); if(l) window.kestrelPlaceForm?.(l); };
 
   // ---------------------------------------------------------------- Team › Plan and Roster (the team's own editors)
   SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its plan.'); if(own()) await loadKai(); setSub(''); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
