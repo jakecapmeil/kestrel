@@ -727,8 +727,9 @@ async function updateEvent(db, teamId, me, role, b, merge = false) {
   if (!isDate(date)) throw new BadRequest('Dates are YYYY-MM-DD.');
   const type = EVENT_TYPES.includes(b.type) ? b.type : merge ? e.type : 'practice';
   // The venue link follows the location text: a known place links to it, new text unlinks, a blank field keeps what was there.
-  const location = str(keep('location', 'location'), 200);
+  let location = str(keep('location', 'location'), 200);
   const place = await placeFor(db, teamId, b.locationId, location);
+  if (place && b.locationId && b.location === undefined) location = place.name;
   const locationId = place ? place.id : location && location !== e.location ? null : e.location_id;
   // An edited practice is no longer the week template's, so clearing the template leaves it alone.
   await db.prepare('UPDATE events SET date = ?, title = ?, time = ?, end_time = ?, description = ?, type = ?, kind = ?, auto = 0, location = ?, location_id = ?, checklist = ?, results = ? WHERE id = ?')
@@ -1391,8 +1392,8 @@ const WHO = { person_id: { type: 'string', description: 'From get_roster' }, ath
 const noArgs = (extra = {}) => ({ type: 'object', properties: { team_id: TEAM_ID, ...extra }, additionalProperties: false });
 const SCHEDULE_TOOLS = [
   { name: 'get_my_teams', description: 'The teams this athlete is on, with their role on each (owner, captain or member) and how many are on it.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
-  { name: 'get_events', description: "The team's calendar (practices, meets and other events), optionally between two dates, with who said they are coming. Each event says whether this athlete can edit it.",
-    inputSchema: noArgs({ from: { type: 'string', description: 'YYYY-MM-DD, inclusive' }, to: { type: 'string', description: 'YYYY-MM-DD, inclusive' } }) },
+  { name: 'get_events', description: "The team's calendar (practices, meets and other events) from today on, or between two dates, with who said they are coming. Each event says whether this athlete can edit it.",
+    inputSchema: noArgs({ from: { type: 'string', description: 'YYYY-MM-DD, inclusive; default today (pass an earlier date for past events)' }, to: { type: 'string', description: 'YYYY-MM-DD, inclusive' } }) },
   { name: 'get_team_state', description: "One snapshot of the team: who is on it, the calendar from two weeks ago on, the latest posts, saved places (with ids), day notes, and this athlete's own statuses and body marks.", inputSchema: noArgs() },
   { name: 'create_event', description: 'Add a practice, meet or other event to the team calendar. Any member can add one.',
     inputSchema: { type: 'object', required: ['date', 'title'], properties: { team_id: TEAM_ID, ...EVENT_FIELDS }, additionalProperties: false } },
@@ -1504,7 +1505,7 @@ async function callScheduleTool(db, person, name, args, origin) {
     if (name === 'get_events' || name === 'get_team_state') {
       const st = await teamState(db, me, teamId);
       const who = Object.fromEntries(st.people.map((p) => [p.id, p.name]));
-      const from = name === 'get_events' ? str(args.from, 10) : addDays(todayInTz(), -14);
+      const from = name === 'get_events' ? str(args.from, 10) || todayInTz() : addDays(todayInTz(), -14);
       const to = name === 'get_events' ? str(args.to, 10) : '';
       const events = Object.values(st.events).flat().filter((e) => (!from || e.date >= from) && (!to || e.date <= to))
         .sort((a, b) => a.date.localeCompare(b.date) || String(a.time).localeCompare(String(b.time))).slice(0, 200).map((e) => withRsvps(e, st.rsvps, who));
@@ -1559,6 +1560,7 @@ async function callScheduleTool(db, person, name, args, origin) {
       return { team: team.name, code, link: `${origin}/join/${code}`, how: 'They open the link (or tap + Team in Kestrel and type the code), sign in or make an account, and join.' };
     }
     if (name === 'remove_from_team') {
+      if (!args.person_id && !args.athlete) throw new McpToolError('Say who: person_id or athlete (their own name to leave the team).');
       const who = await teammate(db, teamId, args, me);
       if (who.id !== me.id && role !== 'owner') throw new Forbidden('Only the team owner can remove someone.');
       await removeMember(db, teamId, who.id);
@@ -1665,7 +1667,7 @@ function checkArgs(schema, args, at = '') {
 const isUserError = (err) => err instanceof McpToolError || err instanceof BadRequest || err instanceof LogError || err instanceof IntervalsError
   || err instanceof PlanError || err instanceof CourseError || err instanceof CalcError || err instanceof AiError || err instanceof CoachError;
 
-const readOnlyTool = (name) => /^(get_|find_|watch_status|invite_athlete)/.test(name);
+const readOnlyTool = (name) => /^(get_|find_|watch_status)/.test(name);
 
 async function serveMcp(request, tools, call, key = '') {
   const reply = (status, body) => json(body, status);
