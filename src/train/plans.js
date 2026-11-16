@@ -169,3 +169,72 @@ export function expandPlanSpec(raw) {
   }
   return { plans: validateTeamPlans(plans), spec };
 }
+
+// ---- Edits to a team plan by name (the coach chat and the /mcp tools; Team → Plan does the same in the browser) ----
+// Levels are named by their weekly miles (a no-race week), never by key: captains can change a level's mileage.
+export function levelByMiles(plans, miles) {
+  const m = Number(miles);
+  const key = Object.keys(plans || {}).find((r) => Number(plans[r].weeks[0].miles) === m);
+  if (!key) throw new PlanFormatError(`There is no ${Number.isFinite(m) ? `${m} mi` : 'such'} level. The levels are ${Object.keys(plans || {}).map((r) => plans[r].weeks[0].miles).join(', ')} mi a week.`);
+  return Number(key);
+}
+const numOf = (c) => parseFloat(c.miles) || 0;
+const fmtMi = (n) => String(Math.round(n * 10) / 10);
+const scaleMiles = (t, f) => String(t).replace(/\d+(?:\.\d+)?/g, (n) => fmtMi(Math.max(0.5, Math.round(Number(n) * f * 2) / 2)));
+
+// A level moved to new weekly miles: every day of all three weeks scales by the same factor, rounded to half miles so
+// each week still adds up to the factor times what it did (the same rule as Edit level mileage in Team → Plan).
+// Levels stay in order: each one needs more miles than the one below it.
+export function scaleLevel(plans, level, miles) {
+  const want = Math.round(Number(miles));
+  if (!(want >= 1 && want <= 150)) throw new PlanFormatError('A level’s weekly miles must be 1-150.');
+  const keys = Object.keys(plans).map(Number).sort((a, b) => a - b);
+  const i = keys.indexOf(Number(level));
+  const below = i > 0 ? plans[keys[i - 1]].weeks[0].miles : null, above = i < keys.length - 1 ? plans[keys[i + 1]].weeks[0].miles : null;
+  if ((below != null && want <= below) || (above != null && want >= above)) {
+    throw new PlanFormatError(`Each level needs more miles than the one below it: this one has to stay between ${below ?? 0} and ${above ?? 151} mi a week.`);
+  }
+  const next = JSON.parse(JSON.stringify(plans));
+  const lv = next[level], k = want / Number(plans[level].weeks[0].miles);
+  if (!(k > 0) || k === 1) return next;
+  lv.weeks = lv.weeks.map((w, wi) => ({ ...w, miles: wi === 0 ? want : Math.max(1, Math.round(w.miles * k)) }));
+  for (let wi = 0; wi < 3; wi++) {
+    const cells = lv.days.map((d) => d.cells[wi]).filter((c) => c.type !== 'Off' && c.type !== 'Cross-train' && numOf(c) > 0);
+    const plain = cells.filter((c) => /^\s*\d+(\.\d+)?\s*$/.test(c.miles));
+    cells.filter((c) => !plain.includes(c)).forEach((c) => { c.miles = scaleMiles(c.miles, k); });
+    const goal = Math.round(plain.reduce((a, c) => a + numOf(c), 0) * k * 2) / 2;
+    const raw = plain.map((c) => Math.max(0.5, numOf(c) * k));
+    const out = raw.map((x) => Math.max(0.5, Math.floor(x * 2) / 2));
+    const order = raw.map((x, j) => [x * 2 - Math.floor(x * 2), j]).sort((p, q) => q[0] - p[0]);
+    for (let j = 0; out.reduce((a, x) => a + x, 0) < goal - 0.01 && j < order.length; j++) out[order[j][1]] += 0.5;
+    plain.forEach((c, j) => { c.miles = fmtMi(out[j]); });
+  }
+  return next;
+}
+
+// One day of one level changed: { day: 'Tuesday', week: 'normal' | 'race' | 'taper', type?, miles?, notes? }.
+// Only what is given changes; shoes are kept. Returns the new plans and what the cell is now.
+export function setPlanCell(plans, level, { day, week = 'normal', type, miles, notes }) {
+  const di = DAYS.findIndex((d) => d.toLowerCase().startsWith(String(day || '').toLowerCase().slice(0, 3)) && String(day || '').length >= 3);
+  if (di < 0) throw new PlanFormatError('Say which day: Monday to Sunday.');
+  const wi = { normal: 0, race: 1, taper: 2 }[week || 'normal'];
+  if (wi == null) throw new PlanFormatError('The week must be the normal week, race week or taper.');
+  const next = JSON.parse(JSON.stringify(plans));
+  const cell = next[level].days[di].cells[wi];
+  const given = (v) => v !== undefined && v !== null && v !== '';
+  if (!given(type) && !given(miles) && notes == null) throw new PlanFormatError('Nothing to change on that day: give a type, miles or notes.');
+  if (type !== undefined && type !== null && type !== '') {
+    const t = type === 'Long run' || type === 'Long Run' ? 'LR' : type;
+    if (!TYPES.includes(t)) throw new PlanFormatError(`The day type must be one of ${TYPES.join(', ')}.`);
+    cell.type = t;
+  }
+  if (miles !== undefined && miles !== null && miles !== '') {
+    const m = String(miles).trim();
+    const n = parseFloat(m);
+    if (!/^\d+(\.\d+)?/.test(m) || !(n >= 0 && n <= 40)) throw new PlanFormatError('A day’s miles must start with a number from 0 to 40, like 6 or 6 (3 WO).');
+    cell.miles = txt(m, 30);
+  }
+  if (notes !== undefined && notes !== null) cell.notes = txt(notes, 120);
+  if (cell.type === 'Off') cell.miles = '0';
+  return { plans: next, day: DAYS[di], week: ['normal week', 'race week', 'taper'][wi], cell };
+}

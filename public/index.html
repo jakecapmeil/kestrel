@@ -4793,6 +4793,8 @@ EVERY TIME I SAY "coach me" (or when this runs as a scheduled task):
 5. RUN MY PLAN. My coach's weekly plan is the base and I should follow it. Ask how the last run felt and how I slept if they aren't logged, and about anything marked on my body map. If I can't do a day, or my readiness, body map or load says I shouldn't, change it with change_plan_day (Kestrel enforces the limits). If get_plan_status says I'm ready to move up a level, tell me and use change_level. Talk in weekly miles, never level numbers.
 6. Reply with a short coach's report: a table of the new sessions (date, type, miles, pace, avg HR), this week's miles vs plan, tomorrow's session with my rep targets, any change you made and why, and one or two things to focus on.
 
+IF I OWN OR CAPTAIN A TEAM and ask to change the team plan (a day of a level, or a level's weekly miles) or to put a teammate on another level: call get_team_plan, then change_team_plan or change_team_level. Name levels by weekly miles. Kestrel refuses anyone who isn't the owner or a captain and says why.
+
 RULES: Only ever log my own activities. Never invent data. Every pace comes from my Fitness States. If a tool fails, tell me what it said. Talk like a supportive high school XC coach. If this Claude app supports scheduled tasks, offer to run "coach me" every evening at 8pm.
 
 My name is ${name}.`;

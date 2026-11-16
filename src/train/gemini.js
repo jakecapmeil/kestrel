@@ -324,6 +324,38 @@ const CHAT_SCHEMA = {
       properties: { direction: { type: 'string', enum: ['up', 'down'] }, reason: { type: 'string' } },
       required: ['direction', 'reason'],
     },
+    team_plan_change: {
+      type: 'array',
+      description: "Only when a team owner or captain (team_lead) asks to change their team's plan: one item per change, either one day of one level or a level's weekly miles.",
+      items: {
+        type: 'object',
+        properties: {
+          team_id: { type: 'string', description: 'From team_lead' },
+          level_miles: { type: 'number', description: "Which level, by its weekly miles now (team_lead levels weekly_miles)" },
+          day: { type: 'string', enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
+          week: { type: 'string', enum: ['normal', 'race', 'taper'], description: 'Which week of the level; normal unless they said race week or taper' },
+          type: { type: 'string', enum: ['Easy', 'Recovery', 'Workout', 'Long run', 'Race', 'Shakeout', 'Cross-train', 'Off'] },
+          miles: { type: 'string', description: 'The day\'s miles, like "6" or "6 (3 WO)"' },
+          notes: { type: 'string', description: 'Short, like "1.5 WU 1.5 CD" or "Strides"' },
+          new_level_miles: { type: 'number', description: "Instead of a day: the level's new weekly miles (every day of the level scales with it)" },
+        },
+        required: ['level_miles'],
+      },
+    },
+    team_level_change: {
+      type: 'array',
+      description: 'Only when a team owner or captain (team_lead) asks to put a teammate on another level of the team plan: one item per athlete.',
+      items: {
+        type: 'object',
+        properties: {
+          team_id: { type: 'string', description: 'From team_lead' },
+          person_id: { type: 'string', description: 'The athlete id from team_lead athletes' },
+          to_level_miles: { type: 'number', description: 'The weekly miles of the level to put them on' },
+          reason: { type: 'string' },
+        },
+        required: ['person_id', 'to_level_miles'],
+      },
+    },
   },
   required: ['answer'],
 };
@@ -337,7 +369,7 @@ export const SITE_GUIDE = `- Five tabs along the bottom. Schedule: the team cale
 - Watch sync: Garmin, COROS, Suunto, Polar and Wahoo sync through intervals.icu (You → Watch and data has a step-by-step guide per watch). Apple Watch needs an iPhone app such as HealthFit or RunGap to upload to intervals.icu. Strava can't be the link: it doesn't let intervals.icu share runs. The Athlete ID and API key are at the bottom of intervals.icu Settings, under Developer Settings. Runs can also be logged by hand.
 - The runner's intake (context.runner: goals, why, what got in the way, their week, injuries, fueling, how they like to be coached) and their active goals (context.goals) are what they told Kestrel. Use them, and coach in the style they asked for.
 - Fueling: talk about eating enough for training (carbohydrate around runs, protein, fuel on long runs). Never suggest restricting food, a calorie deficit or losing weight. If they keep eating less than their training needs, or mention skipped meals, missed periods or stress fractures, point them kindly to a coach, a parent or a doctor; never diagnose. Each run gets a 1-10 difficulty from pace and heart rate.
-- Teams: anyone can start a team and others join with an invite code. Owners and captains edit the calendar and build the team plan. Coaches cannot see an athlete's training or health; teammates never see each other's health or log.
+- Teams: anyone can start a team and others join with an invite code. Owners and captains edit the calendar and build the team plan, and change it (a day, a level's weekly miles) or put an athlete on another level in Team → Plan or by asking Kestrel AI. Coaches cannot see an athlete's training or health; teammates never see each other's health or log.
 - Kestrel AI runs on a free default model, or the athlete's own key or a local model, set in Kestrel Lab (/lab → Providers). Kestrel Lab is where prediction models can be compared, forked and published.
 - Delete data: You → Settings → Delete my Kestrel data.`;
 
@@ -370,6 +402,8 @@ CHECK-INS ARE RARE. Only ask a follow-up question when it helps the current answ
 IF has_plan IS FALSE the athlete has no training plan yet: tell them to open Train → Plan and build one with you (Build with Kestrel AI), and do not invent plan days. YOU RUN THEIR PLAN DAY TO DAY. Their weekly plan (plan.week, from their team's plan or Kestrel's built-in plans at their level) is the base and the goal is to follow it. Change a day (plan_change) when the athlete says they can't do it (busy, sick, hurt, wiped out), when readiness or the body map says so, or to move a workout to a better day. Prefer moving or shrinking over skipping; keep two easy days between hard ones; never add mileage to make up for a missed day. Kestrel rejects changes outside the plan's limits and tells you why, so stay close to the plan. Explain every change in one sentence. plan.today is what they'll see on the Plan tab (plan.tomorrow under it).
 
 LEVELS. plan.level shows their weekly mileage and whether they're ready for the next level (ready plus the gates). If ready is true, you can tell them and level them up (level_change up). If they're injured, sick or exhausted for more than a few days, you can move them down. Talk in weekly miles, never level numbers.
+
+TEAM PLANS. Only a team's owner or captains can change the team plan or put a teammate on another level. team_lead is in the data only when this athlete is one of them: each team they lead, its levels by weekly miles with every day (normal week / race week / taper), and its athletes with the level they're on. When they ask to change the team plan, fill team_plan_change (one day of one level, or a level's weekly miles with new_level_miles); when they ask to move a teammate to another level, fill team_level_change with that athlete's id and the level's weekly miles. These are separate from plan_change and level_change, which only change this athlete's own plan. Name levels by weekly miles and athletes by name; if the level or athlete they mean isn't clear, ask. Kestrel checks every change and says why if it refuses. If there is no team_lead and they ask to change the team plan or someone's level, say only the team owner or a captain can, and change nothing. You never see a teammate's training, health or log, so don't talk about them.
 
 SAVE what they tell you. When the athlete says how a day felt, how they slept, or something about a day, fill log (feel 1-10 where 10 is great; pick the date they mean, default today or the most recent run). When they say a body part is sore, painful or better, fill body with the matching id from body_parts ("none" clears it). When they say they're sick, injured or better, set health_status. Mention briefly in your answer what you saved. Never save anything they didn't say.
 

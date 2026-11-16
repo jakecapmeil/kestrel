@@ -10,7 +10,7 @@
 import { authUser, AuthError } from './auth.js';
 import { EVENT, EVENTS, parseTime } from './events.js';
 import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, courseSlot, PLATFORM_NAME, predictEvent, marathonPredict, tandaPredict, toCourse, validateModel, ModelError, MAX_MODEL_BYTES } from './models.js';
-import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError } from './train/plans.js';
+import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { COACH_RUBRIC } from './train/coach.js';
@@ -371,6 +371,123 @@ async function teamLevels(db, teamId, today) {
     return { id: person.id, name: person.name, class_year: person.class_year, level: rank, miles: milesOfRank(person, rank), locked: mine ? null : person.plan_source === 'own' ? 'Uses their own plan' : 'Follows another team’s plan', recommend: rec };
   }));
   return rows.filter(Boolean);
+}
+
+// Team plan edits, shared by Team → Plan, the coach chat and the /mcp tools. The role is checked on every call.
+async function requireLead(db, teamId, personId) {
+  const role = await roleIn(db, teamId, personId);
+  if (!role) throw new NotFound('You are not on that team.');
+  if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change the team plan.');
+  return role;
+}
+async function teamPlansOf(db, teamId) {
+  const row = await db.prepare('SELECT data FROM team_plans WHERE team_id = ?').bind(teamId).first();
+  if (!row) throw new BadRequest('This team has no plan yet. Build one in Team → Plan first.');
+  return JSON.parse(row.data);
+}
+// spec null = a hand edit of the cells: the AI's brief is kept so it can still be refined.
+async function saveTeamPlans(db, teamId, byId, plans, spec = null) {
+  await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, COALESCE(?, \'\'), ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = COALESCE(?, team_plans.spec), updated_by = excluded.updated_by, updated_at = excluded.updated_at')
+    .bind(teamId, JSON.stringify(validateTeamPlans(plans)), spec, byId, Date.now(), spec).run();
+}
+// A captain puts an athlete on a level of the team plan. The AI's step limit (coach_rank) then counts from there.
+async function setTeamLevel(db, teamId, me, personId, to, reason = '') {
+  if (!(await roleIn(db, teamId, personId))) throw new NotFound('Not on this team.');
+  const person = await loadPerson(db, personId);
+  if (person.plan_source !== 'team' || person.plan_team_id !== teamId) throw new BadRequest(`${person.name || 'That athlete'} does not train from this team’s plan.`);
+  if (!person.plans[to]) throw new BadRequest('That level is not in the plan.');
+  const from = rankOf(person);
+  if (to !== from) {
+    await setRank(db, person, to, `Set by ${me.name || 'a captain'}.${reason ? ` ${str(reason, 200)}` : ''}`, 'captain');
+    await db.prepare('UPDATE people SET coach_rank = ? WHERE id = ?').bind(to, person.id).run();
+  }
+  return { name: person.name, from_miles: milesOfRank(person, from), to_miles: milesOfRank(person, to) };
+}
+
+// Which team a lead means: the one named; else the team on screen (refused there if they don't lead it); else the only
+// team with a plan that they lead.
+async function leadTeamFor(db, personId, wanted, onScreen) {
+  const id = str(wanted, 40);
+  if (id) { await requireLead(db, id, personId); return id; }
+  const { results } = await db.prepare(
+    "SELECT m.team_id, (m.role = 'owner' OR m.leader = 1) AS lead, tp.team_id IS NOT NULL AS has_plan FROM team_members m LEFT JOIN team_plans tp ON tp.team_id = m.team_id WHERE m.person_id = ?"
+  ).bind(personId).all();
+  const forbidden = () => new Forbidden('Only the team owner or a captain can change the team plan.');
+  const here = onScreen ? results.find((r) => r.team_id === onScreen) : null;
+  if (here && !here.lead) throw forbidden();
+  if (here?.has_plan) return here.team_id;
+  const leads = results.filter((r) => r.lead && r.has_plan);
+  if (leads.length === 1) return leads[0].team_id;
+  if (leads.length > 1) throw new BadRequest('You lead more than one team. Open the team in Kestrel first, or say which team.');
+  // They lead a team, but it has no plan: say so, unless they are only a member of a team that has one.
+  if (here || (results.some((r) => r.lead) && !results.some((r) => !r.lead && r.has_plan))) throw new BadRequest('This team has no plan yet. Build one in Team → Plan first.');
+  throw forbidden();
+}
+// One change to a team plan by a lead: a day of one level, or a level's weekly miles. Returns what was saved, in words.
+async function teamPlanChange(db, me, teamId, c) {
+  await requireLead(db, teamId, me.id);
+  const plans = await teamPlansOf(db, teamId);
+  const level = levelByMiles(plans, c?.level_miles);
+  const was = plans[level].weeks[0].miles;
+  if (c?.new_level_miles !== undefined && c?.new_level_miles !== null && c?.new_level_miles !== '') {
+    const next = scaleLevel(plans, level, c.new_level_miles);
+    await saveTeamPlans(db, teamId, me.id, next);
+    return `team plan: the ${was} mi level is now ${next[level].weeks[0].miles} mi a week`;
+  }
+  const x = setPlanCell(plans, level, c || {});
+  await saveTeamPlans(db, teamId, me.id, x.plans);
+  const t = x.cell.type === 'LR' ? 'Long run' : x.cell.type === 'Off' ? 'Rest' : x.cell.type;
+  return `team plan, ${was} mi level: ${x.day} (${x.week}) is ${t}${x.cell.type !== 'Off' ? ` ${x.cell.miles} mi` : ''}${x.cell.notes ? `, ${x.cell.notes}` : ''}`;
+}
+// A lead moves a teammate to another level of the team plan, named by its weekly miles.
+async function teamLevelChange(db, me, teamId, c) {
+  await requireLead(db, teamId, me.id);
+  const { results } = await db.prepare('SELECT p.id, p.name FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ?').bind(teamId).all();
+  const want = str(c?.person_id, 80), name = str(c?.athlete, 80).toLowerCase().trim();
+  let hit = results.filter((r) => r.id === want);
+  if (!hit.length && (name || want)) {
+    const q = name || want.toLowerCase();
+    hit = results.filter((r) => (r.name || '').toLowerCase() === q);
+    if (!hit.length) hit = results.filter((r) => (r.name || '').toLowerCase().split(/\s+/)[0] === q.split(/\s+/)[0]);
+  }
+  if (!hit.length) throw new NotFound('That athlete is not on this team.');
+  if (hit.length > 1) throw new BadRequest(`More than one athlete matches: ${hit.map((r) => r.name).join(', ')}. Say which one.`);
+  // Kestrel AI never moves a captain's own level: that would skip the gates every athlete's own level change passes.
+  if (hit[0].id === me.id) throw new BadRequest('Your own level is not changed this way. Ask the owner or another captain, or set it in Team → Plan.');
+  const to = levelByMiles(await teamPlansOf(db, teamId), c?.to_level_miles);
+  const m = await setTeamLevel(db, teamId, me, hit[0].id, to, c?.reason);
+  return m.from_miles === m.to_miles ? `${m.name} is already on the ${m.to_miles} mi level` : `${m.name}: ${m.from_miles} → ${m.to_miles} mi level`;
+}
+const teamRefusal = (err) => err instanceof Forbidden || err instanceof NotFound || err instanceof BadRequest || err instanceof PlanFormatError || err instanceof PlanError;
+
+// What the coach sees of the teams this athlete leads (owner or captain) that have a plan: every level by weekly miles,
+// day by day, and who is on which level. Names and levels only: never a teammate's training, health or log.
+async function teamLeadContext(db, personId) {
+  const { results: teams } = await db.prepare(
+    "SELECT t.id, t.name, tp.data FROM team_members m JOIN teams t ON t.id = m.team_id JOIN team_plans tp ON tp.team_id = m.team_id WHERE m.person_id = ? AND (m.role = 'owner' OR m.leader = 1) ORDER BY m.joined_at LIMIT 3"
+  ).bind(personId).all();
+  if (!teams.length) return undefined;
+  const cell = (c) => (c.type === 'Off' ? 'Rest' : `${c.type === 'LR' ? 'Long run' : c.type} ${c.miles}`) + (c.notes ? ` (${c.notes})` : '');
+  return await Promise.all(teams.map(async (t) => {
+    const plans = JSON.parse(t.data);
+    const { results: roster } = await db.prepare(
+      `SELECT p.id, p.name, p.plan_rank, json_extract(p.settings, '$.personal_plan.plans') IS NOT NULL AS own,
+        (SELECT tm.team_id FROM team_members tm JOIN team_plans x ON x.team_id = tm.team_id WHERE tm.person_id = p.id ORDER BY tm.joined_at LIMIT 1) AS plan_team
+       FROM team_members m JOIN people p ON p.id = m.person_id WHERE m.team_id = ? ORDER BY p.name`
+    ).bind(t.id).all();
+    const keys = Object.keys(plans).map(Number).sort((a, b) => a - b);
+    return {
+      team_id: t.id, name: t.name,
+      levels: keys.map((k) => ({
+        weekly_miles: plans[k].weeks[0].miles, race_week_miles: plans[k].weeks[1].miles, taper_miles: plans[k].weeks[2].miles,
+        days: Object.fromEntries(plans[k].days.map((d) => [d.day, `${cell(d.cells[0])} / race week: ${cell(d.cells[1])} / taper: ${cell(d.cells[2])}`])),
+      })),
+      athletes: roster.map((r) => {
+        const onPlan = !r.own && r.plan_team === t.id;
+        return { id: r.id, name: r.name, level_miles: onPlan ? (plans[r.plan_rank] || plans[keys[0]]).weeks[0].miles : null, ...(onPlan ? {} : { note: r.own ? 'Uses their own plan' : 'Follows another team’s plan' }) };
+      }),
+    };
+  }));
 }
 
 // What kind of week each athlete is on, for the captain's Plan tab: this week and the next three. `auto` is what
@@ -757,12 +874,15 @@ async function coachContext(db, person) {
      WHERE e.type = 'meet' AND e.date >= ? AND e.date <= ? ORDER BY e.date LIMIT 12`
   ).bind(person.id, todayInTz(), addDays(todayInTz(), 60)).all();
   context.upcoming_meets = meets.results;
+  const lead = await teamLeadContext(db, person.id);
+  if (lead) context.team_lead = lead;
   return context;
 }
 
 // What the coach heard in the chat, checked and saved: a day's feel, sleep and a note; body map changes;
-// health status; a plan day or level change through the plan's guardrails. Refusals come back marked "!".
-async function applyCoachSaves(db, personId, out) {
+// health status; a plan day or level change through the plan's guardrails; for a team's owner or captain, changes to
+// the team plan and who is on which level (role checked here: `out` can come from the browser). Refusals come back marked "!".
+async function applyCoachSaves(db, personId, out, onScreenTeam = null) {
   const saved = [];
   const today = todayInTz();
   const log = out?.log;
@@ -811,6 +931,17 @@ async function applyCoachSaves(db, personId, out) {
     } catch (err) {
       if (!(err instanceof PlanError)) throw err;
       saved.push(`!${err.message}`);
+    }
+  }
+  const many = (v) => (Array.isArray(v) ? v : v && typeof v === 'object' ? [v] : []).slice(0, 10);
+  const teamPlan = many(out?.team_plan_change), teamLevel = many(out?.team_level_change);
+  if (teamPlan.length || teamLevel.length) {
+    const me = await db.prepare('SELECT id, name FROM people WHERE id = ?').bind(personId).first();
+    for (const [list, fn] of [[teamPlan, teamPlanChange], [teamLevel, teamLevelChange]]) {
+      for (const c of list) {
+        try { saved.push(await fn(db, me, await leadTeamFor(db, personId, c?.team_id, onScreenTeam), c)); }
+        catch (err) { if (!teamRefusal(err)) throw err; saved.push(`!${err.message}`); }
+      }
     }
   }
   return { saved: saved.filter((x) => !x.startsWith('!')), refused: saved.filter((x) => x.startsWith('!')).map((x) => x.slice(1)) };
@@ -1091,6 +1222,43 @@ const WATCH_TOOLS = [
   { name: 'get_fitness', description: "Fitness States: race estimates, VO2max estimate, weekly mileage, pace zones and what they're based on, plus runner_type: the athlete's strongest PRs and what kind of runner they are (sprinter, middle distance, distance, long distance), each PR compared with what their other PRs predict.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
 ];
 
+// For a team's owner and captains: the team plan and who is on which level. Kestrel checks the role on every call.
+const PLAN_DAY_TYPES = ['Easy', 'Recovery', 'Workout', 'Long run', 'Race', 'Shakeout', 'Cross-train', 'Off'];
+const TEAM_TOOLS = [
+  { name: 'get_team_plan', description: "Only for a team owner or captain: each team they lead that has a plan, its levels by weekly miles with every day (normal week / race week / taper), and each athlete's level. Names and levels only; teammates' training and health are never shared.", inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  {
+    name: 'change_team_plan', description: "Owner or captain only: change one day of one level of the team plan, or a level's weekly miles (new_level_miles: every day of the level scales with it, and levels stay in order). Levels are named by their weekly miles now (get_team_plan). Kestrel says why if it refuses.",
+    inputSchema: { type: 'object', required: ['level_miles'], properties: {
+      team_id: { type: 'string', description: 'From get_team_plan; may be left out if they lead one team' },
+      level_miles: { type: 'number', description: 'Which level, by its weekly miles now' },
+      day: { type: 'string', enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] },
+      week: { type: 'string', enum: ['normal', 'race', 'taper'], description: 'Which week of the level (default normal)' },
+      type: { type: 'string', enum: PLAN_DAY_TYPES }, miles: { type: 'string', description: 'Like "6" or "6 (3 WO)"' }, notes: { type: 'string' },
+      new_level_miles: { type: 'number', minimum: 1, maximum: 150, description: "Instead of a day: the level's new weekly miles" },
+    }, additionalProperties: false },
+  },
+  {
+    name: 'change_team_level', description: "Owner or captain only: put an athlete on another level of the team plan, named by its weekly miles. Only athletes who train from this team's plan can be moved.",
+    inputSchema: { type: 'object', required: ['to_level_miles'], properties: {
+      team_id: { type: 'string' }, person_id: { type: 'string', description: 'From get_team_plan' }, athlete: { type: 'string', description: 'Or their name' },
+      to_level_miles: { type: 'number' }, reason: { type: 'string' },
+    }, additionalProperties: false },
+  },
+];
+async function callTeamTool(db, person, name, args) {
+  try {
+    if (name === 'get_team_plan') return { teams: (await teamLeadContext(db, person.id)) || [], note: 'Only teams you own or captain, and only those with a plan, are listed.' };
+    const me = { id: person.id, name: person.name };
+    const teamId = await leadTeamFor(db, person.id, args?.team_id, null);
+    if (name === 'change_team_plan') return { saved: await teamPlanChange(db, me, teamId, args) };
+    if (name === 'change_team_level') return { saved: await teamLevelChange(db, me, teamId, args) };
+  } catch (err) {
+    if (teamRefusal(err)) throw new McpToolError(err.message);
+    throw err;
+  }
+  throw new McpToolError(`Unknown tool: ${name}`);
+}
+
 class McpToolError extends Error {}
 async function callWatchTool(env, person, name, args) {
   try {
@@ -1268,8 +1436,9 @@ async function route(request, env, url) {
     const person = await personForToken(db, mcp[1]);
     // 404, not 401: a 401 makes connectors go looking for an OAuth sign-in service, which this link does not use.
     if (!person) return json({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unknown Kestrel AI link. Make a new one in Kestrel > You > Settings.' } }, 404);
-    return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS], (name, args) =>
-      (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args) : callCoachTool(db, person, name, args)), mcp[1]);
+    return await serveMcp(request, [...WATCH_TOOLS, ...COACH_TOOLS, ...TEAM_TOOLS], (name, args) =>
+      (WATCH_TOOLS.some((t) => t.name === name) ? callWatchTool(env, person, name, args)
+        : TEAM_TOOLS.some((t) => t.name === name) ? callTeamTool(db, person, name, args) : callCoachTool(db, person, name, args)), mcp[1]);
   }
 
   // ---- Kestrel Lab: public reads, downloads and the developer API
@@ -1571,26 +1740,15 @@ async function route(request, env, url) {
       }
       const lm = sub.match(/^plan\/levels\/(.+)$/);
       if (lm && method === 'PUT') {
-        const target = await roleIn(db, teamId, lm[1]);
-        if (!target) throw new NotFound('Not on this team.');
-        const person = await loadPerson(db, lm[1]);
-        if (person.plan_source !== 'team' || person.plan_team_id !== teamId) throw new BadRequest('That athlete does not train from this team’s plan.');
-        const to = Number((await readJson(request)).level);
-        if (!person.plans[to]) throw new BadRequest('That level is not in the plan.');
-        const from = rankOf(person);
-        if (to !== from) {
-          await setRank(db, person, to, `Set by ${me.name || 'a captain'}.`, 'captain');
-          await db.prepare('UPDATE people SET coach_rank = ? WHERE id = ?').bind(to, person.id).run(); // the AI's step limit now counts from the captain's choice
-        }
+        await setTeamLevel(db, teamId, me, lm[1], Number((await readJson(request)).level));
         return json({ athletes: await teamLevels(db, teamId, today) });
       }
       if (sub === 'plan' && method === 'PUT') {
         const b = await readJson(request);
         let plans, spec = null; // null = a hand edit of the cells: keep the AI's brief so it can still be refined
         if (b.plan) { const x = expandPlanSpec(b.plan); plans = x.plans; spec = JSON.stringify(x.spec); }
-        else plans = validateTeamPlans(b.plans);
-        await db.prepare('INSERT INTO team_plans (team_id, data, spec, updated_by, updated_at) VALUES (?, ?, COALESCE(?, \'\'), ?, ?) ON CONFLICT(team_id) DO UPDATE SET data = excluded.data, spec = COALESCE(?, team_plans.spec), updated_by = excluded.updated_by, updated_at = excluded.updated_at')
-          .bind(teamId, JSON.stringify(plans), spec, me.id, Date.now(), spec).run();
+        else plans = b.plans;
+        await saveTeamPlans(db, teamId, me.id, plans, spec);
         return json({ ok: true });
       }
       if (sub === 'plan' && method === 'DELETE') { await db.prepare('DELETE FROM team_plans WHERE team_id = ?').bind(teamId).run(); return json({ ok: true }); }
@@ -1903,13 +2061,13 @@ async function route(request, env, url) {
     const person = await loadPerson(db, me.id);
     const history = Array.isArray(b.history) ? b.history : [{ role: 'user', text: b.question }];
     const out = await askCoach(env, db, person, history, await coachContext(db, person), today, BODY_PARTS);
-    return json({ answer: String(out?.answer || ''), ...(await applyCoachSaves(db, me.id, out)) });
+    return json({ answer: String(out?.answer || ''), ...(await applyCoachSaves(db, me.id, out, role ? teamId : null)) });
   }
   if (path === '/api/coach/prompt') {
     const person = await loadPerson(db, me.id);
     return json(coachChat(Array.isArray(b.history) ? b.history : [], await coachContext(db, person), today, BODY_PARTS));
   }
-  if (path === '/api/coach/apply') return json(await applyCoachSaves(db, me.id, b.out || {}));
+  if (path === '/api/coach/apply') return json(await applyCoachSaves(db, me.id, b.out || {}, role ? teamId : null));
   // Food estimates. Free default: the photo goes to Gemini here. Own model: the browser asks for the prompt, calls the
   // model itself, then sends the answer back to be checked. Nothing is saved: the runner edits and adds it in Fuel.
   if (path === '/api/ai/food' || path === '/api/ai/food/prompt' || path === '/api/ai/food/check') {
