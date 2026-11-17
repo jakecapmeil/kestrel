@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inverse hero, everywhere</title>
+<!-- Throwaway prototype for proposal P12 in docs/design-audit.md. Uses the real tokens; nothing here ships.
+     Open it from a server rooted at the repo (e.g. `npx serve .` then /docs/prototypes/inverse-hero.html). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../public/ds/tokens.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:400 var(--fs-subhead,15px)/1.45 var(--font-ui);}
+  .row{display:flex;gap:32px;flex-wrap:wrap;justify-content:center;padding:32px 16px 64px}
+  .phone{width:375px;max-width:100%;padding:16px;display:flex;flex-direction:column;gap:16px}
+  .label{font:600 11px var(--font-ui);letter-spacing:.07em;text-transform:uppercase;color:var(--text-2)}
+  h1{font:800 34px/1.05 var(--font-display);letter-spacing:-.025em;margin:0}
+  /* the pattern: one inverse block per screen, holding the screen's one subject and its one red action */
+  .hero{background:var(--inverse);color:var(--on-inverse);border-radius:var(--r-lg);padding:24px;display:flex;flex-direction:column;gap:8px}
+  .hero .eb{font:600 11px var(--font-ui);letter-spacing:.07em;text-transform:uppercase;opacity:.6}
+  .hero .big{font:800 clamp(34px,10vw,44px)/1.02 var(--font-display);letter-spacing:-.025em}
+  .hero .big span{font:500 .62em var(--font-mono);letter-spacing:0}
+  .hero p{margin:0;opacity:.75}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .btn{height:44px;padding:0 20px;border:0;border-radius:var(--r-pill);font:600 15px var(--font-ui);background:color-mix(in srgb,var(--on-inverse) 12%,transparent);color:inherit}
+  .btn.red{background:var(--accent);color:var(--on-accent)}
+  .bar{height:8px;border-radius:var(--r-pill);background:color-mix(in srgb,var(--on-inverse) 18%,transparent);overflow:hidden}
+  .bar i{display:block;height:100%;width:var(--w);background:var(--accent);border-radius:inherit}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;display:flex;flex-direction:column;gap:6px}
+  .card b{font:600 17px var(--font-ui)}
+  .card small{color:var(--text-2);font-size:13px}
+  .hawk{width:72px;height:72px;color:var(--text);--hawk-eye:var(--accent)}
+  .empty{align-items:center;text-align:center;padding:32px 20px}
+</style>
+</head>
+<body>
+<div class="row">
+  <section class="phone" aria-label="Run">
+    <span class="label">Run · this week</span>
+    <div class="hero">
+      <span class="eb">Week 6 of 12 · 35 mi level</span>
+      <div class="big">18 <span>of 36 mi</span></div>
+      <div class="bar" style="--w:50%"><i></i></div>
+      <p>3 runs left. Thursday's 6×800 is the key session.</p>
+      <div class="btns"><button class="btn red">Add a run</button><button class="btn">See the plan</button></div>
+    </div>
+    <div class="card"><b>Fitness</b><small>5K prediction 17:38, down 9 s this month</small></div>
+    <div class="card"><b>Workouts</b><small>Last: Tempo 20 min, 5:52/mi</small></div>
+  </section>
+
+  <section class="phone" aria-label="Body">
+    <span class="label">Body · today</span>
+    <div class="hero">
+      <span class="eb">Readiness</span>
+      <div class="big">Good <span>72</span></div>
+      <p>Resting HR 48, normal. Slept 7.5 h. Nothing marked on the body map.</p>
+      <div class="btns"><button class="btn">Log how you feel</button></div>
+    </div>
+    <div class="card"><b>Body map</b><small>Tap where it hurts</small></div>
+  </section>
+
+  <section class="phone" aria-label="Team, empty">
+    <span class="label">Team · no team yet (empty state with the hawk)</span>
+    <div class="card empty">
+      <svg class="hawk" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 30 L30 22 L58 10 L40 30 L50 54 L30 36 Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><circle cx="44" cy="20" r="3" fill="var(--hawk-eye)"/></svg>
+      <b>You're training solo</b>
+      <small>Join with a code from a teammate, or start your school's team.</small>
+      <div class="btns" style="justify-content:center"><button class="btn red" style="color:var(--on-accent)">Join a team</button><button class="btn" style="background:var(--surface-2)">Start one</button></div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
