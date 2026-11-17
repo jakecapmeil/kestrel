@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { accountAi, setChoice, saveProvider, removeProvider, modelFor, decryptKey, AiConfigError } from '../src/train/aiconfig.js';
 import { askCoach, reportSessions, askFood, testOwn, AiError } from '../src/train/gemini.js';
+import { modelList, CURATED } from '../src/train/aimodels.js';
 
 let failed = 0;
 const ok = (cond, msg) => { if (!cond) { failed++; console.error('FAIL', msg); } };
@@ -74,7 +75,8 @@ ok(out.answer === 'Solid week.', 'own Anthropic answer comes back');
 ok(c.url === 'http://anthropic.test/v1/messages' && c.headers['x-api-key'] === KEY && c.headers['anthropic-version'], 'calls Anthropic with the saved key');
 ok(!('anthropic-dangerous-direct-browser-access' in c.headers), 'no browser header: it is a server call');
 ok(c.body.model === 'claude-sonnet-5-5' && c.body.max_tokens >= 900, "uses the saved model and the job's own token budget");
-ok(c.body.system.includes('JSON Schema'), 'the schema is in the prompt');
+ok(c.body.tools?.[0]?.name === 'kestrel_reply' && c.body.tools[0].input_schema?.properties?.answer && !c.body.tool_choice, 'Claude is given a reply tool (not forced), carrying the schema');
+ok(c.body.max_tokens >= 900 + 4096, 'room is left for thinking');
 ok(usage(person.id) === 0, 'own-model calls do not spend the free daily calls');
 
 script = () => ({ status: 401, body: { error: { message: `invalid x-api-key ${KEY}` } } });
@@ -87,6 +89,19 @@ await rejects(() => ask(), /having trouble/, 'an overloaded provider says so, an
 ok(calls.every((x) => !x.url.includes('gemini.test')), 'an own-model failure never reaches the free default');
 script = () => ({ status: 200, body: { content: [{ type: 'text', text: '{"answer":"cut' }], stop_reason: 'max_tokens' } });
 await rejects(() => ask(), /ran out of room/, 'a cut-off answer says so');
+// Claude answers through the tool, in prose, or declines
+script = () => ({ status: 200, body: { content: [{ type: 'thinking', thinking: '' }, { type: 'tool_use', id: 't1', name: 'kestrel_reply', input: { answer: 'Try 12 x 200 m at 3K pace.', plan_change: { date: '2026-11-18', type: 'Workout', reason: 'Speed day' } } }], stop_reason: 'tool_use' } });
+out = await ask();
+ok(out.answer === 'Try 12 x 200 m at 3K pace.' && out.plan_change?.type === 'Workout', 'the tool call is the reply, including its other fields');
+script = () => ({ status: 200, body: { content: [{ type: 'text', text: "Here's a good session:\n\n- 12 x 200 m at 3K pace\n- 200 m jog between" }], stop_reason: 'end_turn' } });
+out = await ask();
+ok(/12 x 200 m/.test(out.answer), 'a plain-text answer is accepted as the answer, not an error');
+script = () => ({ status: 200, body: { content: [{ type: 'text', text: '{"answer": "oops' }], stop_reason: 'end_turn' } });
+await rejects(() => ask(), /couldn’t read/, 'broken JSON is still an error, not shown as the answer');
+script = () => ({ status: 200, body: { content: [], stop_reason: 'refusal' } });
+await rejects(() => ask(), /declined/, 'a refusal says so');
+script = () => ({ status: 200, body: { content: [{ type: 'tool_use', id: 't1', name: 'kestrel_reply', input: { answer: 'cut' } }], stop_reason: 'max_tokens' } });
+await rejects(() => ask(), /ran out of room/, 'a tool call cut off by max_tokens is not used');
 script = (url) => url.startsWith('http://gemini.test') ? geminiOk({ meal: 'toast' }) : null;
 const foodOut = await askFood(env, db, person, { system: 's', prompt: 'p' }, [], today);
 ok(String(foodOut).includes('toast'), 'per-job override: food stays on the free default');
@@ -164,6 +179,37 @@ const rep = await reportSessions(capEnv, db, other, sess, { rubric: 'r', maxHr: 
 ok(rep?.sessions?.[0]?.report === 'A fine run.', 'summaries run on the free default');
 ok(usage(other.id) === chatBefore && usage(`${other.id}#sync`) === 1, 'summaries are counted apart from chat');
 ok(await reportSessions({ ...capEnv, GEMINI_API_KEY: '', AI: undefined }, db, { id: 'p_three', settings: '{}' }, sess, { rubric: 'r', maxHr: 190, today }) === null, 'no AI on the server: summaries quietly skip');
+
+// ---- model lists: a reviewed list with no key, the provider's live list with one
+ok((await modelList(env, 'anthropic')).models.map((m) => m.id).join() === CURATED.anthropic.map((m) => m.id).join(), 'no key: the reviewed Anthropic list');
+ok(CURATED.openai.some((m) => m.id === 'gpt-6-luna') && !JSON.stringify(CURATED).includes('gpt-4o'), 'the reviewed OpenAI list has no retiring gpt-4o models');
+script = (url) => {
+  if (url.startsWith('http://anthropic.test/v1/models')) return { status: 200, body: { data: [
+    { id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', created_at: '2026-09-21T00:00:00Z', lifecycle: 'active', capabilities: { image_input: { supported: true } } },
+    { id: 'claude-sonnet-5-5', display_name: 'Claude Sonnet 5.5', created_at: '2026-09-28T00:00:00Z', lifecycle: 'active' },
+    { id: 'claude-opus-4-1', display_name: 'Claude Opus 4.1', created_at: '2025-08-05T00:00:00Z', lifecycle: 'retired' },
+    { id: 'claude-sonnet-5', display_name: 'Claude Sonnet 5', created_at: '2026-06-01T00:00:00Z', lifecycle: 'active' }] } };
+  if (url.startsWith('http://openai.test/v1/models')) return { status: 200, body: { data: [
+    { id: 'gpt-6-luna', created: 1790000000 }, { id: 'gpt-6-luna-2026-10-01', created: 1790000001 }, { id: 'gpt-6.1-terra', created: 1791000000 },
+    { id: 'text-embedding-4', created: 1 }, { id: 'gpt-realtime-2.1', created: 2 }, { id: 'whisper-1', created: 3 }, { id: 'gpt-5.6-sol', created: 1780000000 }, { id: 'gpt-image-2.6-sunburst', created: 4 }] } };
+  if (url.startsWith('http://gemini.test/v1beta/models')) return { status: 200, body: { models: [
+    { name: 'models/gemini-3.8-flash', displayName: 'Gemini 3.8 Flash', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-embedding-2', supportedGenerationMethods: ['embedContent'] },
+    { name: 'models/gemini-3.8-flash-tts', supportedGenerationMethods: ['generateContent'] },
+    { name: 'models/gemini-3-flash-preview', supportedGenerationMethods: ['generateContent'] }] } };
+  return null;
+};
+let ml = await modelList(env, 'anthropic', 'k1');
+ok(ml.live && ml.models.map((m) => m.id).join() === 'claude-sonnet-5-5,claude-opus-5-5,claude-sonnet-5', 'Anthropic: reviewed models the key can use first, retired ones dropped, newer extras after');
+ml = await modelList(env, 'openai', 'k1');
+ok(ml.models.map((m) => m.id).join() === 'gpt-6.1-terra,gpt-6-luna,gpt-5.6-sol', `OpenAI: chat models only, dated snapshots folded into their name (${ml.models.map((m) => m.id)})`);
+ml = await modelList(env, 'gemini', 'k1');
+ok(ml.models.map((m) => m.id).join() === 'gemini-3.8-flash,gemini-3-flash-preview', `Gemini: generateContent chat models only (${ml.models.map((m) => m.id)})`);
+script = () => ({ status: 401, body: { error: { message: 'bad key' } } });
+await rejects(() => modelList(env, 'anthropic', 'k1'), /rejected that key/, 'a wrong key is reported');
+script = () => ({ status: 500, body: {} });
+ml = await modelList(env, 'anthropic', 'k1');
+ok(!ml.live && ml.models.length === CURATED.anthropic.length && ml.error, 'a provider outage falls back to the reviewed list');
 
 if (failed) { console.error(`${failed} check(s) failed`); process.exit(1); }
 console.log('AI checks passed');

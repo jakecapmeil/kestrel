@@ -321,6 +321,14 @@ header .head-right{display:flex;align-items:center;gap:12px;}
 .k-task small{display:block;color:var(--text-2);font-size:var(--fs-sm);line-height:1.35;}
 .k-task select{width:100%;min-width:0;}
 @media (max-width:520px){ .k-task{grid-template-columns:minmax(0,1fr);} }
+.k-models{list-style:none;margin:10px 0;padding:0;display:grid;gap:8px;}
+.k-models li{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:var(--r-md);background:var(--surface-2);min-height:44px;}
+.k-models li > span{flex:1;min-width:0;}
+.k-models b{display:block;font-size:var(--fs-md);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.k-models small{display:block;color:var(--text-2);font-size:var(--fs-sm);}
+.k-models .k-link{min-height:44px;}
+.k-am .k-input{width:100%;}
+.k-am #kAmOther{margin-top:8px;}
 
 /* Sharing training for Kestrel's models */
 .k-share{display:grid;gap:8px;margin:10px 0;}

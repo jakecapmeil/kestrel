@@ -1,6 +1,6 @@
 // Kestrel Lab: browse, try, download and publish open running models, and get API keys to call them.
 // Routes: #/ (about), #/models (directory), #/m/<id>/<tab> (a model: card, files, try, api, lineage), #/new (publish),
-// #/import (from GitHub or Hugging Face), #/workbench (test models on your own PRs), #/providers (what powers Kestrel AI),
+// #/import (from GitHub or Hugging Face), #/workbench (test models on your own PRs), 
 // #/purposes (which model does which job in the app), #/docs (format + API), #/me (your models).
 // Signing in shares the main app's Supabase session (same site), so the Lab needs no sign-in of its own.
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm';
@@ -152,7 +152,6 @@ async function viewLab() {
         ${feat('GitHub and Hugging Face', 'Import a kestrel.json from either site, update from source later, or push your model back out with a model card.', '#/import')}
         ${feat('Wire models to jobs', 'Every model declares one purpose: race times, sprints, the marathon, a single course like Van Cortlandt, or coaching. Pick one per job.', '#/purposes')}
         ${feat('Open-weight coaching models', 'Lite, Standard and Pro language models fine-tuned to coach, from a phone-sized model to a power desktop. Each card says what it needs, how it scored on the Kestrel coach eval, and how to run it.', '#/models?task=coach')}
-        ${feat('Choose what powers the coach', 'Use your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer.', '#/providers')}
         ${feat('Call it from your code', 'Every model has a REST endpoint. Make an API key and predict from your own app or dashboard.', '#/docs')}
         ${feat('Publish your own', 'Upload a validated JSON file, add a model card and a data licence, and share it with every Kestrel athlete.', '#/new')}
       </div>
@@ -758,130 +757,6 @@ async function viewWorkbench() {
   }, e.currentTarget);
 }
 
-// ---------- providers: what powers Kestrel AI (the choice and the key live on your account)
-
-async function viewProviders() {
-  const me = await signedIn();
-  // The account holds the choice and the keys (a key is never sent back, only has_key and its last four characters).
-  let acct = me ? await attempt(() => api('/api/me/ai')) : null;
-  let state = AI.applyAccount(AI.loadAi(), acct);
-  const draw = (id) => {
-    const p = AI.PROVIDERS[id];
-    const c = AI.configFor(state, id);
-    const server = !!p.server;
-    const old = AI.legacyKeys(state);
-    render(html`
-    <div class="k-kicker">Providers</div>
-    ${title('What powers Kestrel AI')}
-    <div class="lab-page">
-      <form id="provForm" class="lab-panel">
-        <p class="k-small">Kestrel is the coach: the plan rules, your data and the safety checks are the same whatever model you choose. ${me ? 'Your choice and your API key are saved on your account, so they work on every device and for the run summaries written after a watch sync. The key is encrypted, sent only to the provider, and never shown again.' : 'Sign in to save a model to your account.'}</p>
-        ${old.length && me ? html`<div class="k-note"><p class="k-small u-m0"><b>${old.map((k) => AI.PROVIDERS[k.id].label.replace(/ \(.*\)$/, '')).join(', ')}</b> ${old.length > 1 ? 'keys are' : 'key is'} saved only in this browser. Move ${old.length > 1 ? 'them' : 'it'} to your account so it works everywhere.</p><div class="k-row"><button type="button" class="k-btn small primary" id="provMove">Move to my account</button></div></div>` : ''}
-        <label class="k-label" for="provP">Provider</label>
-        <select class="k-input" id="provP" name="provider">${Object.entries(AI.PROVIDERS).map(([k, v]) => html`<option value="${k}" ${k === id ? raw('selected') : ''}>${v.label}${k !== 'kestrel' && AI.usable(state).includes(k) ? ' ✓' : ''}</option>`)}</select>
-        ${p.kind === 'kestrel' ? html`<p class="k-small">Free, with a daily limit. Runs on Google Gemini or open-weight Llama on Cloudflare, whichever this server has set up.</p>` : html`
-        ${server ? '' : html`<label class="k-label" for="provB">Server address</label><input class="k-input" id="provB" name="base" value="${c.base}" placeholder="https://…/v1" required>`}
-        <label class="k-label" for="provM">Model</label><div class="k-row" style="margin-top:0"><input class="k-input grow" id="provM" name="model" value="${c.model}" list="provList" placeholder="model name" required><button type="button" class="k-btn small" id="provLs">List models</button></div><datalist id="provList"></datalist>
-        <label class="k-label" for="provK">API key ${p.needsKey ? '' : '(optional)'}</label><input class="k-input" id="provK" name="key" type="password" value="${server ? '' : c.key}" autocomplete="off" placeholder="${server && c.has_key ? `Saved on your account (…${c.last4}). Paste a new one to replace it.` : ''}" ${p.needsKey && !(server && c.has_key) ? raw('required') : ''}>
-        <p class="k-small">${p.keyUrl ? html`<a href="${p.keyUrl}" target="_blank" rel="noopener">Get a key</a>` : ''}${server && c.has_key ? html` · <button type="button" class="k-link danger" id="provForget">Delete the saved key</button>` : ''}</p>
-        ${p.local ? html`<p class="k-small">A model on your own computer stays in this browser: ${id === 'ollama'
-          ? html`install <a href="https://ollama.com" target="_blank" rel="noopener">Ollama</a>, run <code>ollama pull ${c.model || 'llama3.2'}</code>, then start it so this site may call it: <code>OLLAMA_ORIGINS=${location.origin} ollama serve</code>`
-          : html`in LM Studio, load a model, start the local server and turn on "Enable CORS".`}</p>` : ''}
-        ${!server && id === 'custom' ? html`<p class="k-small">This address and key stay in this browser. Kestrel’s server can’t reach a server on your network.</p>` : ''}`}
-        <div class="k-row"><button class="k-btn primary">Save and use</button><button type="button" class="k-btn" id="provTest">Test</button></div>
-        <p class="k-small" id="provMsg"></p>
-      </form>
-      <aside>
-        <section class="lab-panel"><h2>In use now</h2><p><b>${AI.describe(state)}</b></p>
-          ${Object.keys(state.tasks || {}).length ? html`<ul class="k-list">${Object.entries(state.tasks).map(([t, pid]) => html`<li>${AI.TASKS[t].label}: <b>${AI.describe({ ...state, provider: pid })}</b></li>`)}</ul>` : ''}
-          <p class="k-small">Kestrel's coach and the AI tools in the app use this, on every device. You can give each job its own model in You → Settings → Kestrel AI.</p></section>
-        <section class="lab-panel"><h2>Tools (MCP)</h2><p class="k-small">Kestrel also speaks MCP at <code>${location.origin}/mcp/</code>, so Claude, Cursor and other agents can read your plan and log with your sign-in.</p></section>
-      </aside>
-    </div>`);
-    const f = $('provForm');
-    const values = () => Object.fromEntries(new FormData(f).entries());
-    // A form's own pieces of a provider, without touching the account.
-    const local = () => {
-      const v = values();
-      return { base: (v.base || '').trim(), model: (v.model || '').trim(), key: (v.key || '').trim() };
-    };
-    $('provP').onchange = () => {
-      const keep = local();
-      if (!server && id !== 'kestrel') state = { ...state, configs: { ...state.configs, [id]: keep } };
-      draw($('provP').value);
-    };
-    if ($('provMove')) $('provMove').onclick = (e) => attempt(async () => {
-      const r = await AI.moveLegacyKeys(state, api);
-      state = r.state;
-      toast(r.failed.length ? r.failed.join(' ') : `Moved ${r.moved} key${r.moved === 1 ? '' : 's'} to your account.`, !!r.failed.length);
-      draw(id);
-    }, e.currentTarget);
-    // Save what is typed for a provider that runs on the server (nothing leaves the form without a key or model change).
-    const saveServer = async () => {
-      const v = local();
-      const body = { model: v.model };
-      if (v.key) body.key = v.key;
-      state = AI.applyAccount(state, await api(`/api/me/ai/provider/${id}`, { method: 'PUT', body: JSON.stringify(body) }));
-    };
-    f.onsubmit = (e) => {
-      e.preventDefault();
-      attempt(async () => {
-        if (id === 'kestrel') { state = await AI.saveChoice(state, api, { provider: 'kestrel' }); }
-        else if (server) {
-          if (!me) throw new Error('Sign in first: your key is saved on your account.');
-          await saveServer();
-          state = await AI.saveChoice(state, api, { provider: id });
-        } else {
-          state = { ...state, configs: { ...state.configs, [id]: local() } };
-          AI.saveAi(state);
-          if (me) state = await AI.saveChoice(state, api, { provider: id });
-          else state = { ...state, provider: id };
-        }
-        toast(`Kestrel AI now runs on ${AI.describe(state)}.`);
-        draw(id);
-      }, f.querySelector('.primary'));
-    };
-    if ($('provForget')) $('provForget').onclick = (e) => attempt(async () => {
-      if (!confirm('Delete the saved key? Anything using this provider goes back to Kestrel free.')) return;
-      state = AI.applyAccount(state, await api(`/api/me/ai/provider/${id}`, { method: 'DELETE' }));
-      toast('Key deleted.');
-      draw(id);
-    }, e.currentTarget);
-    $('provTest').onclick = async (e) => {
-      const msg = $('provMsg');
-      e.currentTarget.disabled = true;
-      msg.textContent = 'Testing…';
-      msg.className = 'k-small';
-      try {
-        let out;
-        if (id === 'kestrel') out = (await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: [{ role: 'user', text: 'Say hello to a runner in under ten words.' }] }) })).answer;
-        else if (server) {
-          if (!me) throw new Error('Sign in first: your key is saved on your account.');
-          // The test runs on the server with the saved key, exactly as a chat would: save what is typed first.
-          if (local().key || local().model !== c.model) await saveServer();
-          out = (await api('/api/me/ai/test', { method: 'POST', body: JSON.stringify({ provider: id }) })).text;
-        } else out = await AI.complete({ ...state, provider: id, configs: { ...state.configs, [id]: local() } }, 'Reply in under ten words.', [{ role: 'user', content: 'Say hello to a runner.' }]);
-        // A server provider's form is drawn again (the key box now shows what is saved), then the result is shown.
-        if (server) draw(id);
-        const done = $('provMsg');
-        done.textContent = `Works: "${String(out).slice(0, 120)}"`;
-        done.className = 'k-small k-good';
-      } catch (err) { msg.textContent = err.message; msg.className = 'k-small k-bad'; } finally { const b = $('provTest'); if (b) b.disabled = false; }
-    };
-    if ($('provLs')) $('provLs').onclick = async () => {
-      const msg = $('provMsg');
-      try {
-        const v = local();
-        const names = await AI.listModels(server ? state : { ...state, configs: { ...state.configs, [id]: v } }, id, { apiFetch: api, key: v.key });
-        $('provList').innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
-        msg.textContent = names.length ? `${names.length} models found. Start typing in Model to pick one.` : (server && !v.key && !c.has_key ? 'Paste your API key first, then list the models.' : 'The provider did not list any models.');
-        msg.className = 'k-small';
-      } catch (err) { msg.textContent = err.message; msg.className = 'k-small k-bad'; }
-    };
-  };
-  draw(state.provider);
-}
-
 // ---------- purposes
 
 // Every place in Kestrel where a model does a job, what is doing it for you now, and what else could.
@@ -922,7 +797,7 @@ async function viewPurposes() {
   const row = ([key, p]) => {
     if (key === 'course') return courseSection(p);
     if (p.model === false) {
-      return html`<div class="lab-purpose"><div><h3>${p.label}</h3><p class="k-small">Powered by a provider, not a weights file: the free Kestrel model, your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer. The plan rules and safety checks are the same whatever you choose.</p></div><a class="k-btn small" href="#/providers">Choose a provider</a></div>`;
+      return html`<div class="lab-purpose"><div><h3>${p.label}</h3><p class="k-small">Powered by a provider, not a weights file: the free Kestrel model, your own key (OpenAI, Anthropic, Gemini, OpenRouter, Groq) or a model on your own computer. The plan rules and safety checks are the same whatever you choose.</p></div><a class="k-btn small" href="/?ai=add">Choose a model</a></div>`;
     }
     const options = list.models.filter((m) => m.task === key);
     const cur = byId[picks[key]];
@@ -992,7 +867,8 @@ function route() {
   if (path === '/new') return viewNew();
   if (path === '/import') return viewImport();
   if (path === '/workbench') return viewWorkbench();
-  if (path === '/providers') return viewProviders();
+  // Which model powers Kestrel AI is set in the app now (You → Integrate → Add model).
+  if (path === '/providers') { location.replace('/?ai=add'); return; }
   if (path === '/purposes') return viewPurposes();
   if (path === '/docs') return viewDocs();
   if (path === '/me') return viewMe();

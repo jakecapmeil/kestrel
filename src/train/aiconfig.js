@@ -13,8 +13,8 @@ export class AiConfigError extends Error {}
 
 // Providers the server calls itself. Fixed addresses: a stored key is only ever sent to the provider's own host.
 export const SERVER_PROVIDERS = {
-  anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5', vision: true },
-  openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-4o-mini', vision: true },
+  anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5', vision: true },
+  openai: { label: 'OpenAI', kind: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-6.1-terra', vision: true },
   gemini: { label: 'Google Gemini', kind: 'gemini', base: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-flash-latest', vision: true },
   openrouter: { label: 'OpenRouter', kind: 'openai', base: 'https://openrouter.ai/api/v1', model: 'openrouter/auto', vision: true },
   groq: { label: 'Groq', kind: 'openai', base: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', vision: false },
@@ -57,7 +57,7 @@ export async function decryptKey(env, blob, personId) {
     const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(iv), additionalData: new TextEncoder().encode(personId) }, await aesKey(env), unb64(ct));
     return new TextDecoder().decode(pt);
   } catch {
-    throw new AiConfigError('Your saved API key could not be read. Enter it again in You → Settings → Kestrel AI.');
+    throw new AiConfigError('Your saved API key could not be read. Enter it again in You → Integrate.');
   }
 }
 
@@ -162,26 +162,3 @@ export async function keyFor(env, db, personId, id) {
   return row?.key_enc ? decryptKey(env, row.key_enc, personId) : '';
 }
 
-// A provider's model names, for the picker. Uses the saved key, or the one being typed (before it is saved).
-export async function listModels(env, id, key) {
-  const p = SERVER_PROVIDERS[id];
-  if (!p) return [];
-  if (!key) throw new AiConfigError(`Add your ${p.label} API key first.`);
-  const base = baseOf(env, id);
-  let res;
-  try {
-    if (p.kind === 'gemini') res = await fetch(`${base}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
-    else if (p.kind === 'anthropic') res = await fetch(`${base}/models?limit=100`, { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' } });
-    else res = await fetch(`${base}/models`, { headers: { Authorization: `Bearer ${key}` } });
-  } catch {
-    throw new AiConfigError(`Couldn’t reach ${p.label}.`);
-  }
-  if (!res.ok) {
-    let msg = '';
-    try { const j = await res.json(); msg = j.error?.message || (typeof j.error === 'string' ? j.error : '') || ''; } catch { /* no body */ }
-    throw new AiConfigError(`${p.label}${res.status === 401 || res.status === 403 ? ' rejected that key' : ` answered ${res.status}`}${msg ? `: ${msg.replace(key, '…').slice(0, 160)}` : ''}.`);
-  }
-  const data = await res.json();
-  if (p.kind === 'gemini') return (data.models || []).filter((m) => (m.supportedGenerationMethods || []).includes('generateContent')).map((m) => String(m.name).replace(/^models\//, ''));
-  return (data.data || []).map((m) => m.id).filter(Boolean).sort();
-}

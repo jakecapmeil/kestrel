@@ -32,7 +32,8 @@ import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/foo
 import { redeemCode, cleanAppearance, ACCENTS, SupportError } from './train/support.js';
 import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
 import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, testOwn, AiError } from './train/gemini.js';
-import { accountAi, setChoice, saveProvider, removeProvider, removeAll as removeAiAccount, listModels as listAiModels, keyFor as aiKeyFor, AiConfigError } from './train/aiconfig.js';
+import { accountAi, setChoice, saveProvider, removeProvider, removeAll as removeAiAccount, keyFor as aiKeyFor, AiConfigError } from './train/aiconfig.js';
+import { modelList } from './train/aimodels.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
@@ -2002,10 +2003,10 @@ async function route(request, env, url) {
   }
   // A small call on the saved key, so a wrong key or model shows up here and not in the middle of a chat.
   if (path === '/api/me/ai/test' && method === 'POST') return json({ text: String(await testOwn(env, db, me, str((await readJson(request)).provider, 20))).slice(0, 200) });
-  // The provider's model names, from the saved key or one being typed (nothing is saved by asking).
+  // The provider's models: a reviewed list, and with a key (saved, or one being typed) the provider's own live list.
   if (path === '/api/me/ai/models' && method === 'POST') {
     const b = await readJson(request), id = str(b.provider, 20);
-    return json({ models: await listAiModels(env, id, str(b.key, 400).replace(/\s+/g, '') || await aiKeyFor(env, db, me.id, id)) });
+    return json(await modelList(env, id, str(b.key, 400).replace(/\s+/g, '') || await aiKeyFor(env, db, me.id, id).catch(() => '')));
   }
   // Which AI writes run summaries: Kestrel's free default on the server, or the runner's own model in their browser
   // (their key never leaves it, so the app writes those reports and the server's sync leaves them to it).

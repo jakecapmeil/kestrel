@@ -22,9 +22,9 @@ export const ethosOf = (person) => { try { return JSON.parse(person?.settings ||
 
 // Free-tier quota is per model, so when one is used up (429) or down (5xx) the
 // next one answers. Best first. Override with GEMINI_MODELS (comma-separated,
-// e.g. "gemini-flash-latest,gemini-2.5-flash,gemini-2.5-flash-lite"); the
+// e.g. "gemini-flash-latest,gemini-3.6-flash,gemini-3.5-flash-lite"); the
 // older GEMINI_MODEL still works as a single first choice.
-const DEFAULT_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const DEFAULT_MODELS = ['gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.6-flash', 'gemini-3.5-flash-lite'];
 // A model that just ran out is skipped for a while instead of retried on every call.
 const COOLDOWN_MS = 60 * 1000;
 const DAILY_COOLDOWN_MS = 30 * 60 * 1000;
@@ -59,7 +59,7 @@ const bucketOf = (person, task) => (task === 'summary' ? `${person.id}#sync` : p
 async function checkCap(env, db, bucket, today) {
   const cap = dailyCap(env);
   const row = await db.prepare('SELECT calls FROM ai_usage WHERE person_id = ? AND date = ?').bind(bucket, today).first();
-  if ((row?.calls || 0) >= cap) throw new AiError(`You have used today's ${cap} free Kestrel AI calls. Pick your own model in You → Settings → Kestrel AI, or try tomorrow.`);
+  if ((row?.calls || 0) >= cap) throw new AiError(`You have used today's ${cap} free Kestrel AI calls. Pick your own model in You → Integrate, or try tomorrow.`);
 }
 async function charge(db, bucket, today) {
   await db.prepare(
@@ -74,11 +74,11 @@ async function run(env, db, person, task, today, params) {
   let sel;
   try { sel = await modelFor(env, db, person.id, task); } catch (err) { if (err instanceof AiConfigError) throw new AiError(err.message); throw err; }
   if (sel.mode === 'own') return await generateOwn(env, sel, params);
-  if (sel.mode === 'missing') throw new AiError(`${sel.label} is chosen but has no API key saved. Add it in You → Settings → Kestrel AI, or switch back to Kestrel free.`);
-  if (sel.mode === 'browser') throw new AiError('This job is set to a model that runs in your browser. Use the Kestrel app (not an API call) or pick another model in You → Settings → Kestrel AI.');
+  if (sel.mode === 'missing') throw new AiError(`${sel.label} is chosen but has no API key saved. Add it in You → Integrate, or switch back to Kestrel free.`);
+  if (sel.mode === 'browser') throw new AiError('This job is set to a model that runs in your browser. Use the Kestrel app (not an API call) or pick another model in You → Integrate.');
   if (!aiEnabled(env)) {
     if (params.quiet) return null;
-    throw new AiError('The free Kestrel AI is not set up on this server. Pick your own model in You → Settings → Kestrel AI.');
+    throw new AiError('The free Kestrel AI is not set up on this server. Pick your own model in You → Integrate.');
   }
   const bucket = bucketOf(person, task);
   await checkCap(env, db, bucket, today);
@@ -97,7 +97,7 @@ async function generateFree(env, { system, prompt, schema, maxTokens = 1024, ima
   let why = '';
   // Without a Gemini key the Gemini models are skipped; Workers AI still answers.
   // Photos need a model that can see: only Gemini here (the free fallbacks read text only).
-  if (images.length && !env.GEMINI_API_KEY) throw new AiError('Photo estimates need Kestrel’s Gemini key, which this server doesn’t have. Describe the food in words instead, or pick a model that can see images for Food photos in You → Settings → Kestrel AI.');
+  if (images.length && !env.GEMINI_API_KEY) throw new AiError('Photo estimates need Kestrel’s Gemini key, which this server doesn’t have. Describe the food in words instead, or pick a model that can see images for Food photos in You → Integrate.');
   for (const model of env.GEMINI_API_KEY ? order : []) {
     const res = await callModel(env, model, { system, prompt, schema, maxTokens, images });
     if (res.retry) {
@@ -126,7 +126,7 @@ async function generateFree(env, { system, prompt, schema, maxTokens = 1024, ima
     if (out !== undefined) return out;
     why = why || 'Workers AI';
   }
-  throw new AiError(busy ? 'The AI is busy (free-tier rate limit). Try again in a minute.' : `The AI request failed${why ? ` (${why})` : ''}. Try again, or pick your own model in You → Settings → Kestrel AI.`);
+  throw new AiError(busy ? 'The AI is busy (free-tier rate limit). Try again in a minute.' : `The AI request failed${why ? ` (${why})` : ''}. Try again, or pick your own model in You → Integrate.`);
 }
 
 // Workers AI's free quota is small and its JSON mode isn't guaranteed to follow
@@ -144,6 +144,14 @@ function parseLoose(text) {
 const withSchemaText = (system, schema) => (schema ? `${system}\n\nReply with ONLY a JSON object matching this JSON Schema:\n${JSON.stringify(schema)}` : system);
 const missingKey = (obj, schema) => !obj || typeof obj !== 'object' || (schema.required || []).some((k) => obj[k] === undefined);
 const THINK = /<think>[\s\S]*?<\/think>/g;
+// A model that answers in plain prose instead of the JSON asked for: when the only required field is "answer", the prose
+// is the answer (a reply that looks like broken JSON is not).
+function textAsAnswer(text, schema) {
+  const t = String(text || '').trim();
+  const req = schema?.required || [];
+  if (!t || req.length !== 1 || req[0] !== 'answer' || /^[{[]|```/.test(t)) return undefined;
+  return { answer: t };
+}
 
 // Same contract as callModel. JSON mode here doesn't enforce the schema, so it is spelled out in the prompt and the
 // answer is checked for the required keys; a provider that answers badly is skipped, not fatal.
@@ -177,7 +185,10 @@ async function callCompat(env, p, { system, prompt, schema, maxTokens }) {
   const text = (await res.json())?.choices?.[0]?.message?.content;
   if (!schema) return typeof text === 'string' && text.trim() ? { value: text.trim() } : { retry: true, cooldown: COOLDOWN_MS };
   const obj = parseLoose(text);
-  if (missingKey(obj, schema)) return { retry: true, cooldown: COOLDOWN_MS, why: `${p.name} answered badly` };
+  if (missingKey(obj, schema)) {
+    const prose = textAsAnswer(text, schema);
+    return prose ? { value: prose } : { retry: true, cooldown: COOLDOWN_MS, why: `${p.name} answered badly` };
+  }
   return { value: obj };
 }
 
@@ -200,7 +211,12 @@ async function callWorkersAi(env, { system, prompt, schema, maxTokens }) {
       const r = out?.response;
       if (!schema) { if (typeof r === 'string' && r.trim()) return r.trim(); continue; }
       const obj = r && typeof r === 'object' ? r : parseLoose(r);
-      if (missingKey(obj, schema)) { console.error('workers-ai answered badly', model, strict ? 'strict' : 'loose'); continue; }
+      if (missingKey(obj, schema)) {
+        console.error('workers-ai answered badly', model, strict ? 'strict' : 'loose');
+        const prose = !strict && typeof r === 'string' && textAsAnswer(r, schema);
+        if (prose) return prose;
+        continue;
+      }
       return obj;
     } catch (err) {
       console.error('workers-ai error', model, strict ? 'strict' : 'loose', String(err).slice(0, 300));
@@ -275,33 +291,40 @@ async function callModel(env, model, { system, prompt, schema, maxTokens, images
   if (!text) return { retry: true, cooldown: 0, why: data.promptFeedback?.blockReason ? `blocked (${data.promptFeedback.blockReason})` : cut ? 'Gemini ran out of room' : 'Gemini answered nothing' };
   if (!schema) return { value: text };
   const obj = parseLoose(text);
-  if (missingKey(obj, schema)) return { retry: true, cooldown: 0, why: cut ? 'Gemini ran out of room' : 'Gemini answered badly' };
+  if (missingKey(obj, schema)) {
+    const prose = !cut && textAsAnswer(text, schema);
+    return prose ? { value: prose } : { retry: true, cooldown: 0, why: cut ? 'Gemini ran out of room' : 'Gemini answered badly' };
+  }
   return { value: obj };
 }
 
 // ---- the runner's own model, called from here with the key saved on their account (never sent to a browser).
 // sel: { id, kind: 'anthropic' | 'openai' | 'gemini', base, model, key, label, vision } from aiconfig.js modelFor().
 // Failures say what the provider said; nothing falls back to the free default behind the runner's back.
-const REASONING = /^(o\d|gpt-5)/;
+const REASONING = /^(o\d|gpt-[5-9])/;
 
 function ownProblem(sel, status, detail) {
   const d = detail ? ` (${detail})` : '';
-  if (status === 401 || status === 403) return new AiError(`${sel.label} rejected your API key${d}. Enter it again in You → Settings → Kestrel AI.`);
-  if (status === 404) return new AiError(`${sel.label} doesn’t know the model “${sel.model}”${d}. Pick another model in You → Settings → Kestrel AI.`);
+  if (status === 401 || status === 403) return new AiError(`${sel.label} rejected your API key${d}. Enter it again in You → Integrate.`);
+  if (status === 404) return new AiError(`${sel.label} doesn’t know the model “${sel.model}”${d}. Pick another model in You → Integrate.`);
   if (status === 402 || status === 429) return new AiError(`${sel.label} says you are out of credit or over a rate limit${d}.`);
   if (status >= 500) return new AiError(`${sel.label} is having trouble right now${d}. Try again in a minute.`);
   return new AiError(`${sel.label} refused the request${d}.`);
 }
 
+// The tool Claude fills in to answer in the shape Kestrel needs. A tool call is always valid JSON, and unlike asking for JSON
+// in the prompt it can't come back as prose or as JSON wrapped in commentary. Forced tool use is refused by the newest
+// models, so the call is asked for in the prompt and prose is still accepted as the answer.
+const REPLY_TOOL = 'kestrel_reply';
+
 export async function generateOwn(env, sel, { system, prompt, schema, maxTokens = 1024, images = [] }) {
-  if (images.length && !sel.vision) throw new AiError(`${sel.label} can’t read photos. Describe the food in words, or pick a model that sees images for Food photos in You → Settings → Kestrel AI.`);
+  if (images.length && !sel.vision) throw new AiError(`${sel.label} can’t read photos. Describe the food in words, or pick a model that sees images for Food photos in You → Integrate.`);
   if (sel.kind === 'gemini') {
     const res = await callModel(env, sel.model, { system, prompt, schema, maxTokens, images }, { key: sel.key, base: sel.base });
     if (!res.retry) return res.value;
     if (res.status) throw ownProblem(sel, res.status, res.detail);
     throw new AiError(`${sel.label}: ${res.why || 'no answer'}. Try again.`);
   }
-  const sys = withSchemaText(system, schema);
   let res;
   try {
     if (sel.kind === 'anthropic') {
@@ -309,8 +332,12 @@ export async function generateOwn(env, sel, { system, prompt, schema, maxTokens 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': sel.key, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
-          model: sel.model, max_tokens: maxTokens + 1024, system: sys,
+          model: sel.model,
+          // The newest models think before they answer, and thinking counts against max_tokens.
+          max_tokens: maxTokens + 4096,
+          system: schema ? `${system}\n\nAnswer by calling the ${REPLY_TOOL} tool exactly once, with every field filled in as its description says.` : system,
           messages: [{ role: 'user', content: images.length ? [...images.map((i) => ({ type: 'image', source: { type: 'base64', media_type: i.mime, data: i.data } })), { type: 'text', text: prompt }] : prompt }],
+          ...(schema ? { tools: [{ name: REPLY_TOOL, description: 'Send your reply to the runner. Call it once with the whole reply.', input_schema: schema }] } : {}),
         }),
       });
     } else {
@@ -320,7 +347,7 @@ export async function generateOwn(env, sel, { system, prompt, schema, maxTokens 
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sel.key}`, 'X-Title': 'Kestrel' },
         body: JSON.stringify({
           model: sel.model,
-          messages: [{ role: 'system', content: sys }, { role: 'user', content: images.length ? [{ type: 'text', text: prompt }, ...images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] : prompt }],
+          messages: [{ role: 'system', content: withSchemaText(system, schema) }, { role: 'user', content: images.length ? [{ type: 'text', text: prompt }, ...images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } }))] : prompt }],
           // OpenAI's newer models only take max_completion_tokens (which also covers their reasoning) and the default temperature.
           [sel.id === 'openai' ? 'max_completion_tokens' : 'max_tokens']: maxTokens + (reasoning ? 4096 : 1024),
           ...(reasoning ? {} : { temperature: 0.4 }),
@@ -338,14 +365,30 @@ export async function generateOwn(env, sel, { system, prompt, schema, maxTokens 
     throw ownProblem(sel, res.status, detail);
   }
   const data = await res.json();
-  const cut = sel.kind === 'anthropic' ? data.stop_reason === 'max_tokens' : data.choices?.[0]?.finish_reason === 'length';
-  const raw = sel.kind === 'anthropic' ? (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('') : data.choices?.[0]?.message?.content;
+  const anth = sel.kind === 'anthropic';
+  const stop = anth ? data.stop_reason : data.choices?.[0]?.finish_reason;
+  const cut = anth ? stop === 'max_tokens' : stop === 'length';
+  const raw = anth ? (data.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('') : data.choices?.[0]?.message?.content;
   const text = String(raw || '').replace(THINK, '').trim();
-  if (!text) throw new AiError(`${sel.label} returned an empty answer.`);
-  if (!schema) return text;
+  if (anth && stop === 'refusal') throw new AiError(`${sel.label} declined that request. Try asking another way.`);
+  if (!schema) {
+    if (!text) throw new AiError(cut ? `${sel.label} ran out of room before it answered.` : `${sel.label} returned an empty answer.`);
+    return text;
+  }
+  // Claude: the tool call carries the reply; prose or JSON in the text is the fallback.
+  const call = anth ? (data.content || []).find((b) => b.type === 'tool_use' && b.name === REPLY_TOOL && b.input && typeof b.input === 'object') : null;
+  if (call && !cut) {
+    const out = { ...call.input };
+    if (!out.answer && text && (schema.required || []).includes('answer')) out.answer = text;
+    if (!missingKey(out, schema)) return out;
+  }
+  if (cut) throw new AiError(`${sel.label} ran out of room before it finished. Try again, or ask for something shorter.`);
   const obj = parseLoose(text);
-  if (missingKey(obj, schema)) throw new AiError(cut ? `${sel.label} ran out of room before it finished. Try again, or ask for something shorter.` : `${sel.label} answered in a form Kestrel couldn’t read. Try again, or pick a more capable model.`);
-  return obj;
+  if (!missingKey(obj, schema)) return obj;
+  const prose = textAsAnswer(text, schema);
+  if (prose) return prose;
+  console.error('own model answer unreadable', sel.id, sel.model, stop, text.slice(0, 200));
+  throw new AiError(`${sel.label} answered in a form Kestrel couldn’t read. Try again, or pick another model.`);
 }
 
 // For the Test button: one small call on the runner's own model.
@@ -503,7 +546,7 @@ export const SITE_GUIDE = `- Five tabs along the bottom. Schedule: the team cale
 - The runner's intake (context.runner: goals, why, what got in the way, their week, injuries, fueling, how they like to be coached) and their active goals (context.goals) are what they told Kestrel. Use them, and coach in the style they asked for.
 - Fueling: talk about eating enough for training (carbohydrate around runs, protein, fuel on long runs). Never suggest restricting food, a calorie deficit or losing weight. If they keep eating less than their training needs, or mention skipped meals, missed periods or stress fractures, point them kindly to a coach, a parent or a doctor; never diagnose. Each run gets a 1-10 difficulty from pace and heart rate.
 - Teams: anyone can start a team and others join with an invite code. Owners and captains edit the calendar and build the team plan, and change it (a day, a level's weekly miles) or put an athlete on another level in Team → Plan or by asking Kestrel AI. Coaches cannot see an athlete's training or health; teammates never see each other's health or log.
-- Kestrel AI runs on a free default model, or on the athlete's own API key (Anthropic, OpenAI, Gemini, OpenRouter, Groq) or a local model, set in You → Settings → Kestrel AI (or Kestrel Lab → Providers). The key is saved encrypted on their account, so it works on every device and for run summaries after a watch sync; a local model (Ollama, LM Studio) stays in one browser. Kestrel Lab is where prediction models can be compared, forked and published.
+- Kestrel AI runs on a free default model, or on the athlete's own API key (Anthropic, OpenAI, Gemini, OpenRouter, Groq) or a local model, added in You → Integrate → Add model. The key is saved encrypted on their account, so it works on every device and for run summaries after a watch sync; a local model (Ollama, LM Studio) stays in one browser. Kestrel Lab is where prediction models can be compared, forked and published.
 - Delete data: You → Settings → Delete my Kestrel data.`;
 
 // The coach chat as a prompt: the same for the free default and for any model the athlete brings.

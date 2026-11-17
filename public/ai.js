@@ -7,9 +7,9 @@
 
 export const PROVIDERS = {
   kestrel: { label: 'Kestrel (free default)', kind: 'kestrel', needsKey: false },
-  openai: { label: 'OpenAI', kind: 'openai', server: true, model: 'gpt-4o-mini', needsKey: true, vision: true, keyUrl: 'https://platform.openai.com/api-keys' },
-  anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', server: true, model: 'claude-haiku-5-5', needsKey: true, vision: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
-  gemini: { label: 'Google Gemini (your key)', kind: 'gemini', server: true, model: 'gemini-flash-latest', needsKey: true, vision: true, keyUrl: 'https://aistudio.google.com/apikey' },
+  openai: { label: 'OpenAI', kind: 'openai', server: true, model: 'gpt-6.1-terra', needsKey: true, vision: true, keyUrl: 'https://platform.openai.com/api-keys' },
+  anthropic: { label: 'Anthropic (Claude)', kind: 'anthropic', server: true, model: 'claude-sonnet-5-5', needsKey: true, vision: true, keyUrl: 'https://console.anthropic.com/settings/keys' },
+  gemini: { label: 'Google Gemini', kind: 'gemini', server: true, model: 'gemini-flash-latest', needsKey: true, vision: true, keyUrl: 'https://aistudio.google.com/apikey' },
   openrouter: { label: 'OpenRouter (hundreds of models)', kind: 'openai', server: true, model: 'openrouter/auto', needsKey: true, vision: true, keyUrl: 'https://openrouter.ai/keys' },
   groq: { label: 'Groq', kind: 'openai', server: true, model: 'llama-3.3-70b-versatile', needsKey: true, vision: false, keyUrl: 'https://console.groq.com/keys' },
   ollama: { label: 'Ollama (local, on this computer)', kind: 'openai', base: 'http://localhost:11434/v1', model: 'llama3.2', needsKey: false, local: true },
@@ -19,7 +19,7 @@ export const PROVIDERS = {
 
 const KEY = 'kestrel.ai';
 // OpenAI's reasoning models (o1, o3, o4-mini, gpt-5…) take only the default temperature; sending one is an error.
-const REASONING = /^(o\d|gpt-5)/;
+const REASONING = /^(o\d|gpt-[5-9])/;
 
 // What each Kestrel AI job runs on. '' means the main model.
 export const TASKS = {
@@ -187,7 +187,7 @@ export async function listModels(state, id, { apiFetch, key = '' } = {}) {
   if (!p || p.kind === 'kestrel') return [];
   if (isServer(id)) {
     if (!key && !state.configs[id]?.has_key) return [];
-    return (await apiFetch('/api/me/ai/models', { method: 'POST', body: JSON.stringify({ provider: id, key }) })).models || [];
+    return ((await apiFetch('/api/me/ai/models', { method: 'POST', body: JSON.stringify({ provider: id, key }) })).models || []).map((m) => m.id);
   }
   const c = configFor(state, id);
   const base = c.base.replace(/\/+$/, '');

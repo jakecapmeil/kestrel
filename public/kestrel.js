@@ -6,6 +6,9 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import * as AI from '/ai.js';
 
 const REPO_URL = 'https://github.com/jakecapmeil/kestrel';
+// Read before sign-in can rewrite the address.
+const WANT_ADD_MODEL = new URLSearchParams(location.search).get('ai') === 'add';
+if (WANT_ADD_MODEL) history.replaceState(null, '', location.pathname + location.hash);
 const $ = (id) => document.getElementById(id);
 const K = (window.KESTREL = {
   me: null, teams: [], teamId: null, role: null, levels: [], cfg: null, sb: null, started: false,
@@ -650,7 +653,7 @@ async function finishSetup() {
   await refreshMe();
   if (!K.teams.length && !store.get('kestrel.solo')) { renderTeamStart(); return; }
   await start();
-  offerPlan();
+  if (!WANT_ADD_MODEL) offerPlan();
 }
 
 // A new account has no training plan. Offer to build one with Kestrel AI the first time, once.
@@ -672,6 +675,12 @@ async function start() {
     await window.kestrelInit();
   } else {
     await window.kestrelReload();
+  }
+  // /?ai=add (from Kestrel Lab or the plan builder): straight to You → Integrate with the Add model dialog open, once.
+  if (WANT_ADD_MODEL && !K.addModelShown) {
+    K.addModelShown = true;
+    window.navGo?.('you', 'integrations');
+    openAddModel();
   }
 }
 
@@ -1471,7 +1480,7 @@ function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
   const d = dialog();
   d.classList.add('k-wide');
   d.innerHTML = html`<h2>${team ? 'Build the team training plan' : 'Build your training plan'}</h2>
-    <p class="k-small">${team ? 'Describe the season and refine it with Kestrel AI. The plan scales to every runner on the roster, so each athlete lands on the level that fits their fitness.' : 'Describe your goals and your week. Kestrel AI drafts a plan, you refine it, and your coach adapts it to how you feel.'} Powered by ${AI.describe(AI.forTask(K.ai, 'chat'))}. <a href="/lab#/providers" target="_blank" rel="noopener">Change</a></p>
+    <p class="k-small">${team ? 'Describe the season and refine it with Kestrel AI. The plan scales to every runner on the roster, so each athlete lands on the level that fits their fitness.' : 'Describe your goals and your week. Kestrel AI drafts a plan, you refine it, and your coach adapts it to how you feel.'} Powered by ${AI.describe(AI.forTask(K.ai, 'chat'))}. <a href="/?ai=add">Change</a></p>
     <div class="k-builder">
       <div class="k-chat" id="kPbChat" aria-live="polite"></div>
       <div class="k-pbpreview" id="kPbPreview"></div>
@@ -1923,12 +1932,31 @@ window.kestrelFoodEstimate = async ({ images = [], text = '', meal = '' }) => {
 
 // ---------- You > Settings: Kestrel AI, race models, account
 
+// ---------- Kestrel AI: which model runs each job, and adding one (You > Integrate)
+
+// Model names per provider, from the server: a reviewed list, plus the provider's live list once a key is saved.
+const modelCache = {};
+async function modelsFor(id, key = '') {
+  if (!key && modelCache[id]) return modelCache[id];
+  let out;
+  if (AI.PROVIDERS[id]?.server) out = await api('/api/me/ai/models', { method: 'POST', body: JSON.stringify({ provider: id, key }) });
+  else out = { models: (await AI.listModels({ ...K.ai }, id).catch(() => [])).map((m) => ({ id: m, label: m })) };
+  if (!key) modelCache[id] = out;
+  return out;
+}
+const shortName = (id) => (id === 'kestrel' ? 'Kestrel free' : AI.PROVIDERS[id].label.replace(/ \(.*\)$/, ''));
+// "Claude Sonnet 5.5" when the model is known, else "Anthropic · claude-x".
+function modelName(id) {
+  if (id === 'kestrel') return freeName();
+  const c = AI.configFor(K.ai, id);
+  const m = modelCache[id]?.models?.find((x) => x.id === c.model);
+  return m ? m.label : `${shortName(id)}${c.model ? ` · ${c.model}` : ''}`;
+}
 // Keys saved in this browser before keys moved to the account: offer to move them (nothing is sent until they say so).
 function moveKeysHtml() {
   const old = AI.legacyKeys(K.ai);
   if (!old.length) return '';
-  return html`<div class="k-note"><p class="k-small u-m0"><b>${old.map((k) => AI.PROVIDERS[k.id].label.replace(/ \(.*\)$/, '')).join(', ')}</b> ${old.length > 1 ? 'keys are' : 'key is'} saved only in this browser, so other devices and the sync can’t use ${old.length > 1 ? 'them' : 'it'}.</p>
-    <div class="k-row"><button class="k-btn small primary" type="button" data-movekeys>Move to my account</button></div></div>`.s;
+  return html`<div class="k-note k-row spread"><span class="k-small u-m0">${old.map((k) => shortName(k.id)).join(', ')} key saved in this browser only.</span><button class="k-btn small primary" type="button" data-movekeys>Move to account</button></div>`.s;
 }
 function wireMoveKeys(root, again) {
   const b = root.querySelector('[data-movekeys]');
@@ -1941,35 +1969,143 @@ function wireMoveKeys(root, again) {
     again();
   }, b);
 }
+// Everything that shows the AI choice draws again after a change.
+function redrawAi() {
+  if ($('kAiBody')) renderAiCard($('kAiBody'));
+  if ($('kPower')) window.kestrelRenderPower($('kPower'));
+}
+
+function renderAiCard(el) {
+  const ids = AI.usable(K.ai);
+  const added = ids.filter((id) => id !== 'kestrel');
+  el.innerHTML = html`${moveKeysHtml()}
+    <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><b>${info.label}</b>
+      <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${modelName(id)}</option>`)}</select></label>`)}</div>
+    ${added.length ? html`<ul class="k-models">${added.map((id) => html`<li><span><b>${modelName(id)}</b><small>${shortName(id)}${AI.configFor(K.ai, id).last4 ? ` · key …${AI.configFor(K.ai, id).last4}` : ''}</small></span>
+      <button type="button" class="k-link" data-edit="${id}">Edit</button><button type="button" class="k-link danger" data-remove="${id}">Remove</button></li>`)}</ul>` : ''}
+    <div class="k-row"><button type="button" class="k-btn primary small" id="kAddModel">Add model</button><button type="button" class="k-link" id="kEthosLink">Ethos</button></div>`.s;
+  $('kAddModel').onclick = () => openAddModel();
+  $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
+  wireMoveKeys(el, redrawAi);
+  el.querySelectorAll('[data-edit]').forEach((b) => { b.onclick = () => openAddModel(b.dataset.edit); });
+  el.querySelectorAll('[data-remove]').forEach((b) => { b.onclick = () => attempt(async () => {
+    const id = b.dataset.remove;
+    if (!confirm(`Remove ${modelName(id)}?${AI.PROVIDERS[id].server ? ' Its saved key is deleted.' : ''} Anything using it goes back to Kestrel free.`)) return;
+    if (AI.PROVIDERS[id].server) await putAi(`/api/me/ai/provider/${id}`, 'DELETE');
+    else {
+      const configs = { ...K.ai.configs };
+      delete configs[id];
+      K.ai = { ...K.ai, configs };
+      AI.saveAi(K.ai);
+      const tasks = Object.fromEntries(Object.entries(K.ai.tasks || {}).filter(([, v]) => v !== id));
+      await chooseAi({ provider: K.ai.provider === id ? 'kestrel' : K.ai.provider, tasks });
+    }
+    toast('Removed.');
+    redrawAi();
+  }, b); });
+  el.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
+    const t = sel.dataset.task, v = sel.value;
+    const tasks = { ...(K.ai.tasks || {}) };
+    if (v === K.ai.provider) delete tasks[t]; else tasks[t] = v;
+    await chooseAi({ tasks });
+    toast(`${AI.TASKS[t].label}: ${modelName(v)}.`);
+    redrawAi();
+  }); });
+  // Friendly model names arrive after the first draw.
+  added.filter((id) => AI.PROVIDERS[id].server && !modelCache[id]).forEach((id) => modelsFor(id).then(() => { if (el.isConnected) renderAiCard(el); }).catch(() => {}));
+}
+
+// Add or change a model: provider, key (or address for a model on this computer), model. It is checked with one small call
+// before it is used, and then runs everything (each job can still be pointed elsewhere above).
+function openAddModel(preset = '') {
+  const d = dialog();
+  const order = ['anthropic', 'openai', 'gemini', 'openrouter', 'groq', 'ollama', 'lmstudio', 'custom'];
+  const st = { id: preset || order.find((id) => !AI.usable(K.ai).includes(id)) || 'anthropic', list: [], busy: false };
+  const draw = () => {
+    const p = AI.PROVIDERS[st.id], c = AI.configFor(K.ai, st.id), server = !!p.server;
+    const current = c.model || p.model || '';
+    const opts = st.list.length ? st.list : [{ id: current, label: current }];
+    const known = opts.some((m) => m.id === current);
+    d.innerHTML = html`<h2>${preset ? 'Change model' : 'Add a model'}</h2>
+      <form id="kAmForm" class="k-am">
+        <label class="k-label" for="kAmProv">Provider</label>
+        <select class="k-input" id="kAmProv">${order.map((id) => html`<option value="${id}" ${id === st.id ? 'selected' : ''}>${AI.PROVIDERS[id].label}</option>`)}</select>
+        ${server ? html`<label class="k-label" for="kAmKey">API key ${p.keyUrl ? html`<a class="k-small" href="${p.keyUrl}" target="_blank" rel="noopener">Get one</a>` : ''}</label>
+          <input class="k-input" id="kAmKey" type="password" autocomplete="off" placeholder="${c.has_key ? `Saved (…${c.last4}). Paste a new one to replace it.` : 'Paste your key'}" ${c.has_key ? '' : raw('required')}>`
+        : html`<label class="k-label" for="kAmBase">Address</label><input class="k-input" id="kAmBase" value="${c.base}" placeholder="http://localhost:11434/v1" required>
+          ${st.id === 'custom' ? html`<label class="k-label" for="kAmKey">API key (optional)</label><input class="k-input" id="kAmKey" type="password" autocomplete="off" value="${c.key}">` : ''}`}
+        <label class="k-label" for="kAmModel">Model</label>
+        <select class="k-input" id="kAmModel">${opts.map((m) => html`<option value="${m.id}" ${m.id === current ? 'selected' : ''}>${m.label}${m.note ? ` · ${m.note}` : ''}</option>`)}${!known && current ? html`<option value="${current}" selected>${current}</option>` : ''}<option value="__other">Other…</option></select>
+        <input class="k-input" id="kAmOther" placeholder="model id" hidden>
+        <p class="k-small" id="kAmMsg" role="status"></p>
+        <div class="k-row"><button class="k-btn primary" id="kAmSave">Save</button><button type="button" class="k-btn" id="kAmCancel">Cancel</button></div>
+      </form>`.s;
+    const msg = (t, bad) => { const m = $('kAmMsg'); if (m) { m.textContent = t; m.className = `k-small${bad ? ' k-bad' : ''}`; } };
+    $('kAmCancel').onclick = () => d.close();
+    $('kAmProv').onchange = () => { st.id = $('kAmProv').value; st.list = []; draw(); load(); };
+    $('kAmModel').onchange = () => { $('kAmOther').hidden = $('kAmModel').value !== '__other'; };
+    // A pasted key lists that key's models right away (and says if the provider refuses it).
+    const keyEl = $('kAmKey');
+    let timer = 0;
+    if (keyEl && server) keyEl.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { if (keyEl.value.trim().length >= 20) load(keyEl.value.trim()); }, 500); };
+    async function load(key = '') {
+      if (!server && st.id === 'custom') return;
+      msg(key ? 'Checking the key…' : '');
+      try {
+        const r = await modelsFor(st.id, key);
+        if (!d.open || $('kAmProv')?.value !== st.id) return;
+        st.list = r.models || [];
+        const typed = $('kAmKey')?.value || '';
+        draw();
+        if ($('kAmKey')) $('kAmKey').value = typed;
+        msg(key && r.live ? 'Key works.' : r.error || '');
+      } catch (err) { msg(err.message, true); }
+    }
+    $('kAmForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = $('kAmSave');
+      btn.disabled = true;
+      try {
+        let model = $('kAmModel').value;
+        if (model === '__other') model = $('kAmOther').value.trim();
+        if (!model) throw new Error('Pick a model.');
+        msg('Saving and testing…');
+        if (server) {
+          const key = $('kAmKey').value.trim();
+          await putAi(`/api/me/ai/provider/${st.id}`, 'PUT', key ? { model, key } : { model });
+          const t = await api('/api/me/ai/test', { method: 'POST', body: JSON.stringify({ provider: st.id }) }).catch((err) => { throw new Error(`Saved, but the test failed: ${err.message}`); });
+          if (!t?.text) throw new Error('Saved, but the model returned nothing on the test.');
+        } else {
+          const cfg = { base: ($('kAmBase')?.value || '').trim(), model, key: ($('kAmKey')?.value || '').trim() };
+          K.ai = { ...K.ai, configs: { ...K.ai.configs, [st.id]: cfg } };
+          AI.saveAi(K.ai);
+          await AI.complete({ ...K.ai, provider: st.id }, 'Reply in under ten words.', [{ role: 'user', content: 'Say hello to a runner.' }]);
+        }
+        // It works: it runs everything now (a job pointed at another model keeps that model).
+        await chooseAi({ provider: st.id, tasks: Object.fromEntries(Object.entries(K.ai.tasks || {}).filter(([, v]) => v !== st.id)) });
+        const picked = st.list.find((m) => m.id === model)?.label || model;
+        delete modelCache[st.id];
+        d.close();
+        toast(`Kestrel AI now runs on ${picked}.`);
+        redrawAi();
+      } catch (err) {
+        msg(err.message, true);
+        redrawAi();
+      } finally {
+        if (btn.isConnected) btn.disabled = false;
+      }
+    };
+  };
+  draw();
+  d.showModal();
+  // First draw: the reviewed list (with the saved key, the live one).
+  modelsFor(st.id).then((r) => { if (d.open) { st.list = r.models || []; draw(); } }).catch(() => {});
+}
+window.kestrelAddModel = openAddModel;
 
 window.kestrelRenderSettings = async () => {
   const ai = $('kAiBody');
-  if (ai) {
-    // One choice per job. The list is the free default plus every model set up in Kestrel Lab.
-    const ids = AI.usable(K.ai);
-    const nameOf = (id) => id === 'kestrel' ? freeName() : AI.describe({ ...K.ai, provider: id });
-    ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up (your own API key, or a model on your own computer). Your choice and your key are saved on your account, so they work on every device, and your run summaries are written on your model right after a watch sync.</p>
-      ${moveKeysHtml()}
-      <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><span><b>${info.label}</b><small>${info.hint}</small></span>
-        <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${nameOf(id)}</option>`)}</select></label>`)}</div>
-      <div class="k-row spread"><span class="k-small u-m0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Add or change keys</a></div>
-      <details class="k-help"><summary>Which should I pick?</summary><ul class="k-list">
-        <li><b>Kestrel free</b> costs nothing and needs no setup. Here it runs on ${K.cfg?.freeModel === 'Gemini' ? 'Google Gemini’s free tier, which allows Google to use what is sent to improve its products' : 'open-weight models on Cloudflare'}; Kestrel sends what each job needs (your first name, training, profile details, and what you type or photograph), never your email.${K.cfg?.freeVision ? '' : ' It can’t read food photos yet: describe food in words, or pick a model that sees images.'}</li>
-        <li><b>Your own key</b> (Anthropic, OpenAI, Gemini, OpenRouter, Groq) keeps your data out of free-tier training and is usually a little sharper. Kestrel saves the key encrypted on your account and sends it only to that provider; you can delete it any time. You pay the provider directly; a month of chat is typically cents.</li>
-        <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer, but only that browser can reach it, so run summaries are written by the app while it is open. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
-        <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>
-      <div class="k-row spread"><span class="k-small u-m0">Every model follows the Kestrel ethos, plus your own.</span><button type="button" class="k-btn small" id="kEthosLink">Ethos</button></div>
-      <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
-    $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
-    wireMoveKeys(ai, () => window.kestrelRenderSettings());
-    ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
-      const t = sel.dataset.task, v = sel.value;
-      const tasks = { ...(K.ai.tasks || {}) };
-      if (v === K.ai.provider) delete tasks[t]; else tasks[t] = v;
-      await chooseAi({ tasks });
-      toast(`${AI.TASKS[t].label}: ${nameOf(v)}.`);
-    }); });
-  }
+  if (ai) renderAiCard(ai);
   const ds = $('kShareBody');
   if (ds) renderShareCard(ds);
   const sp = $('kSupportBody');
@@ -1980,8 +2116,7 @@ window.kestrelRenderSettings = async () => {
     const lists = await attempt(() => Promise.all(Object.keys(labels).map((t) => api(`/api/models?task=${t}`))));
     if (lists) {
       const nameOf = (t, i) => { const m = lists[i].models.find((x) => x.id === K.me.models[t]); return m ? `${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}` : 'Kestrel default'; };
-      mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Kestrel picks a good one for each. To compare models on your own results, switch, fork or publish one, open Kestrel Lab.</p>
-        ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small u-m0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
+      mb.innerHTML = html`${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small u-m0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
         <div class="k-row"><a class="k-btn small primary" href="/lab#/workbench">Test models on my PRs</a><a class="k-btn small" href="/lab#/models">Browse models</a></div>`.s;
     }
   }
@@ -2014,58 +2149,24 @@ window.kestrelRenderSettings = async () => {
   }
 };
 
-// The model picker above the chat: any provider that can run (the free default, or one with a key saved in Lab), then
-// that provider's models, listed live from its API. The choice is the chat job's model (Lab → AI per job shows it too).
-const modelCache = {};
-const CHAT_MODEL = {
-  // Only models that chat: OpenAI's list also has embeddings, speech, images and moderation.
-  openai: (id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/(embed|audio|tts|transcribe|realtime|image|search|moderation|instruct|dall-e|whisper|codex)/.test(id),
-  anthropic: (id) => /^claude-/.test(id),
-  // Gemini's list also has image, speech, embedding and robotics models, which can't answer a chat.
-  gemini: (id) => /^(gemini|gemma)/.test(id) && !/(embed|image|tts|audio|live|robotics|aqa|imagen|veo|computer-use|learnlm)/.test(id),
-};
-// Shown when the provider's list can't be read (no network, or a key without list access).
-const FALLBACK_MODELS = { anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] };
-async function modelsFor(id) {
-  if (modelCache[id]) return modelCache[id];
-  let list = [];
-  try { list = await AI.listModels(K.ai, id, { apiFetch: api }); } catch { list = []; }
-  list = list.filter(CHAT_MODEL[id] || (() => true));
-  if (!list.length) list = FALLBACK_MODELS[id] || [];
-  return (modelCache[id] = list);
-}
-window.kestrelChatModel = () => AI.describe(AI.forTask(K.ai, 'chat'));
+// The model picker above the chat: any model that can run, as one list. Picking one makes it the chat job's model.
+window.kestrelChatModel = () => modelName(AI.forTask(K.ai, 'chat').provider);
 window.kestrelRenderPower = async (el) => {
   if (!el) return;
-  const cur = AI.forTask(K.ai, 'chat');
+  const cur = AI.forTask(K.ai, 'chat').provider;
   const ids = AI.usable(K.ai);
-  const model = cur.provider === 'kestrel' ? '' : AI.configFor(K.ai, cur.provider).model;
-  const name = (id) => AI.PROVIDERS[id].label.replace(/ \(.*\)$/, '');
-  el.innerHTML = html`<label class="k-pick"><span>Model</span><select class="k-input k-sm" id="kChatProv" aria-label="Who powers Kestrel AI chat">${ids.map((id) => html`<option value="${id}" ${id === cur.provider ? 'selected' : ''}>${id === 'kestrel' ? 'Kestrel free' : name(id)}</option>`)}</select></label>
-    ${cur.provider === 'kestrel' ? '' : html`<select class="k-input k-sm" id="kChatModel" aria-label="Model"><option value="${model}">${model || 'Choose a model'}</option></select>`}
-    <a class="k-link" href="/lab#/providers">${ids.length > 1 ? 'Keys' : 'Add an API key'}</a>
-    ${AI.legacyKeys(K.ai).length ? html`<button class="k-link" type="button" data-movekeys>Move my saved key to my account</button>` : ''}`.s;
-  wireMoveKeys(el, () => window.kestrelRenderPower(el));
-  // The pick is saved on the account, so every device and the server's own jobs see it.
-  const set = (provider, mdl) => attempt(async () => {
-    if (mdl && provider !== 'kestrel') {
-      if (AI.PROVIDERS[provider].server) await putAi(`/api/me/ai/provider/${provider}`, 'PUT', { model: mdl });
-      else { K.ai = { ...K.ai, configs: { ...K.ai.configs, [provider]: { ...(K.ai.configs[provider] || {}), model: mdl } } }; AI.saveAi(K.ai); }
-    }
+  el.innerHTML = html`<select class="k-input k-sm" id="kChatProv" aria-label="Model for Kestrel AI chat">${ids.map((id) => html`<option value="${id}" ${id === cur ? 'selected' : ''}>${id === 'kestrel' ? 'Kestrel free' : modelName(id)}</option>`)}</select>
+    <button type="button" class="k-link" id="kChatAdd">Add model</button>
+    ${AI.legacyKeys(K.ai).length ? html`<button class="k-link" type="button" data-movekeys>Move saved key to account</button>` : ''}`.s;
+  wireMoveKeys(el, redrawAi);
+  $('kChatAdd').onclick = () => openAddModel();
+  $('kChatProv').onchange = (e) => attempt(async () => {
     const tasks = { ...(K.ai.tasks || {}) };
-    if (provider === K.ai.provider) delete tasks.chat; else tasks.chat = provider;
+    if (e.target.value === K.ai.provider) delete tasks.chat; else tasks.chat = e.target.value;
     await chooseAi({ tasks });
-    window.kestrelRenderPower(el);
+    redrawAi();
   });
-  $('kChatProv').onchange = (e) => set(e.target.value);
-  const sel = $('kChatModel');
-  if (sel) {
-    const list = await modelsFor(cur.provider);
-    if (!sel.isConnected || !list.length) return;
-    const all = [...new Set([model, ...list].filter(Boolean))];
-    sel.innerHTML = html`${model ? '' : html`<option value="">Choose a model</option>`}${all.map((m) => html`<option value="${m}" ${m === model ? 'selected' : ''}>${m}</option>`)}`.s;
-    sel.onchange = () => set(cur.provider, sel.value);
-  }
+  ids.filter((id) => AI.PROVIDERS[id].server && !modelCache[id]).forEach((id) => modelsFor(id).then(() => { if (el.isConnected) window.kestrelRenderPower(el); }).catch(() => {}));
 };
 
 // ---------- Kestrel AI: the coach chat with whatever model the athlete picked

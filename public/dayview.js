@@ -305,7 +305,7 @@
   function reportHtml(s, busy){
     const t = window.kestrelAiTask?.('summary');
     if(s.manual) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Logged by hand. Ask Kestrel AI about it in chat.</p>`;
-    if(!s.report && t?.serverOwn && !t.own) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Your run summaries are set to your own model, which this device doesn’t have. Switch them back to Kestrel free, or set up your model in Kestrel Lab here.</p><button type="button" class="sm-btn" data-a="sumKestrel">Use Kestrel free for summaries</button>`;
+    if(!s.report && t?.serverOwn && !t.own) return `<div class="kd-eb">${eye}Kestrel AI on this session</div><p class="kv-hint">Your run summaries are set to your own model, which this device doesn’t have. Switch them back to Kestrel free, or add your model here in You → Integrate.</p><button type="button" class="sm-btn" data-a="sumKestrel">Use Kestrel free for summaries</button>`;
     const btn = t?.own ? `<button type="button" class="sm-btn" data-a="sessReport" data-v="${esc(s.key)}"${busy ? ' disabled' : ''}>${busy ? 'Writing…' : s.report ? 'Rewrite' : 'Write it'} with ${esc(t.label)}</button>` : '';
     return `<div class="kd-eb">${eye}Kestrel AI on this session</div>${s.report ? `<p>${esc(s.report)}</p>` : `<p class="kv-hint">${t?.own ? 'Not written yet.' : 'Kestrel AI writes this once the run syncs and it reviews your day.'}</p>`}${btn}`;
   }
