@@ -452,6 +452,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
   };
   const finishEdit = async () => {
     K.me = await save();
+    syncAi();
     await api('/api/me/goal-from-profile', { method: 'POST', body: '{}' }).catch(() => null);
     K.ob = null;
     toast('Runner profile saved.');
@@ -468,6 +469,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
     if (!d.age) { toast('Please confirm your age to continue.', true); return; }
     attempt(async () => {
       K.me = await save();
+      syncAi();
       const watch = d.watch;
       K.ob = null;
       await api('/api/me/goal-from-profile', { method: 'POST', body: '{}' }).catch(() => null);
@@ -611,8 +613,12 @@ function renderTeamStart(back = false) {
 
 // ---------- signed in
 
+// The account holds what powers Kestrel AI: whenever the signed-in person is (re)loaded, K.ai follows it.
+function syncAi() { K.ai = AI.applyAccount(K.ai, K.me?.ai); }
+
 async function refreshMe() {
   K.me = await api('/api/me');
+  syncAi();
   K.teams = K.me.teams;
   const ids = K.teams.map((t) => t.id);
   const saved = store.get('kestrel.team');
@@ -627,6 +633,7 @@ function afterSignIn() {
     const me = await attempt(() => api('/api/me'));
     if (!me) { renderLanding(); return; }
     K.me = me;
+    syncAi();
     if (!me.user.age_ok) { renderOnboarding(); return; }
     await finishSetup();
   })().finally(() => { signingIn = null; });
@@ -693,6 +700,7 @@ window.kestrelSaveProfile = async (fields) => {
   const me = await attempt(() => api('/api/me', { method: 'PUT', body: JSON.stringify(fields) }));
   if (!me) return null;
   K.me = me;
+  syncAi();
   renderHeader();
   return me;
 };
@@ -1561,14 +1569,14 @@ function openPlanBuilder({ team, current, onSaved, replacesEdits }) {
   }, e.currentTarget);
 }
 
-// -> { answer, plan?, preview? }. Free Kestrel AI answers on the server; any other model is called from the browser.
+// -> { answer, plan?, preview? }. The server answers on the free default or on the account's own key; only a model in this browser is called from here.
 async function planAsk(base, turns, current, documents = []) {
   const history = turns.map((t) => ({ role: t.role === 'user' ? 'user' : 'kai', text: t.text }));
   const ai = AI.forTask(K.ai, 'chat');
-  if (ai.provider === 'kestrel') return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
+  if (AI.onServer(ai)) return await api(`${base}/chat`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
   const chat = await api(`${base}/prompt`, { method: 'POST', body: JSON.stringify({ history, current, documents }) });
   const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the person reads; include "plan" only when you are giving or changing the plan.\n${JSON.stringify(chat.schema)}`;
-  const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }]);
   const out = parseLoose(text) || { answer: text };
   const res = { answer: typeof out.answer === 'string' && out.answer.trim() ? out.answer : String(text) };
   if (out.plan) {
@@ -1719,14 +1727,14 @@ window.kestrelPlaceForm = (place = null) => {
   }, e.currentTarget);
 };
 
-// -> { answer, events, places }. The free Kestrel AI answers on the server; any other model is called from the browser.
+// -> { answer, events, places }. The server answers on the free default or on the account's own key; only a model in this browser is called from here.
 async function scheduleAsk(text, documents) {
   const body = JSON.stringify({ text, documents });
   const ai = AI.forTask(K.ai, 'chat');
-  if (ai.provider === 'kestrel') return await api('/api/schedule/import', { method: 'POST', body });
+  if (AI.onServer(ai)) return await api('/api/schedule/import', { method: 'POST', body });
   const chat = await api('/api/schedule/import/prompt', { method: 'POST', body });
   const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema.\n${JSON.stringify(chat.schema)}`;
-  const out = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const out = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }]);
   const obj = parseLoose(out) || {};
   return { answer: typeof obj.answer === 'string' ? obj.answer : '', events: Array.isArray(obj.events) ? obj.events : [], places: Array.isArray(obj.places) ? obj.places : [] };
 }
@@ -1878,32 +1886,61 @@ window.kestrelShareCard = renderShareCard;
 window.kestrelMe = () => K.me;
 
 // Own-model helpers for the screens: a session's report, and food estimates. Free Kestrel AI runs on the server.
-window.kestrelAiTask = (task) => { const a = AI.forTask(K.ai, task); return { provider: a.provider, own: a.provider !== 'kestrel', serverOwn: task === 'summary' && K.me?.ai_tasks?.summary === 'own', label: a.provider === 'kestrel' ? freeName() : AI.describe(a), vision: a.provider !== 'kestrel' || !!K.cfg?.freeVision }; };
+window.kestrelAiTask = (task) => {
+  const a = AI.forTask(K.ai, task), free = a.provider === 'kestrel', server = AI.onServer(a);
+  // own: this browser runs it (a local model set up here). serverOwn: it is set to a local model this browser doesn't have.
+  const here = !server && AI.usable(K.ai).includes(a.provider);
+  return { provider: a.provider, own: here, serverOwn: !server && !here, label: free ? freeName() : AI.describe(a), vision: free ? !!K.cfg?.freeVision : server ? !!AI.PROVIDERS[a.provider].vision : true };
+};
 function freeName() { return `Kestrel free (${K.cfg?.freeModel || 'free model'})`; }
-// Run summaries: the choice is stored explicitly here and on the server, so it never drifts with the main model.
-async function setSummary(v) {
-  K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), summary: v } };
-  AI.saveAi(K.ai);
-  const r = await api('/api/me/ai-tasks', { method: 'PUT', body: JSON.stringify({ summary: v === 'kestrel' ? 'kestrel' : 'own' }) });
-  if (K.me) K.me.ai_tasks = r.ai_tasks;
+// Run summaries: the choice is kept on the account, so the server's sync writes them on the same model.
+async function putAi(path, method, body) {
+  const acct = await api(path, { method, body: JSON.stringify(body) });
+  if (K.me) K.me.ai = acct;
+  syncAi();
+  return acct;
 }
+// The main model and the per-job overrides, saved on the account. A job set to the main model has no override.
+async function chooseAi({ provider = K.ai.provider, tasks = K.ai.tasks } = {}) {
+  return putAi('/api/me/ai/choice', 'PUT', { provider, tasks });
+}
+async function setSummary(v) { await chooseAi({ tasks: { ...(K.ai.tasks || {}), summary: v } }); }
 window.kestrelSetSummary = setSummary;
 window.kestrelWriteReport = async (key) => {
   const ai = AI.forTask(K.ai, 'summary');
-  if (ai.provider === 'kestrel') throw new Error('Run summaries are on Kestrel free: they are written when your runs sync.');
+  if (AI.onServer(ai)) throw new Error('Run summaries are written on Kestrel’s server when your runs sync.');
   const chat = await api('/api/ai/session/prompt', { method: 'POST', body: JSON.stringify({ key }) });
-  const text = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+  const text = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt }]);
   return (await api('/api/ai/session/save', { method: 'POST', body: JSON.stringify({ key, main_id: chat.main_id, report: text }) })).report;
 };
 window.kestrelFoodEstimate = async ({ images = [], text = '', meal = '' }) => {
   const ai = AI.forTask(K.ai, 'food');
-  if (ai.provider === 'kestrel') return await api('/api/ai/food', { method: 'POST', body: JSON.stringify({ images, text, meal }) });
+  if (AI.onServer(ai)) return await api('/api/ai/food', { method: 'POST', body: JSON.stringify({ images, text, meal }) });
   const chat = await api('/api/ai/food/prompt', { method: 'POST', body: JSON.stringify({ text, meal, photos: images.length }) });
-  const out = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt, images }], { apiFetch: api });
+  const out = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt, images }]);
   return await api('/api/ai/food/check', { method: 'POST', body: JSON.stringify({ out: parseLoose(out) || {} }) });
 };
 
 // ---------- You > Settings: Kestrel AI, race models, account
+
+// Keys saved in this browser before keys moved to the account: offer to move them (nothing is sent until they say so).
+function moveKeysHtml() {
+  const old = AI.legacyKeys(K.ai);
+  if (!old.length) return '';
+  return html`<div class="k-note"><p class="k-small u-m0"><b>${old.map((k) => AI.PROVIDERS[k.id].label.replace(/ \(.*\)$/, '')).join(', ')}</b> ${old.length > 1 ? 'keys are' : 'key is'} saved only in this browser, so other devices and the sync can’t use ${old.length > 1 ? 'them' : 'it'}.</p>
+    <div class="k-row"><button class="k-btn small primary" type="button" data-movekeys>Move to my account</button></div></div>`.s;
+}
+function wireMoveKeys(root, again) {
+  const b = root.querySelector('[data-movekeys]');
+  if (!b) return;
+  b.onclick = () => attempt(async () => {
+    const r = await AI.moveLegacyKeys(K.ai, api);
+    K.ai = r.state;
+    if (K.me) K.me.ai = { provider: K.ai.provider, tasks: K.ai.tasks, providers: Object.fromEntries(Object.entries(K.ai.configs).filter(([id, c]) => AI.PROVIDERS[id]?.server && c.has_key).map(([id, c]) => [id, { model: c.model, has_key: true, last4: c.last4 }])) };
+    toast(r.failed.length ? r.failed.join(' ') : `Moved ${r.moved} key${r.moved === 1 ? '' : 's'} to your account.`, !!r.failed.length);
+    again();
+  }, b);
+}
 
 window.kestrelRenderSettings = async () => {
   const ai = $('kAiBody');
@@ -1911,23 +1948,25 @@ window.kestrelRenderSettings = async () => {
     // One choice per job. The list is the free default plus every model set up in Kestrel Lab.
     const ids = AI.usable(K.ai);
     const nameOf = (id) => id === 'kestrel' ? freeName() : AI.describe({ ...K.ai, provider: id });
-    ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up in Kestrel Lab (your own key, or a model on your own computer). Keys stay in this browser.</p>
+    ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up (your own API key, or a model on your own computer). Your choice and your key are saved on your account, so they work on every device, and your run summaries are written on your model right after a watch sync.</p>
+      ${moveKeysHtml()}
       <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><span><b>${info.label}</b><small>${info.hint}</small></span>
         <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${nameOf(id)}</option>`)}</select></label>`)}</div>
-      <div class="k-row spread"><span class="k-small u-m0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Set up in Lab</a></div>
+      <div class="k-row spread"><span class="k-small u-m0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Add or change keys</a></div>
       <details class="k-help"><summary>Which should I pick?</summary><ul class="k-list">
         <li><b>Kestrel free</b> costs nothing and needs no setup. Here it runs on ${K.cfg?.freeModel === 'Gemini' ? 'Google Gemini’s free tier, which allows Google to use what is sent to improve its products' : 'open-weight models on Cloudflare'}; Kestrel sends what each job needs (your first name, training, profile details, and what you type or photograph), never your email.${K.cfg?.freeVision ? '' : ' It can’t read food photos yet: describe food in words, or pick a model that sees images.'}</li>
-        <li><b>Your own key</b> (Anthropic, OpenAI, Gemini paid, OpenRouter) keeps your data out of free-tier training and is usually a little sharper. You pay the provider directly; a month of chat is typically cents.</li>
-        <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
+        <li><b>Your own key</b> (Anthropic, OpenAI, Gemini, OpenRouter, Groq) keeps your data out of free-tier training and is usually a little sharper. Kestrel saves the key encrypted on your account and sends it only to that provider; you can delete it any time. You pay the provider directly; a month of chat is typically cents.</li>
+        <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer, but only that browser can reach it, so run summaries are written by the app while it is open. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
         <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>
       <div class="k-row spread"><span class="k-small u-m0">Every model follows the Kestrel ethos, plus your own.</span><button type="button" class="k-btn small" id="kEthosLink">Ethos</button></div>
       <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
     $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
+    wireMoveKeys(ai, () => window.kestrelRenderSettings());
     ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
       const t = sel.dataset.task, v = sel.value;
-      // Run summaries are written on the server unless they run on the runner's own model.
-      if (t === 'summary') await setSummary(v);
-      else { K.ai = { ...K.ai, tasks: { ...(K.ai.tasks || {}), [t]: v === K.ai.provider ? undefined : v } }; if (K.ai.tasks[t] === undefined) delete K.ai.tasks[t]; AI.saveAi(K.ai); }
+      const tasks = { ...(K.ai.tasks || {}) };
+      if (v === K.ai.provider) delete tasks[t]; else tasks[t] = v;
+      await chooseAi({ tasks });
       toast(`${AI.TASKS[t].label}: ${nameOf(v)}.`);
     }); });
   }
@@ -1982,13 +2021,15 @@ const CHAT_MODEL = {
   // Only models that chat: OpenAI's list also has embeddings, speech, images and moderation.
   openai: (id) => /^(gpt-|o\d|chatgpt-)/.test(id) && !/(embed|audio|tts|transcribe|realtime|image|search|moderation|instruct|dall-e|whisper|codex)/.test(id),
   anthropic: (id) => /^claude-/.test(id),
+  // Gemini's list also has image, speech, embedding and robotics models, which can't answer a chat.
+  gemini: (id) => /^(gemini|gemma)/.test(id) && !/(embed|image|tts|audio|live|robotics|aqa|imagen|veo|computer-use|learnlm)/.test(id),
 };
 // Shown when the provider's list can't be read (no network, or a key without list access).
 const FALLBACK_MODELS = { anthropic: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] };
 async function modelsFor(id) {
   if (modelCache[id]) return modelCache[id];
   let list = [];
-  try { list = await AI.listModels(K.ai, id); } catch { list = []; }
+  try { list = await AI.listModels(K.ai, id, { apiFetch: api }); } catch { list = []; }
   list = list.filter(CHAT_MODEL[id] || (() => true));
   if (!list.length) list = FALLBACK_MODELS[id] || [];
   return (modelCache[id] = list);
@@ -2002,16 +2043,20 @@ window.kestrelRenderPower = async (el) => {
   const name = (id) => AI.PROVIDERS[id].label.replace(/ \(.*\)$/, '');
   el.innerHTML = html`<label class="k-pick"><span>Model</span><select class="k-input k-sm" id="kChatProv" aria-label="Who powers Kestrel AI chat">${ids.map((id) => html`<option value="${id}" ${id === cur.provider ? 'selected' : ''}>${id === 'kestrel' ? 'Kestrel free' : name(id)}</option>`)}</select></label>
     ${cur.provider === 'kestrel' ? '' : html`<select class="k-input k-sm" id="kChatModel" aria-label="Model"><option value="${model}">${model || 'Choose a model'}</option></select>`}
-    <a class="k-link" href="/lab#/providers">${ids.length > 1 ? 'Keys' : 'Add an API key'}</a>`.s;
-  const set = (provider, mdl) => {
+    <a class="k-link" href="/lab#/providers">${ids.length > 1 ? 'Keys' : 'Add an API key'}</a>
+    ${AI.legacyKeys(K.ai).length ? html`<button class="k-link" type="button" data-movekeys>Move my saved key to my account</button>` : ''}`.s;
+  wireMoveKeys(el, () => window.kestrelRenderPower(el));
+  // The pick is saved on the account, so every device and the server's own jobs see it.
+  const set = (provider, mdl) => attempt(async () => {
+    if (mdl && provider !== 'kestrel') {
+      if (AI.PROVIDERS[provider].server) await putAi(`/api/me/ai/provider/${provider}`, 'PUT', { model: mdl });
+      else { K.ai = { ...K.ai, configs: { ...K.ai.configs, [provider]: { ...(K.ai.configs[provider] || {}), model: mdl } } }; AI.saveAi(K.ai); }
+    }
     const tasks = { ...(K.ai.tasks || {}) };
     if (provider === K.ai.provider) delete tasks.chat; else tasks.chat = provider;
-    const configs = { ...K.ai.configs };
-    if (mdl && provider !== 'kestrel') configs[provider] = { ...(configs[provider] || {}), model: mdl };
-    K.ai = { ...K.ai, tasks, configs };
-    AI.saveAi(K.ai);
+    await chooseAi({ tasks });
     window.kestrelRenderPower(el);
-  };
+  });
   $('kChatProv').onchange = (e) => set(e.target.value);
   const sel = $('kChatModel');
   if (sel) {
@@ -2038,10 +2083,10 @@ function parseLoose(text) {
 window.kestrelAsk = async (turns) => {
   try {
     const ai = AI.forTask(K.ai, 'chat');
-    if (ai.provider === 'kestrel') return await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: turns }) });
+    if (AI.onServer(ai)) return await api('/api/coach/ask', { method: 'POST', body: JSON.stringify({ history: turns }) });
     const chat = await api('/api/coach/prompt', { method: 'POST', body: JSON.stringify({ history: turns }) });
     const system = `${chat.system}\n\nReply with ONLY a JSON object (no prose around it) matching this JSON Schema. "answer" is what the athlete reads; fill the other fields only when the rules above say to.\n${JSON.stringify(chat.schema)}`;
-    const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }], { apiFetch: api });
+    const text = await AI.complete(ai, system, [{ role: 'user', content: chat.prompt }]);
     const out = parseLoose(text) || { answer: text };
     if (typeof out.answer !== 'string' || !out.answer.trim()) out.answer = typeof text === 'string' ? text : 'The model returned nothing.';
     const applied = await api('/api/coach/apply', { method: 'POST', body: JSON.stringify({ out }) });

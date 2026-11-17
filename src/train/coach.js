@@ -174,7 +174,7 @@ export async function vo2rFor(db, personId) {
   try { return (await getFitness(db, personId, todayInTz()))?.vo2r || null; } catch { return null; }
 }
 
-async function maxHrFor(db, personId) {
+export async function maxHrFor(db, personId) {
   const row = await db.prepare('SELECT MAX(max_hr) AS m FROM workouts WHERE person_id = ?').bind(personId).first();
   return row?.m && row.m >= 160 ? row.m : DEFAULT_MAX_HR;
 }

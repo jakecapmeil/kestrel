@@ -13,7 +13,9 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell, addLevel, removeLevel } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { COACH_RUBRIC } from './train/coach.js';
+import { maxHrFor, vo2rFor } from './train/coach.js';
+import { SUMMARY_RUBRIC, activityFacts, templateReport, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
+import { paceStructure } from './train/grade.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
@@ -29,7 +31,8 @@ import { sessionReportChat, ethosOf, askFood } from './train/gemini.js';
 import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/food.js';
 import { redeemCode, cleanAppearance, ACCENTS, SupportError } from './train/support.js';
 import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
-import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, AiError } from './train/gemini.js';
+import { aiEnabled, askCoach, coachChat, askPlan, planChat, parseProfileText, askSchedule, scheduleChat, testOwn, AiError } from './train/gemini.js';
+import { accountAi, setChoice, saveProvider, removeProvider, removeAll as removeAiAccount, listModels as listAiModels, keyFor as aiKeyFor, AiConfigError } from './train/aiconfig.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
@@ -102,6 +105,9 @@ async function meView(db, me) {
     event_models: settingsOf(me).event_models || {},
     data_share: shareOf(settingsOf(me)),
     ai_tasks: settingsOf(me).ai_tasks || {},
+    // What powers Kestrel AI on this account: the choice and which providers have a key saved (never the key).
+    // (If migration 0013 hasn't been applied yet, sign-in still works and everyone is on the free default.)
+    ai: await accountAi(db, me.id).catch((err) => { console.error('ai account', String(err)); return { provider: 'kestrel', tasks: {}, providers: {}, saved: false }; }),
     supporter: settingsOf(me).supporter ? { tier: settingsOf(me).supporter.tier, since: settingsOf(me).supporter.since } : null,
     appearance: settingsOf(me).appearance || { accent: 'kestrel' },
     teams,
@@ -322,9 +328,20 @@ async function deleteMe(db, me) {
   for (const t of results) await removeMember(db, t.team_id, me.id);
   await db.prepare("UPDATE teams SET created_by = (SELECT person_id FROM team_members WHERE team_id = teams.id AND role = 'owner') WHERE created_by = ?").bind(me.id).run();
   await db.prepare('DELETE FROM api_keys WHERE person_id = ?').bind(me.id).run();
-  await db.prepare('DELETE FROM ai_usage WHERE person_id = ?').bind(me.id).run();
+  await db.prepare('DELETE FROM ai_usage WHERE person_id IN (?, ?)').bind(me.id, `${me.id}#sync`).run();
+  await removeAiAccount(db, me.id);
   for (const t of ['xtrain', 'food_log', 'goals', 'run_shoes', 'kai_chats']) await db.prepare(`DELETE FROM ${t} WHERE person_id = ?`).bind(me.id).run();
   await db.prepare('DELETE FROM people WHERE id = ?').bind(me.id).run();
+}
+
+// The facts about a session's activities, from the runner's own paces and heart rate (train/runfacts.js).
+async function sessionFacts(db, personId, sess) {
+  const ctx = { maxHr: await maxHrFor(db, personId), vo2r: await vo2rFor(db, personId) };
+  return (sess.activities || []).map((a) => activityFacts({
+    id: a.id, name: a.name, type: a.category === 'crosstrain' ? '' : 'Run', category: a.category, miles: a.miles, sec: a.moving_sec,
+    avg_hr: a.avg_hr, max_hr: a.max_hr, elev_ft: a.elev_ft, laps: a.laps, track: a.track,
+    paceInfo: paceStructure({ distance_mi: a.miles, moving_sec: a.moving_sec, avg_hr: a.avg_hr, laps: a.laps, elev_gain_ft: a.elev_ft, name: a.name }, ctx),
+  }, ctx));
 }
 
 // ------------------------------------------------------------------ teams
@@ -1968,6 +1985,28 @@ async function route(request, env, url) {
     await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...st, data_share }), me.id).run();
     return json({ data_share });
   }
+  // What powers Kestrel AI. The choice and the API keys live on the account (keys encrypted, never sent back), so they
+  // follow the runner to every browser and app, and the server runs every job on them, run summaries after a sync included.
+  if (path === '/api/me/ai' && method === 'GET') return json(await accountAi(db, me.id));
+  const aiProv = path.match(/^\/api\/me\/ai\/provider\/([a-z]{3,12})$/);
+  if (aiProv && method === 'PUT') {
+    const b = await readJson(request);
+    await saveProvider(env, db, me.id, aiProv[1], { model: b.model, key: b.key });
+    return json(await accountAi(db, me.id));
+  }
+  if (aiProv && method === 'DELETE') { await removeProvider(db, me.id, aiProv[1]); return json(await accountAi(db, me.id)); }
+  if (path === '/api/me/ai/choice' && method === 'PUT') {
+    const b = await readJson(request);
+    await setChoice(db, me.id, { provider: b.provider, tasks: b.tasks });
+    return json(await accountAi(db, me.id));
+  }
+  // A small call on the saved key, so a wrong key or model shows up here and not in the middle of a chat.
+  if (path === '/api/me/ai/test' && method === 'POST') return json({ text: String(await testOwn(env, db, me, str((await readJson(request)).provider, 20))).slice(0, 200) });
+  // The provider's model names, from the saved key or one being typed (nothing is saved by asking).
+  if (path === '/api/me/ai/models' && method === 'POST') {
+    const b = await readJson(request), id = str(b.provider, 20);
+    return json({ models: await listAiModels(env, id, str(b.key, 400).replace(/\s+/g, '') || await aiKeyFor(env, db, me.id, id)) });
+  }
   // Which AI writes run summaries: Kestrel's free default on the server, or the runner's own model in their browser
   // (their key never leaves it, so the app writes those reports and the server's sync leaves them to it).
   if (path === '/api/me/ai-tasks' && method === 'PUT') {
@@ -2419,11 +2458,14 @@ async function route(request, env, url) {
     const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
     const sess = day?.sessions?.find((x) => x.key === key);
     if (!sess) throw new NotFound('That session is gone.');
-    if (path.endsWith('prompt')) return json({ ...sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, COACH_RUBRIC), main_id: sess.main_id });
+    const facts = await sessionFacts(db, me.id, sess);
+    if (path.endsWith('prompt')) return json({ ...sessionReportChat({ ...(await loadPerson(db, me.id)), settings: me.settings }, day, sess, SUMMARY_RUBRIC, facts), main_id: sess.main_id });
     // A sync between the prompt and the save can renumber the day's sessions: only save onto the session the prompt was for.
     if (str(b.main_id, 80) !== String(sess.main_id)) throw new BadRequest('That day changed while the report was being written. Open the session and try again.');
-    const report = str(b.report, 1200).trim();
+    let report = str(b.report, 1200).trim();
     if (report.length < 20) throw new BadRequest('The model returned too little to keep.');
+    // A note with a number that isn't in the facts is replaced by the written one, as on the server's own summaries.
+    if (ungroundedNumbers(report, allowedNumbers(facts)).length) report = templateReport({ main_id: sess.main_id, facts });
     await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
     return json({ ok: true, report });
   }
@@ -2466,7 +2508,7 @@ export default {
       if (err instanceof AuthError) return json({ error: err.message, auth: true }, 401, cors);
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
-      if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof LogError
+      if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof AiConfigError || err instanceof LogError
         || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError || err instanceof SupportError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);

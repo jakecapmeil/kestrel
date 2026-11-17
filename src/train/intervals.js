@@ -9,9 +9,11 @@
 // it's set up, refines the category and writes one report per session.
 // Scoring is the same logWorkouts path Kai in Claude uses. Old history is
 // imported in chunks with rules only, so it never spends the AI quota.
-import { logWorkouts, todayInTz, COACH_RUBRIC, bodyStatus, backfillConditions, recheckCategories } from './coach.js';
+import { logWorkouts, todayInTz, bodyStatus, backfillConditions, recheckCategories } from './coach.js';
 import { saveDay, sessionsOf } from './log.js';
 import { reportSessions, AiError } from './gemini.js';
+import { SUMMARY_RUBRIC, activityFacts, needsModel, templateReport, templateDayLine, allowedNumbers, ungroundedNumbers } from './runfacts.js';
+import { modelFor, accountAi } from './aiconfig.js';
 import { recomputeFitness } from './fitness.js';
 import { gradeRun, paceStructure } from './grade.js';
 import { VC_RE } from './conditions.js';
@@ -185,6 +187,78 @@ function dayTypes(category, fast) {
   return avg <= 450 ? ['track'] : avg >= 1400 ? ['threshold'] : ['intervals'];
 }
 
+// The reports and day lines for freshly synced runs. Returns { ai: { sessions, days }, aiNote, counts }.
+export async function summarizeRuns(env, db, person, recent, { maxHr, today, recentFrom }) {
+  const pseudo = recent.map((r) => ({
+    strava_id: String(r.a.id), date: r.date, category: r.category, distance_mi: r.a.distance / 1609.344,
+    moving_sec: r.a.moving_time, elapsed_sec: r.a.elapsed_time, start_local: r.start, name: r.a.name || '',
+  }));
+  // What the athlete's teams had on those days, so a race can be told from a workout.
+  const calendar = (await db.prepare(
+    `SELECT e.date, e.type, e.title, e.location, l.name AS loc_name FROM events e
+     JOIN team_members tm ON tm.team_id = e.team_id AND tm.person_id = ?
+     LEFT JOIN locations l ON l.id = e.location_id WHERE e.date >= ?`
+  ).bind(person.id, recentFrom).all()).results
+    .filter((e) => pseudo.some((p) => p.date === e.date))
+    .map((e) => ({ date: e.date, type: e.type, title: e.title, location: e.loc_name || e.location || '' }));
+  const body = await bodyStatus(db, person.id);
+  const byDate = new Map();
+  pseudo.forEach((p) => byDate.set(p.date, [...(byDate.get(p.date) || []), p]));
+  // Each session with the facts Kestrel worked out from the runner's own paces and heart rate.
+  const sessions = [];
+  for (const [date, list] of byDate) {
+    for (const sess of sessionsOf(list)) {
+      sessions.push({
+        key: sess.key, date, main_id: String(sess.main_id),
+        facts: sess.activities.map((x) => {
+          const r = recent.find((y) => String(y.a.id) === x.id);
+          return { ...activityFacts({
+            id: r.a.id, name: r.a.name || '', type: r.a.type, category: r.category, miles: r.a.distance / 1609.344, sec: r.a.moving_time,
+            avg_hr: r.a.average_heartrate, max_hr: r.a.max_heartrate, elev_ft: r.a.total_elevation_gain != null ? r.a.total_elevation_gain * 3.281 : null,
+            laps: r.laps, paceInfo: r.pace, track: r.track, gps: r.gps, note: (r.a.description || '').slice(0, 300),
+          }, { maxHr }), start: r.start };
+        }),
+      });
+    }
+  }
+  const meetDates = new Set(calendar.filter((e) => e.type === 'meet').map((e) => e.date));
+  const hasBody = !!(body?.marked?.length || (body?.health && body.health !== 'healthy'));
+  // A day with anything for the model goes whole, so its one-line summary covers every run that day.
+  const modelDates = new Set(sessions.filter((s) => needsModel(s, { meetDates, hasBody })).map((s) => s.date));
+  const toModel = sessions.filter((s) => modelDates.has(s.date));
+  const routine = sessions.filter((s) => !modelDates.has(s.date));
+  let model = null;
+  let aiNote = '';
+  if (toModel.length) {
+    try {
+      model = await reportSessions(env, db, person, toModel.map((s) => ({ key: s.key, date: s.date, main_id: s.main_id, activities: s.facts })), { rubric: SUMMARY_RUBRIC, maxHr, today, body, calendar });
+    } catch (err) {
+      aiNote = `${err instanceof AiError ? err.message : 'AI unavailable'} Kestrel wrote the notes itself.`;
+    }
+  }
+  // The model's notes, kept only when every number in them is in the facts it was given; otherwise the written note stands in.
+  const out = { sessions: [], days: [] };
+  let wrote = 0, replaced = 0;
+  for (const s of toModel) {
+    const o = (model?.sessions || []).find((x) => x?.key === s.key);
+    let report = typeof o?.report === 'string' ? o.report.trim() : '';
+    if (report && ungroundedNumbers(report, allowedNumbers(s.facts)).length) { console.warn('summary numbers not in the facts', s.key); report = ''; replaced++; }
+    if (!report) { report = templateReport(s); wrote++; }
+    out.sessions.push({ key: s.key, main_id: s.main_id, report, activities: (o?.activities || []).filter((x) => s.facts.some((f) => f.id === String(x?.id))) });
+  }
+  for (const s of routine) {
+    out.sessions.push({ key: s.key, main_id: s.main_id, report: templateReport(s), activities: s.facts.filter((f) => f.gps_at_van_cortlandt != null).map((f) => ({ id: f.id, course: f.gps_at_van_cortlandt ? 'vc' : 'flat' })) });
+    wrote++;
+  }
+  for (const date of byDate.keys()) {
+    const here = sessions.filter((s) => s.date === date);
+    const d = (model?.days || []).find((x) => x?.date === date);
+    const line = d?.line && !ungroundedNumbers(d.line, allowedNumbers(here.map((s) => s.facts))).length ? String(d.line).trim() : templateDayLine(here);
+    if (line) out.days.push({ date, line });
+  }
+  return { ai: out, aiNote, counts: { model: toModel.length, written: wrote, replaced } };
+}
+
 // ------------------------------------------------------------------ sync
 
 const WORKOUT_NAME = /\d\s*x|x\s*\d|rep|interval|tempo|workout|track|fartlek|threshold|hill|cruise|ladder|progression|race|meet|xc|\bk\b/i;
@@ -354,55 +428,14 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   runs.forEach((r) => { r.fast = r.pace.work || []; });
   runs.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
 
-  // Kai: one report per session (warm-up + workout + cool-down together)
-  // for recent days. Failures fall back to the rule-based labels.
+  // One report per session (warm-up + workout + cool-down together) for recent days. Routine easy runs are written
+  // from the facts alone; the rest go to the model with those facts. A run always gets a report (runfacts.js).
   let ai = null;
   let aiNote = '';
+  let counts = null;
   const recentFrom = todayInTz(new Date(Date.now() - AI_REPORT_DAYS * 86400000));
   const recent = runs.filter((r) => r.date >= recentFrom);
-  if (recent.length && useAi) {
-    const pseudo = recent.map((r) => ({
-      strava_id: String(r.a.id), date: r.date, category: r.category, distance_mi: r.a.distance / 1609.344,
-      moving_sec: r.a.moving_time, elapsed_sec: r.a.elapsed_time, start_local: r.start, name: r.a.name || '',
-    }));
-    // What the athlete's teams had on those days, so the AI can tell where a race was.
-    const calendar = (await db.prepare(
-      `SELECT e.date, e.type, e.title, e.location, l.name AS loc_name FROM events e
-       JOIN team_members tm ON tm.team_id = e.team_id AND tm.person_id = ?
-       LEFT JOIN locations l ON l.id = e.location_id WHERE e.date >= ?`
-    ).bind(person.id, recentFrom).all()).results
-      .filter((e) => pseudo.some((p) => p.date === e.date))
-      .map((e) => ({ date: e.date, type: e.type, title: e.title, location: e.loc_name || e.location || '' }));
-    const byDate = new Map();
-    pseudo.forEach((p) => byDate.set(p.date, [...(byDate.get(p.date) || []), p]));
-    const sessions = [];
-    for (const [date, list] of byDate) {
-      for (const sess of sessionsOf(list)) {
-        sessions.push({
-          key: sess.key, date,
-          activities: sess.activities.map((x) => {
-            const r = recent.find((y) => String(y.a.id) === x.id);
-            return {
-              id: x.id, start: r.start, name: r.a.name || '', type: r.a.type, rule_category: r.category,
-              elev_ft: r.a.total_elevation_gain != null ? Math.round(r.a.total_elevation_gain * 3.281) : null,
-              miles: Math.round(r.a.distance / 16.09344) / 100, minutes: Math.round(r.a.moving_time / 60),
-              pace: fmtPace(r.a.moving_time / (r.a.distance / 1609.344)), avg_hr: r.a.average_heartrate || null, max_hr: r.a.max_heartrate || null,
-              laps: r.splits || null,
-              // Kestrel's pace check against the runner's own paces: the zone of the whole run and of its fast laps.
-              pace_zone: r.pace.run_zone || undefined, fast_laps: r.pace.known ? r.pace.fast_laps : undefined,
-              fast_lap_zone: r.pace.rep_zone || undefined, workout_by_pace: r.pace.known ? r.pace.workout : undefined,
-              on_track: r.track || undefined, gps_at_van_cortlandt: r.gps == null ? undefined : !!r.gps, athlete_note: (r.a.description || '').slice(0, 300) || null,
-            };
-          }),
-        });
-      }
-    }
-    try {
-      ai = await reportSessions(env, db, person, sessions, { rubric: COACH_RUBRIC, maxHr, today, body: await bodyStatus(db, person.id), calendar });
-    } catch (err) {
-      aiNote = err instanceof AiError ? err.message : 'AI unavailable';
-    }
-  }
+  if (recent.length && useAi) ({ ai, aiNote, counts } = await summarizeRuns(env, db, person, recent, { maxHr, today, recentFrom }));
   const catById = new Map();
   const courseById = new Map();
   const reportById = new Map();
@@ -458,7 +491,7 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   for (const d of ai?.days || []) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(d?.date || '') && d.line) await saveDay(db, person.id, d.date, { day_line: d.line });
   }
-  return { imported, checked: usable.length, total: all.length, skipped_strava: skippedStrava, ai: !!ai, ai_note: aiNote || undefined };
+  return { imported, checked: usable.length, total: all.length, skipped_strava: skippedStrava, ai: !!ai, ai_note: aiNote || undefined, summaries: counts || undefined };
 }
 
 async function loadPerson(env, personId) {
@@ -590,10 +623,9 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
     const key = await decrypt(env, person.icu_key_enc);
     const lastSyncDay = person.icu_synced_at ? todayInTz(new Date(person.icu_synced_at - 3 * 86400000)) : null;
     const oldest = days ? todayInTz(new Date(Date.now() - days * 86400000)) : (lastSyncDay || todayInTz(new Date(Date.now() - FIRST_SYNC_DAYS * 86400000)));
-    // A runner who writes run summaries with their own model gets the rule-based labels here; the app writes the reports.
-    let ownSummaries = false;
-    try { ownSummaries = JSON.parse(person.settings || '{}')?.ai_tasks?.summary === 'own'; } catch { /* bad settings: use Kestrel AI */ }
-    const res = await importRange(env, person, key, { oldest, newest: today, ai: !ownSummaries, lapBudget: MAX_LAP_FETCHES });
+    // Reports are written here, on the model the account chose for run summaries (the free default, or the runner's own
+    // key). Only a model that runs in the runner's browser (Ollama, LM Studio) gets the rule-based labels here: the app writes those.
+    const res = await importRange(env, person, key, { oldest, newest: today, ai: !(await summariesInBrowser(env, db, person)), lapBudget: MAX_LAP_FETCHES });
     res.wellness_days = await syncWellness(env, person, key, today);
     res.best_efforts = await syncBestEfforts(env, person, key);
     if (backfill) res.weather = await backfillConditions(db, person.id);
@@ -607,6 +639,15 @@ export async function syncPerson(env, personId, { days, backfill = false } = {})
   } catch (err) {
     throw await fail(env, person, err);
   }
+}
+
+// True when this runner's run summaries are set to a model that only their browser can reach.
+async function summariesInBrowser(env, db, person) {
+  try {
+    // Before the account held the choice, "own" was kept in the settings and meant a model in the browser.
+    if (!(await accountAi(db, person.id)).saved) { try { return JSON.parse(person.settings || '{}')?.ai_tasks?.summary === 'own'; } catch { return false; } }
+    return (await modelFor(env, db, person.id, 'summary')).mode === 'browser';
+  } catch { return false; }
 }
 
 // Full history, newest to oldest, one window per call. The page calls this
