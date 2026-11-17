@@ -2,7 +2,7 @@
 // Body (recovery, cross-training, fuel) and Team. Shares views.js's helpers through window.KV.
 (function(){
   const SCREENS = window.KV.screens, ACT = window.KV.act, V = window.KV.state;
-  const { esc, sec, card, tiles, need, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost } = window.KV._h;
+  const { esc, sec, card, tiles, need, hero, empty, noTeam, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost } = window.KV._h;
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   // ---------------------------------------------------------------- month grid (your training, or the team's events)
@@ -179,21 +179,26 @@
     const t = byDate[today];
     V.cache.feelTitle = t?.feel ? `Feeling ${t.feel}/10` : 'How you feel';
     const rd = h?.health?.readiness;
-    setSub(rd ? `Readiness ${rd.score} · ${rd.label}` : '');
+    setSub(rd?.score != null ? `Readiness ${rd.score} · ${rd.label}` : '');
     const status = currentTrainingStatus();
     const statusCard = card('Training status', 'What you’re doing right now. Teammates see it.', `<div class="kv-chips">${TRAINING_KEYS.map(k=> `<button type="button" class="kv-chip ${k === status ? 'on' : ''}" data-a="trainStatus" data-v="${k}">${TRAINING_STATES[k].label}</button>`).join('')}</div>`);
     const week = Array.from({ length:7 }, (_, i)=> iso(new Date(Date.now() - (6 - i) * 864e5)));
     const trend = card('Last 7 days', 'How you felt and slept.', `<div class="kv-trendbars">${week.map(d=>{ const x = byDate[d]; return `<div><div class="tb"><i class="f" style="height:${(x?.feel || 0) * 10}%"></i><i class="s" style="height:${Math.min(100, (x?.sleep_hours || 0) * 10)}%"></i></div><span>${new Date(d + 'T12:00:00').toLocaleDateString(undefined, { weekday:'short' })}</span></div>`; }).join('')}</div>
       <div class="kv-legend"><span><i style="background:var(--accent)"></i>Feel</span><span><i style="background:var(--info)"></i>Sleep</span></div>`);
-    const health = card('Health', 'From your log and your watch.', tiles([['Readiness', rd ? rd.score : '–', rd?.label || ''], ['Resting HR', h?.health?.resting_hr?.last7 ?? '–', h?.health?.resting_hr?.normal ? 'norm ' + h.health.resting_hr.normal : ''], ['HRV', h?.health?.hrv?.last7 ?? '–', h?.health?.hrv?.normal ? 'norm ' + h.health.hrv.normal : ''], ['Sleep', h?.health?.sleep?.last7 != null ? h.health.sleep.last7 + ' h' : '–', '7-day average']], 4)
-      + (rd?.factors?.length ? `<div class="kv-list" style="margin-top:8px">${rd.factors.map(x=> `<div class="kv-li"><div><span style="color:var(--text)">${esc(x.why)}</span></div><i>${x.pts > 0 ? '+' : ''}${x.pts}</i></div>`).join('')}</div>` : ''));
+    const health = card('Health', 'From your log and your watch.', tiles([['Readiness', rd?.score ?? '–', rd?.label || ''], ['Resting HR', h?.health?.resting_hr?.last7 ?? '–', h?.health?.resting_hr?.normal ? 'norm ' + h.health.resting_hr.normal : ''], ['HRV', h?.health?.hrv?.last7 ?? '–', h?.health?.hrv?.normal ? 'norm ' + h.health.hrv.normal : ''], ['Sleep', h?.health?.sleep?.last7 != null ? h.health.sleep.last7 + ' h' : '–', '7-day average']], 4)
+      + (rd?.factors?.length ? `<div class="kv-list u-mt2">${rd.factors.map(x=> `<div class="kv-li"><div><span class="u-text">${esc(x.why)}</span></div><i>${x.pts > 0 ? '+' : ''}${x.pts}</i></div>`).join('')}</div>` : ''));
     const marks = bodyMarks[activePersonId] || {};
     const map = card('Body map', 'Tap anything that hurts: sore, then pain, then clear. Kestrel AI keeps hard runs off it.', `<div class="kv-bodymap"><div id="kvBodyMount"></div>
       <div class="kv-bmchips">${Object.entries(marks).map(([id, st])=> `<span class="kv-bmchip ${st}">${esc(BODY_PART_LABELS[id] || id)}<button type="button" data-a="bmClear" data-v="${id}" aria-label="Clear">✕</button></span>`).join('')}</div>
       <button type="button" class="kv-bmflip" data-a="bmFlip">${ICON.flip}<span>${V.bmView === 'front' ? 'Front' : 'Back'}</span></button></div>
       <div class="kv-legend" style="justify-content:center"><span><i style="background:#94a3b8"></i>OK</span><span><i style="background:#f97316"></i>Sore</span><span><i style="background:#dc2626"></i>Pain</span></div>
       <div class="kv-btns"><button type="button" data-a="bmKai">Tell Kestrel AI how it feels</button></div>`);
-    return `<div class="kv-row" style="--c:1.2fr 1fr"><div class="kv-stack">${feelCard(t, false)}${trend}${health}</div><div class="kv-stack">${map}</div></div>`;
+    const hs = h?.health || {}, sore = Object.keys(marks).length;
+    const top = hero({ eb:'Readiness · today', big:rd?.score != null ? esc(rd.label) : 'Check in', unit:rd?.score != null ? rd.score : '',
+      lines:[rd?.score != null ? [hs.resting_hr?.last7 != null && `Resting HR ${hs.resting_hr.last7}${hs.resting_hr.normal ? `, normal ${hs.resting_hr.normal}` : ''}.`, hs.sleep?.last7 != null && `Sleeping ${hs.sleep.last7} h a night.`].filter(Boolean).join(' ') : 'Log how you feel and how you slept for a few days, and Kestrel works out your readiness.',
+        sore ? `${sore} ${sore === 1 ? 'spot' : 'spots'} marked on the body map.` : 'Nothing marked on the body map.'],
+      btns:`<button type="button" data-a="ask">Ask Kestrel AI</button>` });
+    return `${top}<div class="kv-row" style="--c:1.2fr 1fr"><div class="kv-stack">${feelCard(t, false)}${trend}${health}</div><div class="kv-stack">${map}</div></div>`;
   };
   SCREENS.recovery.after = ()=>{
     const el = $('kvBodyMount'); if(!el || !window.BodyMuscles) return;
@@ -340,18 +345,26 @@
 
   // ---------------------------------------------------------------- Team › Feed
   SCREENS.feed = async ()=>{
-    if(!window.KESTREL?.teamId) return need('Join or start a team to see the team feed.');
+    if(!window.KESTREL?.teamId) return noTeam('the team feed');
     const d = await getJson('/api/team');
     setSub(d ? `${d.this_week} miles this week · ${d.logged}/${d.members} athletes logged` : '');
     const rows = (d?.athletes || []).slice().sort((a, b)=> b.this_week - a.this_week || b.avg4 - a.avg4);
     const top = Math.max(1, ...rows.map(r=> r.this_week), ...rows.map(r=> r.avg4));
     const board = card('Miles this week', 'Only teammates who share their miles appear.', tiles([['Team', d?.this_week ?? '–', 'miles'], ['Last week', d?.last_week ?? '–', 'miles'], ['Logged', d ? `${d.logged}/${d.members}` : '–', 'athletes']], 3)
-      + `<div class="kv-board">${rows.map((r, i)=> `<div class="kv-lb ${r.id === activePersonId ? 'me' : ''}"><span class="rk">${r.this_week > 0 ? i + 1 : '–'}</span><span class="nm"><i style="background:${r.color}"></i>${esc(r.name)}</span><span class="kv-bar"><i style="width:${r.this_week / top * 100}%"></i></span><b>${r.this_week || '–'}</b></div>`).join('') || '<div class="kv-hint">Nobody shares their weekly miles yet.</div>'}</div>`);
+      + `<div class="kv-board">${rows.map((r, i)=> `<div class="kv-lb ${r.id === activePersonId ? 'me' : ''}"><span class="rk">${r.this_week > 0 ? i + 1 : '–'}</span><span class="nm" title="${esc(r.name)}"><i style="background:${r.color}"></i>${esc(r.name)}</span><span class="kv-bar"><i style="width:${r.this_week / top * 100}%"></i></span><b>${r.this_week || '–'}</b></div>`).join('') || '<div class="kv-hint">Nobody shares their weekly miles yet.</div>'}</div>`);
     const sorted = [...posts].sort((a, b)=> b.createdAt - a.createdAt);
     const feed = `<form class="card kv-card kv-compose" data-f="post"><input name="text" placeholder="Post to the team" autocomplete="off" maxlength="2000"><button type="submit" class="pri">Post</button></form>
       <div class="card kv-card kv-posts" id="kvPosts">${sorted.length ? sorted.slice(0, 6).map(renderPostItem).join('') : '<div class="kv-hint">No posts yet.</div>'}</div>
       <div id="kvActivities"></div>`;
-    return `<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${feed}</div><div class="kv-stack">${board}</div></div>`;
+    const today = todayKey(), ev = (events[today] || [])[0];
+    // Nothing today: name the next thing on the calendar within a week, so the block still answers "when do we meet?".
+    const nextKey = ev ? null : Object.keys(events).filter(k=> k > today && (events[k] || []).length).sort()[0];
+    const next = nextKey && (new Date(nextKey + 'T12:00:00') - new Date(today + 'T12:00:00')) / 864e5 <= 7 ? events[nextKey][0] : null;
+    const lead = hero({ eb:ev ? esc(['Team today', eventStyle(ev).label].filter(Boolean).join(' · ')) : 'Team today', big:ev ? esc(ev.title) : 'No practice',
+      unit:ev ? esc(formatEventTimeRange(ev) || '') : '',
+      lines:[ev?.location && esc(ev.location), next && `Next: ${esc(next.title)}, ${esc(nice(nextKey, { weekday:'long' }))}${next.time ? ' ' + esc(next.time) : ''}.`, d && `${d.this_week} team miles this week · ${d.logged} of ${d.members} logged.`],
+      btns:`<button type="button" data-a="go" data-v="calendar/team">Open the calendar</button>` });
+    return `${lead}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${feed}</div><div class="kv-stack">${board}</div></div>`;
   };
   SCREENS.feed.after = ()=>{ const p = $('kvPosts'); if(p && typeof wirePostItems === 'function') wirePostItems(p, redraw); if($('kvActivities')) window.kestrelRenderActivities?.($('kvActivities')); };
   ACT.post = async (_, f)=>{ const text = f.elements.text.value.trim(); if(!text) return; const r = await createPostRemote(activePersonId, text, ''); posts.push(r?.post || { id:'post_' + Date.now(), personId:activePersonId, text, header:'', createdAt:Date.now() }); redraw(); };
@@ -364,7 +377,7 @@
   const allEvents = ()=> Object.entries(events).flatMap(([d, list])=> list.map(e=> ({ ...e, date:d }))).sort((a, b)=> a.date.localeCompare(b.date) || String(a.time || '').localeCompare(String(b.time || '')));
   const evById = (id)=> allEvents().find(e=> e.id === id);
   SCREENS.meets = async ()=>{
-    if(!window.KESTREL?.teamId) return need('Join a team to see its schedule.');
+    if(!window.KESTREL?.teamId) return noTeam('its schedule');
     const today = todayKey(), all = allEvents(), type = V.schedType || 'all';
     const up = all.filter(e=> e.date >= today && (type === 'all' || e.type === type));
     const past = all.filter(e=> e.date < today && e.type === 'meet').reverse();
@@ -387,7 +400,7 @@
     const list = weeks.length ? weeks.slice(0, limit).map(w=> card(esc(weekName(w.m)), '', `<div class="kv-list">${w.list.map(row).join('')}</div>`)).join('')
       + (weeks.length > limit ? `<div class="kv-btns" style="margin-top:0"><button type="button" data-a="schedMore">Show ${weeks.length - limit} more ${weeks.length - limit === 1 ? 'week' : 'weeks'}</button></div>` : '')
       : card('', '', `<div class="kv-hint">${type === 'all' ? 'Nothing on the schedule yet.' : `No ${type === 'other' ? 'other events' : type + 's'} coming up.`} Add practices and meets here, or let Kestrel AI read a schedule you paste or attach.</div>`);
-    const results = card('Results', 'Past meets.', `<div class="kv-list">${past.slice(0, 6).map(e=> `<div class="kv-li"><div><b>${esc(e.title)}</b><span>${esc(nice(e.date))}${e.location ? ' · ' + esc(e.location) : ''}</span>${e.results ? `<span style="color:var(--text)">${esc(e.results)}</span>` : ''}</div>${canEditEv(e) ? `<button type="button" class="kv-link-sm" data-a="evEdit" data-v="${e.id}">${e.results ? 'Edit' : 'Add results'}</button>` : ''}</div>`).join('') || '<div class="kv-hint">No past meets yet.</div>'}</div>`);
+    const results = card('Results', 'Past meets.', `<div class="kv-list">${past.slice(0, 6).map(e=> `<div class="kv-li"><div><b>${esc(e.title)}</b><span>${esc(nice(e.date))}${e.location ? ' · ' + esc(e.location) : ''}</span>${e.results ? `<span class="u-text">${esc(e.results)}</span>` : ''}</div>${canEditEv(e) ? `<button type="button" class="kv-link-sm" data-a="evEdit" data-v="${e.id}">${e.results ? 'Edit' : 'Add results'}</button>` : ''}</div>`).join('') || '<div class="kv-hint">No past meets yet.</div>'}</div>`);
     const places = card('Places', 'Courses, tracks and meeting spots.', `<div class="kv-list">${(locations || []).map(l=> `<div class="kv-li"><div><b>${esc(l.name)}</b><span>${esc(l.address || '')}</span></div><a class="kv-link-sm" href="${mapsSearchLink(l.address || l.name)}" target="_blank" rel="noopener">Map</a>${lead() ? `<button type="button" class="kv-link-sm" data-a="placeEdit" data-v="${l.id}">Edit</button>` : ''}</div>`).join('') || '<div class="kv-hint">No places saved yet.</div>'}</div><div class="kv-btns"><button type="button" data-a="placeAdd">Add a place</button></div>`);
     return `${tools}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${list}</div><div class="kv-stack">${results}${places}</div></div>`;
   };
@@ -401,10 +414,10 @@
   ACT.placeEdit = (id)=>{ const l = (locations || []).find(x=> x.id === id); if(l) window.kestrelPlaceForm?.(l); };
 
   // ---------------------------------------------------------------- Team › Plan and Roster (the team's own editors)
-  SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its plan.'); if(own()) await loadKai(); setSub(''); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
+  SCREENS.teamplan = async ()=>{ if(!window.KESTREL?.teamId) return noTeam('its plan'); if(own()) await loadKai(); setSub(''); return '<div id="kvTeamPlan" class="kv-stack"></div>'; };
   SCREENS.teamplan.after = ()=> window.kestrelRenderTeamTraining?.($('kvTeamPlan'));
   SCREENS.teamplan.selfFed = true;
-  SCREENS.roster = async ()=>{ if(!window.KESTREL?.teamId) return need('Join a team to see its roster.'); setSub(''); return '<div id="kvRoster" class="kv-stack"></div>'; };
+  SCREENS.roster = async ()=>{ if(!window.KESTREL?.teamId) return noTeam('its roster'); setSub(''); return '<div id="kvRoster" class="kv-stack"></div>'; };
   SCREENS.roster.after = ()=> window.kestrelRenderRoster?.($('kvRoster'));
   SCREENS.roster.selfFed = true;
 

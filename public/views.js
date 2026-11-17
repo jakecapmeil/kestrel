@@ -26,6 +26,19 @@
   const card = (title, hint, body, right, cls)=> `<div class="card kv-card ${cls || ''}">${title ? `<div class="kv-ch"><div><div class="kv-ct">${title}</div>${hint ? `<div class="kv-hint">${hint}</div>` : ''}</div>${right || ''}</div>` : ''}${body}</div>`;
   const tiles = (rows, cols)=> `<div class="kv-tiles" style="--cols:${cols || rows.length}">${rows.map(([n, v, s])=> `<div><span>${esc(n)}</span><b>${v}</b>${s ? `<i>${esc(s)}</i>` : ''}</div>`).join('')}</div>`;
   const need = (what)=> `<div class="card kv-card"><div class="kv-hint">${what}</div></div>`;
+  // An empty screen gets the hawk, not a grey sentence. Same outline as kestrel.js's HAWK_PATH (that file is a module).
+  const HAWK = 'M5 17c4-1 7-4 9-8 1 3 3 5 6 5l7-3c-2 4-5 6-9 7l-3 6-2-5c-3 0-6-1-8-2z';
+  const empty = ({ title, text, btns = '' })=> `<div class="card kv-card kv-empty"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="${HAWK}" fill="none" stroke="currentColor" stroke-width=".9" stroke-linejoin="round"/><circle cx="20.5" cy="12.6" r=".9" fill="var(--hawk-eye)"/></svg><div class="kv-ct">${title}</div>${text ? `<div class="kv-hint">${text}</div>` : ''}${btns ? `<div class="kv-btns">${btns}</div>` : ''}</div>`;
+  const noTeam = (what)=> empty({ title:'You’re training solo', text:`Join with a code from a teammate, or start your school’s team, to see ${what}.`, btns:'<button type="button" class="pri" data-a="teamStart">Join or start a team</button>' });
+  // The screen's one subject, in an inverse block (Today's run card is the original): an eyebrow, a big figure with its
+  // unit, an optional progress bar, a line or two, and its buttons (one red .pri at most). Every main screen opens with one.
+  const hero = ({ eb, big, unit, bar, lines = [], btns = '', act })=> `<div class="card kv-card kv-run kv-hero">
+    ${eb ? `<div class="kv-eb">${eb}</div>` : ''}
+    ${act ? `<button type="button" class="kv-runh" ${act}>${big}${unit ? ` <span>${unit}</span>` : ''} <i>›</i></button>` : `<div class="kv-runh">${big}${unit ? ` <span>${unit}</span>` : ''}</div>`}
+    ${bar != null ? `<div class="kv-hbar" role="img" aria-label="${Math.round(bar * 100)} percent"><i style="width:${Math.max(0, Math.min(100, bar * 100))}%"></i></div>` : ''}
+    ${lines.filter(Boolean).map(l=> `<div class="kv-hint kv-on">${l}</div>`).join('')}
+    ${btns ? `<div class="kv-btns">${btns}</div>` : ''}
+  </div>`;
   const toast = (t)=>{ const n = document.createElement('div'); n.className = 'kv-toast'; n.textContent = t; document.body.appendChild(n); setTimeout(()=> n.remove(), 1800); };
   async function getJson(u){ try{ const r = await fetch(u, { cache:'no-store' }); return r.ok ? await r.json() : null; }catch(e){ return null; } }
   async function post(u, body){ try{ const r = await fetch(u, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body) }); const d = await r.json().catch(()=> ({})); return r.ok ? d : { error:d.error || 'That didn’t save. Try again.' }; }catch(e){ return { error:'Couldn’t reach Kestrel. Check your connection.' }; } }
@@ -142,7 +155,7 @@
         ${changed && t.reason ? `<div class="kv-hint kv-on"><b>Why:</b> ${esc(t.reason)}</div>` : ''}
         ${done.length ? `<div class="kv-done">${done.map(s=> `<button type="button" data-a="${s.key ? 'sess' : 'day'}" data-v="${esc(s.key || today)}"><b>${esc(SESSION_LABEL[s.category] || 'Run')} ${esc(s.miles)} mi</b><span>${esc([s.pace && s.pace + '/mi', s.avg_hr && s.avg_hr + ' bpm'].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>` : ''}
         ${h.tomorrow ? `<div class="kv-hint kv-on kv-next">Tomorrow: ${esc(h.tomorrow.type === 'Off' ? 'Rest' : `${h.tomorrow.type}${h.tomorrow.miles ? ' ' + h.tomorrow.miles + ' mi' : ''}`)}</div>` : ''}
-        <div class="kv-btns">${done.length ? `<button type="button" class="pri" data-a="day" data-v="${today}">View run</button>` : `<button type="button" class="pri" data-a="record">Start run</button><button type="button" data-a="cant">Can’t do this</button>`}<button type="button" data-a="ask">Ask Kestrel AI</button>${changed ? `<button type="button" data-a="unswap" data-v="${t.date}">Back to the plan</button>` : ''}</div>
+        <div class="kv-btns">${done.length ? `<button type="button" class="pri" data-a="day" data-v="${today}">View run</button>` : `<button type="button" class="pri" data-a="record">Start run</button>`}<button type="button" data-a="ask">Ask Kestrel AI</button>${changed ? `<button type="button" data-a="unswap" data-v="${t.date}">Back to the plan</button>` : ''}</div>
       </div>`;
     }
     const feel = own() ? feelCard(day, true) : need('Pick your name to check in.');
@@ -157,7 +170,7 @@
       <button type="button" class="card kv-card kv-tile" data-a="go" data-v="body/xtrain">${ICON.bike}<span><b>Cross-train</b><small>${xw.sessions ? `${xw.sessions} ${xw.sessions === 1 ? 'session' : 'sessions'} · ${Math.round(xw.xt_min)} min this week` : 'Nothing yet this week'}</small></span></button>
       <button type="button" class="card kv-card kv-tile" data-a="go" data-v="body/food">${ICON.fuel}<span><b>${f ? Math.round(f.totals?.kcal || 0).toLocaleString() + ' kcal' : 'Fuel'}</b><small>${f ? `${Math.round(f.totals?.carbs_g || 0)} g carbs today` : 'Log what you eat'}</small></span></button></div>`;
     const teamToday = window.KESTREL?.teamId ? (ev.length ? ev.map(e=> eventCard(e, today)).join('') : card('', '', `<div class="kv-hint">Nothing on the team calendar today.</div><button type="button" class="kv-link" data-a="go" data-v="calendar/team"><span>Open the team calendar</span><i>›</i></button>`))
-      + (latestPost() ? card('', '', latestPost()) : '') : need('Join a team to see practices and meets here.');
+      + (latestPost() ? card('', '', latestPost()) : '') : noTeam('practices and meets here');
     const kai = card('', '', `<div class="kv-hint">Tell it how a run felt, what hurts, or what you can’t make, and it adjusts your plan.</div>
       <form class="kv-compose" data-f="askToday"><input name="q" placeholder="Tell Kestrel AI how it went" autocomplete="off"><button type="submit" class="pri">Send</button></form>`);
     return `<div class="kv-today">
@@ -175,13 +188,13 @@
     const p = [...(posts || [])].sort((a, b)=> b.createdAt - a.createdAt)[0];
     if(!p) return '';
     const who = people.find(x=> x.id === p.personId);
-    return `<div class="kv-post"><span class="kv-av" style="background:${who?.color || '#888'}">${esc((who?.name || '?').slice(0, 1))}</span><div><b>${esc(who?.name || 'Teammate')}</b><div class="kv-hint" style="color:var(--text)">${esc(p.header ? p.header + ': ' : '')}${esc(p.text)}</div></div></div>`;
+    return `<div class="kv-post"><span class="kv-av" style="--av:${who?.color || '#888'}">${esc((who?.name || '?').slice(0, 1))}</span><div><b>${esc(who?.name || 'Teammate')}</b><div class="kv-hint u-text">${esc(p.header ? p.header + ': ' : '')}${esc(p.text)}</div></div></div>`;
   }
   function eventCard(e, date){
     const st = own() ? getRsvp(e.id) : null;
     const et = eventStyle(e);
     return `<div class="card kv-card kv-ev"><div class="kv-ch"><div><div class="kv-eb" style="color:${et.text}">${esc([formatEventTimeRange(e), et.label].filter(Boolean).join(' · '))}</div><div class="kv-ct">${esc(e.title)}</div>${e.location ? `<div class="kv-hint">${esc(e.location)}</div>` : ''}</div>
-      ${st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(st === 'unknown' ? 'RSVP' : rsvpLabel[st])}</button>` : ''}</div>${e.desc ? `<div class="kv-hint" style="margin-top:8px">${esc(e.desc)}</div>` : ''}</div>`;
+      ${st ? `<button type="button" class="kv-rsvp ${st}" data-a="rsvp" data-v="${e.id}">${esc(st === 'unknown' ? 'RSVP' : rsvpLabel[st])}</button>` : ''}</div>${e.desc ? `<div class="kv-hint u-mt2">${esc(e.desc)}</div>` : ''}</div>`;
   }
   // Feel 1-10 and sleep save to today's training log; health and sore spots are the app's statuses.
   function feelCard(day, compact){
@@ -198,6 +211,7 @@
   ACT.record = ()=> setPage('record');
   ACT.cant = ()=> openKai("I can't do today's run as planned because ", false);
   ACT.ask = ()=> openKai();
+  ACT.teamStart = ()=> document.getElementById('kAddTeam')?.click();
   ACT.unswap = async (d)=>{ await resetPlanDay(d, false); redraw(); };
   ACT.go = (v)=>{ const [t, s] = v.split('/'); navGo(t, s); };
   ACT.rsvp = async (id)=>{ await cycleRsvp(id); redraw(); };
@@ -223,11 +237,16 @@
         const changed = ['kai','hawky','auto'].includes(d.source);
         const lanes = [[off ? 'bl' : '', off ? 'Rest' : d.type], ...(changed ? [['', 'Kestrel AI']] : []), ...(events[d.date] || []).map(e=> ['g', `${e.title}${e.time ? ' ' + e.time : ''}`])];
         return `<button type="button" class="kv-day ${d.date === today ? 'now' : ''}" data-a="day" data-v="${d.date}"><div class="kv-dn"><b>${dt.getDate()}</b><span>${dt.toLocaleDateString(undefined, { weekday:'short' })}</span></div>
-          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc((did.sessions || []).filter(z=> z.category !== 'crosstrain').length > 1 ? (did.sessions || []).filter(z=> z.category !== 'crosstrain').length + ' sessions' : runTitle(did))} · ${Math.round(did.miles * 10) / 10} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
-    const side = card('This week', '', tiles([['Done', Math.round(done * 10) / 10, `of ${Math.round(planned * 10) / 10} mi`], ['Runs', days.filter(d=> byDate[d.date]?.miles).length, `of ${days.filter(d=> d.type !== 'Off').length}`]], 2))
-      + card('Your level', '', levelHtml(h))
+          <div class="kv-dm"><div class="kv-dt">${did?.miles ? `✓ ${esc((did.sessions || []).filter(z=> z.category !== 'crosstrain').length > 1 ? (did.sessions || []).filter(z=> z.category !== 'crosstrain').length + ' sessions' : runTitle(did))} · ${Math.round(did.miles * 10) / 10} mi` : esc(off ? 'Rest' : `${d.type} · ${d.miles} mi`)}</div>${sessionText(d) || d.base?.notes ? `<div class="kv-hint">${esc(sessionText(d) || d.base.notes)}</div>` : ''}<div class="kv-lanes">${lanes.map(([c, l])=> `<span class="kv-pill ${c}" title="${esc(l)}">${esc(l)}</span>`).join('')}</div></div></button>`; }).join('')}</div>`;
+    const runDays = days.filter(d=> d.type !== 'Off'), left = runDays.filter(d=> d.date >= today && !byDate[d.date]?.miles);
+    const key = left.find(d=> /workout|long|lr|race/i.test(d.type));
+    const top = hero({ eb:[h.week.week_type ? esc(/week$/i.test(h.week.week_type) ? h.week.week_type : h.week.week_type + ' week') : 'This week', h.level && `${h.level.weekly_miles} mi level`].filter(Boolean).join(' · '),
+      big:Math.round(done * 10) / 10, unit:`/ ${Math.round(planned * 10) / 10} mi`, bar:planned ? done / planned : 0,
+      lines:[left.length ? `${left.length} ${left.length === 1 ? 'run' : 'runs'} left this week.${key ? ` ${esc(nice(key.date, { weekday:'long' }))}’s ${esc(key.type.toLowerCase())} is the key session.` : ''}` : 'Every run this week is done.'],
+      btns:`<button type="button" class="pri" data-a="record">Start a run</button><button type="button" data-a="ask">Ask Kestrel AI</button>` });
+    const side = card('Your level', '', levelHtml(h))
       + card('Kestrel AI’s changes', 'What moved in your plan and why.', `<div class="kv-changes">${changesHtml(h)}</div>`);
-    return `<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}${runViewsBtn()}</div></div>`;
+    return `${top}<div class="kv-row" style="--c:1.4fr 1fr"><div class="kv-stack">${list}${host2}</div><div class="kv-stack">${side}${runViewsBtn()}</div></div>`;
   };
   SCREENS.plan.after = (el)=>{
     el.querySelectorAll('[data-undo]').forEach(b=> b.addEventListener('click', async ()=>{ await resetPlanDay(b.dataset.undo, false); redraw(); }));
@@ -258,7 +277,7 @@
       <div class="kv-chips kv-filter">${LIB_LEN.map(([v, l])=> `<button type="button" class="kv-chip ${V.wtime === v ? 'on' : ''}" data-a="wtime" data-v="${v}">${l}</button>`).join('')}</div>
       <div class="kv-hint" style="margin:0 0 12px">${esc(tile.sub || '')} · ${list.length} workouts</div>
       <div class="kv-wolist">${list.map(w=>{ const pw = w.personal, open = V.wopen === w.id;
-        return `<div class="card kv-card kv-woitem ${open ? 'open' : ''}"><button type="button" class="kv-ch kv-wohead" data-a="wopen" data-v="${w.id}"><div><div class="kv-ct" style="font-size:17px">${esc(w.name)}</div><div class="kv-hint">${esc(pw?.session || w.main)}</div></div><span class="kv-pill bl">${w.total_min} min</span></button>
+        return `<div class="card kv-card kv-woitem ${open ? 'open' : ''}"><button type="button" class="kv-ch kv-wohead" data-a="wopen" data-v="${w.id}"><div><div class="kv-ct u-lg">${esc(w.name)}</div><div class="kv-hint">${esc(pw?.session || w.main)}</div></div><span class="kv-pill bl">${w.total_min} min</span></button>
           ${open ? `<div class="kv-wobody">${(pw?.sections || []).map(set).join('')}
             <div class="kv-why"><b>Why</b><span>${esc(w.purpose)}</span></div><div class="kv-why"><b>How to run it</b><span>${esc(w.cues)}</span></div><div class="kv-why"><b>Next time</b><span>${esc(w.progress)}</span></div>
             ${own() ? `<div class="kv-btns"><button type="button" class="pri" data-a="woFit" data-v="${w.id}">Fit it into my week</button></div>` : ''}</div>` : ''}</div>`; }).join('') || need('Nothing this short. Try a longer time.')}</div>`;
@@ -302,7 +321,7 @@
     const tab = V.fitTab;
     const body = tab === 'prs' ? `${(f.new_prs || []).map(p=> `<div class="kv-note">New PR found: <b>${esc(p.event)} ${esc(p.time)}</b> on ${esc(p.date)}</div>`).join('')}<div class="kv-list">${prs.map(x=> `<div class="kv-li"><div><b>${esc(x.label.replace(/ \(.*$/, ''))}</b><span>${esc(nice(x.date, { month:'short', day:'numeric', year:'numeric' }))}</span></div></div>`).join('') || '<div class="kv-hint">No PRs with dates yet.</div>'}</div><div class="kv-btns"><button type="button" data-a="prs">Edit PRs</button></div>`
       : tab === 'based' ? `<div class="kv-list">${(f.sources || []).slice(0, 5).map(x=> `<div class="kv-li"><div><b>${esc(x.label)}</b><span>${esc(kind[x.kind] || x.kind)}${x.date ? ' · ' + esc(x.date) : ''}${x.vo2r ? ' · rated ' + x.vo2r : ''}</span></div></div>`).join('')}</div><div class="kv-hint">Profile: ${f.profile === 'speed' ? 'speed-leaning' : f.profile === 'endurance' ? 'endurance-leaning' : 'balanced'}.</div><div class="kv-btns"><button type="button" data-a="fitRecalc">Recalculate</button><button type="button" data-a="prs">Update PRs</button></div>`
-      : tab === 'calc' ? `<form class="kv-form" data-f="heat"><div class="kv-ct" style="font-size:16px">Heat and hills</div><div class="kv-grid3"><label><span>Cool-day 5K</span><input name="time" value="${esc(five?.time || '')}"></label><label><span>Temp °F</span><input name="temp_f" type="number" value="75"></label><label><span>Dew point °F</span><input name="dew_f" type="number" value="60"></label></div><div class="kv-btns"><button type="submit" class="pri">Calculate</button></div><div class="kv-hint" id="kvHeatOut"></div></form><button type="button" class="kv-link" data-a="oldCalc"><span>Taper and Runners like you</span><i>›</i></button>`
+      : tab === 'calc' ? `<form class="kv-form" data-f="heat"><div class="kv-ct u-lg">Heat and hills</div><div class="kv-grid3"><label><span>Cool-day 5K</span><input name="time" value="${esc(five?.time || '')}"></label><label><span>Temp °F</span><input name="temp_f" type="number" value="75"></label><label><span>Dew point °F</span><input name="dew_f" type="number" value="60"></label></div><div class="kv-btns"><button type="submit" class="pri">Calculate</button></div><div class="kv-hint" id="kvHeatOut"></div></form><button type="button" class="kv-link" data-a="oldCalc"><span>Taper and Runners like you</span><i>›</i></button>`
       : `<div class="kv-how"><p><b>Every run is searched for races.</b> Any run at a race distance and race effort counts, and a faster one updates your PR.</p><p><b>Course and weather are taken out.</b> Each race is credited back to a flat course on a cool day.</p><p><b>KestrelPredict reads your results</b> from the last two years. The ± is its 80% range.</p><p><b>VO2max</b> is your watch’s when it sends one; Kestrel VO2max is what your races are worth and sets your paces.</p></div>`;
     const tabs = card('', '', `<div class="seg kv-seg">${[['prs','Recent PRs'],['based','Based on'],['calc','Calculators'],['how','How it works']].map(([v, l])=> `<button type="button" class="seg-btn ${tab === v ? 'active' : ''}" data-a="fittab" data-v="${v}">${l}</button>`).join('')}</div><div class="kv-tab">${body}</div>`);
     return `<div class="kv-row" style="--c:1.5fr 1fr">${main}<div class="kv-stack">${paces}${tabs}</div></div>`;
@@ -345,5 +364,5 @@
   ACT.goalCustom = ()=> window.kTrack?.editGoal(null, { kind:'race', event:'custom' });
 
   window.KV.screens = SCREENS; window.KV.has = (k)=> !!SCREENS[SCREEN_OF[k] || k]; window.KV.act = ACT; window.KV.state = V;
-  window.KV._h = { esc, sec, card, tiles, need, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost };
+  window.KV._h = { esc, sec, card, tiles, need, hero, empty, noTeam, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost };
 })();

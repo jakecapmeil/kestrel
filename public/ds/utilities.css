@@ -1,0 +1,4 @@
+/* Kestrel utilities. Loaded last so a utility wins over component rules, as the inline style="" it replaced did. */
+.u-mt2{margin-top:var(--s-2);} .u-mt3{margin-top:var(--s-3);} .u-mt4{margin-top:var(--s-4);}
+.u-mb2{margin-bottom:var(--s-2);} .u-mb3{margin-bottom:var(--s-3);} .u-m0{margin:0;}
+.u-text{color:var(--text);} .u-lg{font-size:var(--fs-lg);}

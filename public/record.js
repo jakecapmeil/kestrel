@@ -211,14 +211,14 @@
     if(!el) return;
     if(R.state === 'idle'){
       const last = R.summary?.saved ? `<div class="card rec-hero"><div class="card-title">Saved to your log</div><div class="hint">${R.summary.mi.toFixed(2)} mi in ${clock(R.summary.sec)}. Find it under Train › Log.</div></div>` : '';
-      el.innerHTML = `<div class="rec">${last}<div class="card rec-hero"><div id="recGps">${gpsBadge()}</div><button type="button" class="rec-go" id="recStart">Start</button><p class="rec-note" style="margin-top:var(--sp-4)">Your phone’s GPS tracks distance, pace and every mile split. Keep this screen open while you run.</p></div></div>`;
+      el.innerHTML = `<div class="rec">${last}<div class="card rec-hero"><div id="recGps">${gpsBadge()}</div><button type="button" class="rec-go" id="recStart">Start</button><p class="rec-note u-mt4">Your phone’s GPS tracks distance, pace and every mile split. Keep this screen open while you run.</p></div></div>`;
       document.getElementById('recStart').onclick = start;
       return;
     }
     if(R.state === 'done'){
       const sm = R.summary;
       el.innerHTML = `<div class="rec"><div class="card rec-hero"><div class="eyebrow">${sm.date.toLocaleDateString(undefined, { weekday:'long', month:'short', day:'numeric' })}</div><div class="rec-big">${miles(sm.dist)}<small>mi</small></div>
-        <div class="rec-stats" style="margin-top:var(--sp-4)"><div><b>${clock(sm.sec)}</b><span>Time</span></div><div><b>${pace(sm.dist, sm.sec)}</b><span>Pace /mi</span></div><div><b>${sm.splits.length}</b><span>Splits</span></div></div></div>
+        <div class="rec-stats u-mt4"><div><b>${clock(sm.sec)}</b><span>Time</span></div><div><b>${pace(sm.dist, sm.sec)}</b><span>Pace /mi</span></div><div><b>${sm.splits.length}</b><span>Splits</span></div></div></div>
         <div class="card">${routeSvg()}${sm.splits.length ? `<div class="card-title" style="margin:var(--sp-4) 0 var(--sp-2)">Splits</div>${splitsHtml(sm.splits)}` : ''}</div>
         <div class="card"><div class="rec-form"><label class="field"><span>How hard? 1-10</span><input type="number" id="recEffort" min="1" max="10" step="1" inputmode="numeric"></label><label class="field full"><span>Notes</span><textarea id="recNote" rows="2" maxlength="500"></textarea></label></div></div>
         <div class="rec-actions"><button type="button" class="ghost" id="recDiscard">Discard</button><button type="button" class="ghost" id="recGpx">GPX</button><button type="button" id="recSave">Save run</button></div></div>`;
@@ -228,7 +228,7 @@
       return;
     }
     el.innerHTML = `<div class="rec"><div class="card rec-hero"><div id="recGps">${gpsBadge()}</div><div class="rec-big" id="recDist">0.00<small>mi</small></div>
-      <div class="rec-stats" style="margin-top:var(--sp-4)"><div><b id="recTime">0:00</b><span>Time</span></div><div><b id="recPace">–:––</b><span>Pace /mi</span></div><div><b id="recAvg">–:––</b><span>Avg /mi</span></div></div></div>
+      <div class="rec-stats u-mt4"><div><b id="recTime">0:00</b><span>Time</span></div><div><b id="recPace">–:––</b><span>Pace /mi</span></div><div><b id="recAvg">–:––</b><span>Avg /mi</span></div></div></div>
       <div class="card" id="recMapCard"></div>
       <div class="rec-actions">${R.state === 'recording' ? '<button type="button" class="ghost" id="recPause">Pause</button>' : '<button type="button" id="recResume">Resume</button>'}<button type="button" class="stop" id="recFinish">Finish</button></div>
       ${R.state === 'paused' ? '<p class="rec-note">Paused. The clock and distance are stopped.</p>' : '<p class="rec-note">Keep this screen open; locking the phone can pause GPS in the browser.</p>'}</div>`;

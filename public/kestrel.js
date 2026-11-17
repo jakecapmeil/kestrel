@@ -197,7 +197,7 @@ function renderLanding(mode, message = '') {
       <button class="k-btn primary wide" type="submit">${signup ? 'Create account' : 'Sign in'}</button>
     </form>
     <div class="k-row spread">
-      <button class="k-link" type="button" id="kSwap">${signup ? 'Have an account? Sign in' : 'New here? Create an account'}</button>
+      <button class="k-link" type="button" id="kSwap">${signup ? 'I have an account' : 'Create an account'}</button>
       ${signup ? '' : html`<button class="k-link" type="button" id="kForgot">Forgot password?</button>`}
     </div>
     <p class="k-small">Kestrel is open source: <a href="${REPO_URL}" target="_blank" rel="noopener">read the code</a>. <a href="/legal" target="_blank" rel="noopener">Terms, privacy and safety</a>. Building running models? <a href="/lab">Kestrel Lab</a>.</p>
@@ -683,7 +683,7 @@ function renderHeader() {
   $('kAddTeam').onclick = () => renderTeamStart(true);
   const w = $('kWho');
   const u = K.me.user;
-  w.innerHTML = html`<span class="k-avatar" style="background:${u.color}">${(u.name || 'You').trim().slice(0, 1).toUpperCase()}</span><span class="k-who-name">${u.name || 'You'}</span>`.s;
+  w.innerHTML = html`<span class="k-avatar" style="--av:${u.color}">${(u.name || 'You').trim().slice(0, 1).toUpperCase()}</span><span class="k-who-name">${u.name || 'You'}</span>`.s;
   w.setAttribute('aria-label', `${u.name || 'You'}: profile`);
   w.onclick = () => window.kestrelSetPage('you', 'profile');
 }
@@ -1002,7 +1002,7 @@ function renderWeekTypes(el, wk) {
     <div class="k-lvls">${wk.athletes.map((a) => { const c = a.weeks[i]; return html`<div class="k-lvl">
       <span class="k-lname"><b>${a.name || 'Unnamed'}</b>${a.class_year ? html`<small>${a.class_year}</small>` : ''}</span>
       ${a.locked
-        ? html`<span class="k-small" style="margin:0">${a.locked}</span>`
+        ? html`<span class="k-small u-m0">${a.locked}</span>`
         : html`<select class="k-input" data-who="${a.id}" aria-label="Week type for ${a.name}">${opts(c.set ? c.kind : 'auto', c.auto)}</select>`}
     </div>`; })}</div>
     ${wk.athletes.length ? '' : html`<p class="k-small">No one has joined the team yet.</p>`}`.s;
@@ -1028,7 +1028,7 @@ function renderLevels(el, lv) {
     <div class="k-lvls">${rows.map((a) => html`<div class="k-lvl">
       <span class="k-lname"><b>${a.name || 'Unnamed'}</b>${a.class_year ? html`<small>${a.class_year}</small>` : ''}</span>
       ${a.locked
-        ? html`<span class="k-small" style="margin:0">${a.locked}</span>`
+        ? html`<span class="k-small u-m0">${a.locked}</span>`
         : html`<select class="k-input" data-who="${a.id}" aria-label="Level for ${a.name}">${lv.levels.map((l) => html`<option value="${l.level}" ${l.level === a.level ? 'selected' : ''}>${l.miles} mi a week</option>`)}</select>`}
       ${a.recommend ? html`<span class="k-rec"><span class="badge tone-race">Kestrel AI: ready for ${a.recommend.miles} mi</span> <button class="k-btn small" type="button" data-up="${a.id}" data-to="${a.recommend.to}">Move up</button></span>` : ''}
     </div>`)}</div>
@@ -1734,13 +1734,13 @@ window.kestrelRenderSettings = async () => {
     ai.innerHTML = html`<p class="k-small">Kestrel works out of the box on a free model. Pick what runs each job: the free default, or a model you set up in Kestrel Lab (your own key, or a model on your own computer). Keys stay in this browser.</p>
       <div class="k-tasks">${Object.entries(AI.TASKS).map(([t, info]) => html`<label class="k-task"><span><b>${info.label}</b><small>${info.hint}</small></span>
         <select class="k-input" data-task="${t}">${ids.map((id) => html`<option value="${id}" ${AI.forTask(K.ai, t).provider === id ? 'selected' : ''}>${nameOf(id)}</option>`)}</select></label>`)}</div>
-      <div class="k-row spread"><span class="k-small" style="margin:0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Set up in Lab</a></div>
+      <div class="k-row spread"><span class="k-small u-m0">Add a model: your own key, Ollama or LM Studio.</span><a class="k-btn small" href="/lab#/providers">Set up in Lab</a></div>
       <details class="k-help"><summary>Which should I pick?</summary><ul class="k-list">
         <li><b>Kestrel free</b> costs nothing and needs no setup. Here it runs on ${K.cfg?.freeModel === 'Gemini' ? 'Google Gemini’s free tier, which allows Google to use what is sent to improve its products' : 'open-weight models on Cloudflare'}; Kestrel sends what each job needs (your first name, training, profile details, and what you type or photograph), never your email.${K.cfg?.freeVision ? '' : ' It can’t read food photos yet: describe food in words, or pick a model that sees images.'}</li>
         <li><b>Your own key</b> (Anthropic, OpenAI, Gemini paid, OpenRouter) keeps your data out of free-tier training and is usually a little sharper. You pay the provider directly; a month of chat is typically cents.</li>
         <li><b>A local model</b> (Ollama, LM Studio) keeps everything on your computer. Food photos need one that can see images, like llava or qwen2.5-vl.</li>
         <li>Whatever you pick, Kestrel’s guardrails check every plan change, and every model follows the Kestrel ethos.</li></ul></details>
-      <div class="k-row spread"><span class="k-small" style="margin:0">Every model follows the Kestrel ethos, plus your own.</span><button type="button" class="k-btn small" id="kEthosLink">Ethos</button></div>
+      <div class="k-row spread"><span class="k-small u-m0">Every model follows the Kestrel ethos, plus your own.</span><button type="button" class="k-btn small" id="kEthosLink">Ethos</button></div>
       <p class="k-small">AI can be wrong. It is not a doctor or a certified coach.</p>`.s;
     $('kEthosLink').onclick = () => window.navGo?.('run', 'ethos');
     ai.querySelectorAll('[data-task]').forEach((sel) => { sel.onchange = () => attempt(async () => {
@@ -1762,7 +1762,7 @@ window.kestrelRenderSettings = async () => {
     if (lists) {
       const nameOf = (t, i) => { const m = lists[i].models.find((x) => x.id === K.me.models[t]); return m ? `${m.name} ${m.version}${m.builtin ? '' : ` · by ${m.owner}`}` : 'Kestrel default'; };
       mb.innerHTML = html`<p class="k-small">Every prediction in Fitness comes from an open model. Kestrel picks a good one for each. To compare models on your own results, switch, fork or publish one, open Kestrel Lab.</p>
-        ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small" style="margin:0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
+        ${Object.keys(labels).map((t, i) => html`<div class="k-row spread"><div><div class="k-small u-m0">${labels[t]}</div><b>${nameOf(t, i)}</b></div><a class="k-btn small" href="/lab#/m/${encodeURIComponent(K.me.models[t])}">Open in Lab</a></div>`)}
         <div class="k-row"><a class="k-btn small primary" href="/lab#/workbench">Test models on my PRs</a><a class="k-btn small" href="/lab#/models">Browse models</a></div>`.s;
     }
   }

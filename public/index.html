@@ -21,64 +21,27 @@
        everywhere else), so a post's name, headline and body no longer read as
        three different documents. Archivo survives only as the masthead
        wordmark; the mono face only where the glyphs really are data. */
-    --font-ui:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,'Segoe UI',Roboto,sans-serif;
-    --font-display:'Archivo',-apple-system,BlinkMacSystemFont,sans-serif;
-    --font-mono:ui-monospace,SFMono-Regular,'SF Mono',Menlo,monospace;
 
-    /* HIG's iOS text styles, in rem so the reader's browser text-size setting
-       scales the whole app the way Dynamic Type does natively. Tracking values
+    /* Sizes for these HIG text styles live in ds/tokens.css (--fs-*, in rem so the browser text-size setting
+       scales the app like Dynamic Type). Line height and SF-style tracking per style stay here. Tracking values
        are SF's own optical tracking at each size. */
-    --fs-large-title:2.125rem; --lh-large-title:1.21; --tr-large-title:-0.4px;
-    --fs-title2:1.375rem;      --lh-title2:1.27;      --tr-title2:-0.26px;
-    --fs-title3:1.25rem;       --lh-title3:1.25;      --tr-title3:-0.45px;
-    --fs-headline:1.0625rem;   --lh-headline:1.29;    --tr-headline:-0.43px;
-    --fs-body:1.0625rem;       --lh-body:1.45;        --tr-body:-0.43px;
-    --fs-callout:1rem;         --lh-callout:1.35;     --tr-callout:-0.31px;
-    --fs-subhead:0.9375rem;    --lh-subhead:1.33;     --tr-subhead:-0.23px;
-    --fs-footnote:0.8125rem;   --lh-footnote:1.38;    --tr-footnote:-0.08px;
-    --fs-caption:0.75rem;      --lh-caption:1.33;     --tr-caption:0px;
-    --fs-caption2:0.6875rem;   --lh-caption2:1.18;    --tr-caption2:0.07px;
+    --lh-large-title:1.21; --tr-large-title:-0.4px;
+    --lh-title2:1.27;      --tr-title2:-0.26px;
+    --lh-title3:1.25;      --tr-title3:-0.45px;
+    --lh-headline:1.29;    --tr-headline:-0.43px;
+    --lh-body:1.45;        --tr-body:-0.43px;
+    --lh-callout:1.35;     --tr-callout:-0.31px;
+    --lh-subhead:1.33;     --tr-subhead:-0.23px;
+    --lh-footnote:1.38;    --tr-footnote:-0.08px;
+    --lh-caption:1.33;     --tr-caption:0px;
+    --lh-caption2:1.18;    --tr-caption2:0.07px;
 
     /* ---- Colour ---------------------------------------------------------
        Every colour in the app resolves through these tokens (the JS colour
        tables hold var() strings, not hexes), so the dark scheme at the bottom
        of this block is the only place the palette forks. Text pairs are all
        at or above WCAG AA 4.5:1 against the surface they sit on. */
-    --ink:#241934;
-    --ink-soft:#675d72;
-    --bg:#f3efe9;
-    --card:#ffffff;
-    --field:#ffffff;
-    --line:#e7e1d8;
-    --press:#ece6dc;
-    --fill:#241934;
-    --on-fill:#ffffff;
-    --shadow:rgba(36,25,52,0.18);
-    --scrim:rgba(36,25,52,0.45);
-    --gold:#7a4fae;
-    --gold-bg:#ece1f7;
-    --gold-ink:#4f3370;
-    --green:#16673d;
-    --green-bg:#dcf3e4;
-    --red:#a82f2f;
-    --red-bg:#fbe3e3;
-    --info:#1c6b8a;
-    --info-bg:#e1eef3;
-    --practice:#e0a415;
-    --practice-ink:#8a6206;
-    --practice-bg:#faf0d2;
-    --meet:#7a4fae;
-    --meet-bg:#ece1f7;
-    --other:#241934;
-    --other-bg:#e5e1e8;
-    --easy:#16673d;
-    --easy-bg:#dcf3e4;
-    --workout:#9a4a12;
-    --workout-bg:#fbe6d6;
-    --long:#1c6b8a;
-    --long-bg:#e1eef3;
-    --muted-bg:#e7e1d8;
-    --track:#e7e1d8;
+
     /* Matches the vendored body-muscles library's own INTENSITY_COLORS[5]/[8]
        and its neutral fill (see vendor/body-muscles/), so the legend, the
        team-status pills, and the body map itself all agree on what
@@ -101,10 +64,7 @@
        buttons, the CTA) gets --r-pill, which is deliberately larger than
        any element's own height so it always fully rounds regardless of
        size — one token instead of hand-computing height/2 per component. */
-    --r-card:16px;
-    --r-control:11px;
-    --r-row:8px;
-    --r-pill:999px;
+
     /* HIG's 44pt minimum hit target. --btn-h-sm is a *visual* height only:
        anything using it expands its touch area back to 44 with a pseudo. */
     --btn-h:44px;
@@ -114,41 +74,6 @@
 
   @media (prefers-color-scheme:dark){
     :root{
-      --ink:#f2eef7;
-      --ink-soft:#a49bb0;
-      --bg:#141119;
-      --card:#1e1a26;
-      --field:#2a2436;
-      --line:#332c40;
-      --press:#2a2436;
-      --fill:#f2eef7;
-      --on-fill:#141119;
-      --shadow:rgba(0,0,0,0.55);
-      --scrim:rgba(0,0,0,0.6);
-      --gold:#c4a0e8;
-      --gold-bg:#3a2b52;
-      --gold-ink:#dcc6f5;
-      --green:#5ddb99;
-      --green-bg:#123a26;
-      --red:#ff9d9d;
-      --red-bg:#4a1f1f;
-      --info:#6fc7e8;
-      --info-bg:#123540;
-      --practice:#f0b843;
-      --practice-ink:#f0b843;
-      --practice-bg:#3d3010;
-      --meet:#c4a0e8;
-      --meet-bg:#3a2b52;
-      --other:#d8d2e0;
-      --other-bg:#302b39;
-      --easy:#5ddb99;
-      --easy-bg:#123a26;
-      --workout:#f0975a;
-      --workout-bg:#42250f;
-      --long:#6fc7e8;
-      --long-bg:#123540;
-      --muted-bg:#2c2635;
-      --track:#100d14;
       --sore-ink:#f7b878;
       --sore-bg:#3d2410;
       --pain-ink:#ffb3a0;
@@ -186,7 +111,7 @@
   :focus-visible{
     outline:2px solid var(--gold);
     outline-offset:2px;
-    border-radius:4px;
+    border-radius:var(--r-xs);
   }
   /* HIG: honour Reduce Motion. */
   @media (prefers-reduced-motion:reduce){
@@ -215,7 +140,7 @@
   h1{
     font-family:var(--font-display);
     font-weight:900;
-    font-size:clamp(1.25rem,5.6vw,1.5rem);
+    font-size:var(--fs-2xl);
     letter-spacing:-0.3px;
     margin:0;
     line-height:1.05;
@@ -288,7 +213,7 @@
   .page-tab{
     flex:1;min-width:0;height:52px;padding:0 2px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-    border-radius:calc(var(--r-control) - 3px);
+    border-radius:calc(var(--r-control) - var(--r-xs));
     border:1px solid transparent;
     background:transparent;color:var(--ink-soft);
     font-family:var(--font-ui);font-weight:600;font-size:var(--fs-caption2);
@@ -458,8 +383,6 @@
   }
   @media (prefers-color-scheme:dark){
     :root{
-      --elev-1:0 1px 2px rgba(0,0,0,.4);
-      --elev-2:0 6px 20px rgba(0,0,0,.5);
       --int-1:#5ddb99; --int-1-bg:#143524; --int-1-ink:#8ff0bc;
       --int-2:#f0c04a; --int-2-bg:#3a2e0f; --int-2-ink:#f7d684;
       --int-3:#f0975a; --int-3-bg:#41240f; --int-3-ink:#f8bd91;
@@ -469,7 +392,8 @@
 
   .stack{display:flex;flex-direction:column;gap:var(--sp-3);}
   .stack-lg{display:flex;flex-direction:column;gap:var(--sp-4);}
-  .cluster{display:flex;flex-wrap:wrap;gap:var(--sp-2);align-items:center;}
+  .cluster{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:var(--sp-2);align-items:center;padding-block:4px;}
+  .cluster > *{flex:none;}
   .num{font-variant-numeric:tabular-nums;}
   .eyebrow{
     font-size:var(--fs-caption);line-height:var(--lh-caption);font-weight:700;
@@ -491,7 +415,7 @@
   .seg{display:flex;gap:3px;background:var(--track);border-radius:var(--r-control);padding:3px;}
   .seg-btn{
     flex:1;min-width:0;height:var(--btn-h-sm);padding:0 var(--sp-3);
-    border-radius:calc(var(--r-control) - 3px);border:1px solid transparent;
+    border-radius:calc(var(--r-control) - var(--r-xs));border:1px solid transparent;
     background:transparent;color:var(--ink-soft);
     font-size:var(--fs-footnote);font-weight:600;letter-spacing:var(--tr-footnote);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1.15;
@@ -551,7 +475,7 @@
   .tone-int-2{background:var(--int-2-bg);color:var(--int-2-ink);}
   .tone-int-3{background:var(--int-3-bg);color:var(--int-3-ink);}
   .tone-int-4{background:var(--int-4-bg);color:var(--int-4-ink);}
-  .grade{width:40px;height:40px;border-radius:12px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-callout);background:var(--bg);color:var(--ink-soft);}
+  .grade{width:40px;height:40px;border-radius:var(--r-sm);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:var(--fs-callout);background:var(--bg);color:var(--ink-soft);}
   .grade.g-A{background:var(--int-1-bg);color:var(--int-1-ink);}
   .grade.g-B{background:var(--info-bg);color:var(--info);}
   .grade.g-C{background:var(--int-2-bg);color:var(--int-2-ink);}
@@ -597,7 +521,7 @@
   .tl-num{font-size:var(--fs-caption2);font-weight:700;color:var(--ink-soft);}
   .tl-cell.today .tl-num{color:var(--on-fill);background:var(--fill);border-radius:var(--r-pill);padding:0 5px;}
   .tl-mi{font-size:var(--fs-subhead);font-weight:800;font-variant-numeric:tabular-nums;line-height:1.1;}
-  .tl-tag{font-size:10px;line-height:1.15;color:inherit;opacity:.8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tl-tag{font-size:var(--fs-xs);line-height:1.15;color:inherit;opacity:.8;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .tl-cell.i1{background:var(--int-1-bg);border-color:transparent;color:var(--int-1-ink);}
   .tl-cell.i2{background:var(--int-2-bg);border-color:transparent;color:var(--int-2-ink);}
   .tl-cell.i3{background:var(--int-3-bg);border-color:transparent;color:var(--int-3-ink);}
@@ -607,7 +531,7 @@
   .tl-week{display:flex;flex-direction:column;justify-content:center;align-items:center;border-radius:var(--r-row);background:var(--bg);font-weight:800;font-size:var(--fs-subhead);font-variant-numeric:tabular-nums;}
   .tl-week span{font-size:var(--fs-caption2);font-weight:600;color:var(--ink-soft);}
   .legend{display:flex;gap:var(--sp-3);flex-wrap:wrap;font-size:var(--fs-caption);color:var(--ink-soft);margin-top:var(--sp-3);}
-  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:var(--r-xs);margin-right:5px;vertical-align:-1px;}
   .tl-empty{text-align:center;padding:var(--sp-6) var(--sp-4);}
 
   /* ---- Training: workouts ---------------------------------------------- */
@@ -629,7 +553,7 @@
   /* ---- Kestrel AI in Claude / PRs ------------------------------------------- */
   .coach-steps{margin:0;padding-left:20px;font-size:var(--fs-footnote);color:var(--ink-soft);display:flex;flex-direction:column;gap:var(--sp-2);line-height:1.45;}
   .coach-steps b{color:var(--ink);}
-  .coach-prompt{width:100%;min-height:160px;font-family:var(--font-mono);font-size:12px;line-height:1.45;}
+  .coach-prompt{width:100%;min-height:160px;font-family:var(--font-mono);font-size:var(--fs-sm);line-height:1.45;}
   .pr-grid{display:flex;flex-direction:column;gap:var(--sp-2);}
   .pr-row{display:grid;grid-template-columns:58px minmax(0,1fr) minmax(0,1.2fr);gap:var(--sp-2);align-items:center;}
   .pr-row.head{font-size:var(--fs-caption2);font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
@@ -639,7 +563,7 @@
   @media (max-width:420px){
     .stat{padding:var(--sp-2) 2px;}
     .stat b{font-size:var(--fs-callout);}
-    .stat span{font-size:10px;}
+    .stat span{font-size:var(--fs-xs);}
     .lib-paces{grid-template-columns:repeat(2,minmax(0,1fr));}
     .tl-cell{min-height:50px;padding:3px;}
     .tl-tag{display:none;}
@@ -725,7 +649,8 @@
     display:flex;justify-content:space-between;align-items:center;
     margin-bottom:10px;gap:8px;flex-wrap:wrap;
   }
-  .cal-toolbar-left{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;}
+  .cal-toolbar-left{display:flex;align-items:center;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;min-width:0;}
+  .cal-toolbar-left > *{flex:none;}
   /* Availability chip — hides the per-person dots so the grid shows only
      what's actually scheduled. */
   .chip-toggle{
@@ -784,7 +709,7 @@
   .day.today .num{color:var(--gold-ink);}
   .day.edit-target{background:var(--green-bg);border-color:var(--green);}
   .event-marks{display:flex;gap:3px;justify-content:center;margin-top:3px;height:5px;}
-  .event-marks .e{width:12px;height:5px;border-radius:2.5px;}
+  .event-marks .e{width:12px;height:5px;border-radius:var(--r-xs);}
   .dots{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;margin-top:2px;max-width:100%;}
   .dots .d{width:5px;height:5px;border-radius:50%;}
   .day.you-away{opacity:0.5;}
@@ -809,7 +734,7 @@
   }
   .event-row:last-child{border-bottom:none;}
   .event-header{display:flex;align-items:stretch;gap:9px;}
-  .event-bar{width:3px;border-radius:2px;background:var(--ink);flex-shrink:0;align-self:stretch;}
+  .event-bar{width:3px;border-radius:var(--r-xs);background:var(--ink);flex-shrink:0;align-self:stretch;}
   .event-title{
     font-weight:600;font-size:var(--fs-headline);line-height:var(--lh-headline);
     letter-spacing:var(--tr-headline);
@@ -850,12 +775,12 @@
   .event-type-picker{
     position:relative;display:flex;gap:2px;
     background:var(--track);border:1px solid var(--line);
-    border-radius:calc(var(--r-control) + 2px);padding:3px;margin-top:2px;
+    border-radius:calc(var(--r-control) + var(--r-xs));padding:3px;margin-top:2px;
   }
   .event-type-slider{
     position:absolute;top:3px;left:3px;
     height:calc(100% - 6px);width:calc(33.333% - 2px);
-    border-radius:calc(var(--r-control) - 1px);background:var(--practice);
+    border-radius:calc(var(--r-control) - var(--r-xs));background:var(--practice);
     transform:translateX(0%);
     transition:transform .24s cubic-bezier(.4,0,.2,1), background-color .24s ease;
     box-shadow:0 1px 3px var(--shadow);
@@ -1119,7 +1044,7 @@
   /* body map — dark "phone mockup" panel, muscular silhouette, Strava-style */
   .bodymap-panel{
     background:linear-gradient(180deg in oklch,#1a1720,#100e14);
-    border-radius:20px;
+    border-radius:var(--r-md);
     padding:20px 14px 16px;
     display:flex;flex-direction:column;align-items:center;gap:14px;
   }
@@ -1139,7 +1064,7 @@
   .bm-chip-x{
     width:20px;height:20px;padding:0;border-radius:50%;flex-shrink:0;
     background:rgba(255,255,255,0.14);border:none;color:#fff;
-    font-size:11px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;
+    font-size:var(--fs-xs);line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
   .bm-chip-more{
     color:rgba(255,255,255,0.78);background:transparent;
@@ -1162,7 +1087,7 @@
     letter-spacing:var(--tr-footnote);color:var(--ink-soft);
   }
   .bodymap-legend .swatch{
-    display:inline-block;width:10px;height:10px;border-radius:3px;
+    display:inline-block;width:10px;height:10px;border-radius:var(--r-xs);
     margin-right:5px;vertical-align:middle;
   }
 
@@ -1191,7 +1116,7 @@
   .tp-dmiles .was{display:block;font-size:var(--fs-caption);font-weight:500;color:var(--ink-soft);text-decoration:line-through;text-align:right;}
   .ready{display:flex;gap:var(--sp-3);align-items:center;}
   .ready-score{width:84px;height:84px;border-radius:50%;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
-  .ready-score b{font-size:1.75rem;line-height:1;font-weight:800;font-variant-numeric:tabular-nums;}
+  .ready-score b{font-size:var(--fs-2xl);line-height:1;font-weight:800;font-variant-numeric:tabular-nums;}
   .ready-score span{font-size:var(--fs-caption2);font-weight:700;margin-top:3px;text-align:center;line-height:1.1;}
   .ready-why{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font-size:var(--fs-footnote);line-height:1.35;min-width:0;}
   .ready-why li::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;vertical-align:1px;background:var(--int-1);}
@@ -1218,7 +1143,7 @@
   .kai-tools .sm-btn{white-space:nowrap;}
   .kai-hist{border:1px solid var(--line);border-radius:var(--r-control);padding:var(--sp-2);max-height:320px;overflow:auto;}
   .kai-hist-list{display:flex;flex-direction:column;gap:2px;}
-  .kai-hist-row{display:flex;align-items:center;gap:6px;border-radius:8px;}
+  .kai-hist-row{display:flex;align-items:center;gap:6px;border-radius:var(--r-xs);}
   .kai-hist-row.on{background:var(--surface-2,rgba(127,127,127,.12));}
   .kai-hist-open{flex:1;min-width:0;height:auto;min-height:0;box-shadow:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;background:none;border:0;padding:8px;color:inherit;cursor:pointer;font:inherit;}
   .kai-hist-open b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-subhead);}
@@ -1245,7 +1170,7 @@
   #tlDayCard .tl-day-actions{gap:var(--sp-2);align-items:center;}
   #tlDayCard.viewing #tlDaySplits,#tlDayCard.viewing #tlTrackWrap,#tlDayCard.viewing #tlManual,#tlDayCard.viewing #splitPanel,#tlDayCard.viewing .stack-lg,#tlDayCard.viewing .divider,#tlDayCard.viewing #tlLockNote,#tlDayCard.viewing #tlCancel,#tlDayCard.viewing .tag-pick{display:none !important;}
   #tlDayCard.editing #tlEdit,#tlDayCard.editing #tlReadout,#tlDayCard.editing .session-suggest{display:none !important;}
-  .tag-chip{display:inline-block;font-size:var(--fs-caption);padding:1px 9px;border-radius:99px;border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;}
+  .tag-chip{display:inline-block;font-size:var(--fs-caption);padding:1px 9px;border-radius:var(--r-pill);border:1px solid var(--line);color:var(--ink-soft);white-space:nowrap;}
   .tag-chip.hard{background:var(--gold-bg);color:var(--gold-ink);border-color:transparent;}
   .session-suggest{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;background:var(--gold-bg);color:var(--gold-ink);border-radius:var(--r-control);padding:var(--sp-2) var(--sp-3);margin-top:var(--sp-2);font-size:var(--fs-subhead);line-height:1.4;}
   .session-suggest span{flex:1 1 200px;}
@@ -1268,11 +1193,11 @@
   .seg-card .act-btn{display:none;}
   .seg-card .act-body{display:block;padding:0;}
   .seg-prs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
-  .pr-chip{font-size:var(--fs-caption);font-weight:700;padding:2px 10px;border-radius:99px;background:var(--gold);color:#fff;}
+  .pr-chip{font-size:var(--fs-caption);font-weight:700;padding:2px 10px;border-radius:var(--r-pill);background:var(--gold);color:#fff;}
   .seg-meta{font-size:var(--fs-footnote);color:var(--ink-soft);margin-top:4px;}
   .tag-pick{margin-top:var(--sp-3);}
   .tag-pick .tag-opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
-  .tag-pick .tag-opts button{font-size:var(--fs-footnote);padding:4px 11px;border-radius:99px;min-height:0;}
+  .tag-pick .tag-opts button{font-size:var(--fs-footnote);padding:4px 11px;border-radius:var(--r-pill);min-height:0;}
   .tag-pick .tag-opts button.on{border-color:var(--ink);font-weight:600;}
   .tag-new{display:none;gap:6px;margin-top:8px;flex-wrap:wrap;}
   .tag-new.show{display:flex;}
@@ -1301,12 +1226,13 @@
   .rec-gps{display:inline-flex;align-items:center;gap:7px;font-size:var(--fs-footnote);font-weight:600;color:var(--ink-soft);margin-bottom:var(--sp-4);}
   .rec-gps i{width:9px;height:9px;border-radius:50%;background:var(--ink-soft);}
   .rec-gps.good i{background:var(--int-1);} .rec-gps.fair i{background:var(--int-2);} .rec-gps.bad i{background:var(--int-4);}
-  .rec-go{width:148px;height:148px;border-radius:50%;border:0;background:var(--gold);color:var(--on-fill);font:800 22px var(--font-display);letter-spacing:-.02em;box-shadow:0 10px 30px color-mix(in srgb,var(--gold) 38%,transparent);transition:transform .25s var(--spring),box-shadow .25s;}
+  .rec-go{width:148px;height:148px;border-radius:50%;border:0;background:var(--gold);color:var(--on-fill);font:800 var(--fs-xl) var(--font-display);letter-spacing:-.02em;box-shadow:0 10px 30px color-mix(in srgb,var(--gold) 38%,transparent);transition:transform .25s var(--spring),box-shadow .25s;}
   .rec-go:hover{transform:scale(1.04);}
+  /* The live-run readout is the one size outside the scale: read at arm's length mid-run, like a watch face. */
   .rec-big{font:800 clamp(56px,16vw,84px)/1 var(--font-display);letter-spacing:-.05em;font-variant-numeric:tabular-nums;text-align:center;}
   .rec-big small{font-size:.32em;letter-spacing:0;margin-left:6px;color:var(--ink-soft);font-weight:700;}
   .rec-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-2);text-align:center;}
-  .rec-stats div b{display:block;font:800 clamp(22px,6vw,30px)/1.1 var(--font-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
+  .rec-stats div b{display:block;font:800 var(--fs-2xl)/1.1 var(--font-display);letter-spacing:-.03em;font-variant-numeric:tabular-nums;}
   .rec-stats div span{font-size:var(--fs-caption);font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.05em;}
   .rec-map{width:100%;height:200px;border-radius:var(--r-control);background:var(--track);display:block;}
   .rec-map path{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;stroke-linejoin:round;}
@@ -1355,8 +1281,8 @@
 
   /* ---- Kestrel AI ------------------------------------------------------------ */
   .kai-mark{
-    width:28px;height:28px;border-radius:9px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
-    background:var(--gold);color:var(--on-fill);font-family:var(--font-display);font-weight:900;font-size:15px;margin-right:8px;
+    width:28px;height:28px;border-radius:var(--r-xs);flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
+    background:var(--gold);color:var(--on-fill);font-family:var(--font-display);font-weight:900;font-size:var(--fs-md);margin-right:8px;
   }
   @media (prefers-color-scheme:dark){ .kai-mark{color:#141119;} }
   .kai-card .chip-scroll{margin-bottom:var(--sp-3);}
@@ -1368,9 +1294,9 @@
   .kai-body{padding:4px 16px 18px;display:flex;flex-direction:column;gap:var(--sp-3);}
   .kai-body .chip-scroll{margin:0 -16px;padding:0 16px 2px;}
   .kai-thread{display:flex;flex-direction:column;gap:var(--sp-2);max-height:min(52vh,460px);overflow-y:auto;padding:2px 0;}
-  .kai-msg{max-width:88%;padding:var(--sp-2) var(--sp-3);border-radius:14px;white-space:pre-wrap;font-size:var(--fs-subhead);line-height:1.45;}
-  .kai-msg.kai{align-self:flex-start;background:var(--bg);border-bottom-left-radius:4px;}
-  .kai-msg.user{align-self:flex-end;background:var(--fill);color:var(--on-fill);border-bottom-right-radius:4px;}
+  .kai-msg{max-width:88%;padding:var(--sp-2) var(--sp-3);border-radius:var(--r-sm);white-space:pre-wrap;font-size:var(--fs-subhead);line-height:1.45;}
+  .kai-msg.kai{align-self:flex-start;background:var(--bg);border-bottom-left-radius:var(--r-xs);}
+  .kai-msg.user{align-self:flex-end;background:var(--fill);color:var(--on-fill);border-bottom-right-radius:var(--r-xs);}
   .kai-msg.typing{color:var(--ink-soft);}
   .kai-saved{align-self:flex-start;display:flex;flex-wrap:wrap;gap:4px;margin-top:-2px;}
   .kai-saved span{font-size:var(--fs-caption);font-weight:600;background:var(--int-1-bg);color:var(--int-1-ink);border-radius:var(--r-pill);padding:2px 8px;}
@@ -1424,11 +1350,11 @@
   .act-body{display:none;padding:0 var(--sp-3) var(--sp-3);}
   .act.open .act-body{display:block;}
   .act-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px;}
-  .act-stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;min-width:0;}
+  .act-stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xs);padding:6px 8px;display:flex;flex-direction:column;min-width:0;}
   .act-stat b{font-size:var(--fs-subhead);font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
   .act-stat span{font-size:var(--fs-caption);color:var(--ink-soft);}
   .act-note{margin-top:var(--sp-2);font-size:var(--fs-footnote);color:var(--ink-soft);line-height:1.45;}
-  .act-zones{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:var(--sp-2);background:var(--line);}
+  .act-zones{display:flex;height:10px;border-radius:var(--r-xs);overflow:hidden;margin-top:var(--sp-2);background:var(--line);}
   .act-zones i{display:block;height:100%;}
   .act-zone-key{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:4px;font-size:var(--fs-caption);color:var(--ink-soft);}
   .act-laps{width:100%;border-collapse:collapse;margin-top:var(--sp-2);font-size:var(--fs-footnote);font-variant-numeric:tabular-nums;}
@@ -1441,7 +1367,7 @@
   .fit-row .tm .rng{display:block;font-size:var(--fs-caption);font-weight:500;color:var(--ink-soft);}
   .week-bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end;height:96px;margin-top:var(--sp-3);}
   .week-bars .wb{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px;font-size:var(--fs-caption2);color:var(--ink-soft);font-weight:600;}
-  .week-bars .wb i{display:block;width:100%;border-radius:4px;background:var(--track);min-height:2px;}
+  .week-bars .wb i{display:block;width:100%;border-radius:var(--r-xs);background:var(--track);min-height:2px;}
   .week-bars .wb.has i{background:var(--gold);}
   .week-bars .wb.today span{color:var(--ink);}
   .session-summary{font-size:var(--fs-subhead);margin:0 0 var(--sp-3);line-height:1.4;}
@@ -1454,7 +1380,7 @@
   .session-report b{color:var(--gold);font-size:var(--fs-caption);text-transform:uppercase;letter-spacing:.05em;margin-right:4px;}
   .tl-events{display:flex;flex-direction:column;gap:6px;margin-top:var(--sp-3);}
   .tl-event{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-footnote);color:var(--ink-soft);}
-  .tl-event i{width:3px;height:16px;border-radius:2px;flex-shrink:0;}
+  .tl-event i{width:3px;height:16px;border-radius:var(--r-xs);flex-shrink:0;}
   .split-builder{display:flex;flex-direction:column;gap:6px;}
   .split-toggle{
     width:100%;height:auto;min-height:var(--tap-min);padding:0;margin-bottom:var(--sp-2);
@@ -1475,7 +1401,7 @@
   .split-row .n{font-size:var(--fs-caption);color:var(--ink-soft);font-weight:700;text-align:center;}
   .split-row input{width:100%;min-width:0;padding:8px 5px;text-align:center;font-variant-numeric:tabular-nums;}
   .split-row .pace{font-size:var(--fs-footnote);font-weight:700;font-variant-numeric:tabular-nums;text-align:right;}
-  .split-row .x{width:28px;height:28px;padding:0;border-radius:50%;background:transparent;color:var(--ink-soft);border:1px solid var(--line);font-size:12px;}
+  .split-row .x{width:28px;height:28px;padding:0;border-radius:50%;background:transparent;color:var(--ink-soft);border:1px solid var(--line);font-size:var(--fs-sm);}
   .split-empty{font-size:var(--fs-footnote);color:var(--ink-soft);padding:var(--sp-2) 0;}
   .split-add{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:var(--sp-2);font-size:var(--fs-footnote);color:var(--ink-soft);}
   .split-add input{width:78px;padding:8px 6px;text-align:center;}
@@ -1561,9 +1487,9 @@
   .stat-grid-3{grid-template-columns:repeat(3,minmax(0,1fr));}
   .team-bars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;align-items:end;height:120px;margin-top:var(--sp-4);}
   .team-bar{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px;min-width:0;}
-  .team-bar i{display:block;width:100%;max-width:34px;border-radius:6px 6px 2px 2px;background:var(--gold-bg);min-height:3px;}
+  .team-bar i{display:block;width:100%;max-width:34px;border-radius:var(--r-xs) var(--r-xs) var(--r-xs) var(--r-xs);background:var(--gold-bg);min-height:3px;}
   .team-bar.cur i{background:var(--gold);}
-  .team-bar span{font-size:10px;color:var(--ink-soft);white-space:nowrap;}
+  .team-bar span{font-size:var(--fs-xs);color:var(--ink-soft);white-space:nowrap;}
   .team-bar b{font-size:var(--fs-caption2);font-variant-numeric:tabular-nums;}
   .seg-sm .seg-btn{height:28px;font-size:var(--fs-caption);}
   .seg-sm{min-width:0;}
@@ -1574,8 +1500,8 @@
   .leader-row .nm{display:flex;align-items:center;gap:6px;min-width:0;font-size:var(--fs-subhead);font-weight:600;}
   .leader-row .nm span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .leader-row .nm small{font-size:var(--fs-caption2);color:var(--ink-soft);font-weight:500;}
-  .leader-row .bar{height:8px;border-radius:4px;background:var(--bg);overflow:hidden;}
-  .leader-row .bar i{display:block;height:100%;background:var(--gold);border-radius:4px;}
+  .leader-row .bar{height:8px;border-radius:var(--r-xs);background:var(--bg);overflow:hidden;}
+  .leader-row .bar i{display:block;height:100%;background:var(--gold);border-radius:var(--r-xs);}
   .leader-row .mi{font-weight:800;font-variant-numeric:tabular-nums;text-align:right;font-size:var(--fs-subhead);}
   .leader-row .sub{grid-column:2 / -1;font-size:var(--fs-caption);color:var(--ink-soft);margin-top:-4px;}
   .leader-row.me .nm span{color:var(--gold);}
@@ -1593,7 +1519,7 @@
   .setup-body p b{color:var(--ink);}
   .link-btn{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;height:var(--btn-h-sm);padding:0 var(--sp-3);border-radius:var(--r-control);background:var(--gold-bg);color:var(--gold-ink);font-weight:700;font-size:var(--fs-footnote);text-decoration:none;}
   .link-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;}
-  .import-bar{height:6px;border-radius:3px;background:var(--bg);overflow:hidden;display:none;}
+  .import-bar{height:6px;border-radius:var(--r-xs);background:var(--bg);overflow:hidden;display:none;}
   .import-bar.show{display:block;}
   .import-bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .4s ease;}
 
@@ -1604,8 +1530,8 @@
   #rosterList .roster-line{padding:6px 0;}
   #rosterActions{flex-wrap:wrap;}
   .ev-chips{display:none;flex-direction:column;gap:2px;margin-top:3px;min-width:0;}
-  .ev-chip{font-size:10.5px;line-height:1.25;font-weight:600;padding:1px 5px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
-  .ev-more{font-size:10px;color:var(--ink-soft);padding-left:5px;}
+  .ev-chip{font-size:var(--fs-xs);line-height:1.25;font-weight:600;padding:1px 5px;border-radius:var(--r-xs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .ev-more{font-size:var(--fs-xs);color:var(--ink-soft);padding-left:5px;}
   .log-link{display:inline-flex;align-items:center;gap:4px;}
   #schViews,#youViews{max-width:300px;}
 
@@ -1642,7 +1568,7 @@
     .rec-course .rec-x{margin-top:var(--sp-2);}
   }
   .rec-course{display:grid;grid-template-columns:minmax(0,1fr) 28px;gap:var(--sp-2);align-items:center;}
-  .rec-x{width:28px;height:28px;padding:0;border-radius:50%;background:transparent;border:1px solid var(--line);color:var(--ink-soft);font-size:16px;line-height:1;}
+  .rec-x{width:28px;height:28px;padding:0;border-radius:50%;background:transparent;border:1px solid var(--line);color:var(--ink-soft);font-size:var(--fs-lg);line-height:1;}
   .rec-status{min-height:1.4em;margin-top:var(--sp-3);}
   .chip-wrap{display:flex;flex-wrap:wrap;gap:var(--sp-2);}
   .course-list{display:flex;flex-direction:column;gap:var(--sp-2);max-height:320px;overflow-y:auto;}
@@ -1688,7 +1614,7 @@
       column-gap:var(--sp-4);align-items:center;
     }
     .wrap > header{display:contents;}
-    .wrap > header > .wordmark{grid-area:brand;font-size:1.375rem;}
+    .wrap > header > .wordmark{grid-area:brand;font-size:var(--fs-xl);}
     .wrap > header > .head-right{grid-area:right;}
     .wrap > .page-tabs{grid-area:tabs;margin:0;}
     .wrap > [id^="page"]{grid-area:page;margin-top:var(--sp-5);align-self:start;}
@@ -1726,7 +1652,7 @@
     .split-log .split-side,.split-lib .split-side{position:sticky;top:var(--sp-5);max-height:calc(100dvh - 2 * var(--sp-5));overflow-y:auto;}
     .tl-cell{min-height:72px;padding:var(--sp-2);}
     .tl-mi{font-size:var(--fs-headline);}
-    .chip-scroll{flex-wrap:wrap;overflow:visible;margin:0;padding:0;}
+    .chip-scroll{margin:0;padding:0;}
   }
 
 
@@ -1743,7 +1669,7 @@
   .tk-row.off{background:var(--bg);}
   .tk-move{display:flex;gap:4px;}
   .tk-move button{height:32px;width:32px;padding:0;}
-  .tk-x{height:18px;width:18px;padding:0;border:none;background:transparent;color:inherit;font-size:11px;}
+  .tk-x{height:18px;width:18px;padding:0;border:none;background:transparent;color:inherit;font-size:var(--fs-xs);}
   .tk-tips{margin:var(--sp-2) 0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:var(--fs-footnote);line-height:1.5;color:var(--ink-soft);}
   .tk-tips b{color:var(--ink);}
   .gl-card.main{border-color:var(--gold);box-shadow:inset 3px 0 0 var(--gold);}
@@ -1753,7 +1679,7 @@
   .gl-sub{font-size:var(--fs-footnote);font-weight:700;margin:var(--sp-4) 0 var(--sp-2);}
   .gl-weeks{position:relative;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;align-items:end;height:90px;margin:var(--sp-3) 0 var(--sp-2);}
   .gl-wk{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;}
-  .gl-wk i{display:block;width:100%;border-radius:4px;background:var(--track);}
+  .gl-wk i{display:block;width:100%;border-radius:var(--r-xs);background:var(--track);}
   .gl-wk.met i{background:var(--gold);}
   .gl-wk span{height:14px;font-size:var(--fs-caption2);font-weight:600;color:var(--ink-soft);}
   .gl-wk.now span{color:var(--ink);}
@@ -1773,7 +1699,7 @@
   .xt-bars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;align-items:end;height:118px;margin-top:var(--sp-4);}
   .xt-wk{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;font-size:var(--fs-caption2);color:var(--ink-soft);font-weight:600;}
   .xt-stack{display:flex;flex-direction:column-reverse;width:100%;gap:1px;}
-  .xt-stack i{display:block;width:100%;border-radius:3px;}
+  .xt-stack i{display:block;width:100%;border-radius:var(--r-xs);}
   .xt-stack .run{background:var(--gold);}
   .xt-stack .xt{background:var(--int-2);}
   .fu-macros{display:flex;flex-direction:column;gap:var(--sp-3);margin-top:var(--sp-4);}
@@ -1799,6 +1725,7 @@
 <link rel="stylesheet" href="/ds/views.css">
 <link rel="stylesheet" href="/kestrel.css">
 <link rel="stylesheet" href="/ds/motion.css">
+<link rel="stylesheet" href="/ds/utilities.css">
 </head>
 <body>
 
@@ -1847,7 +1774,7 @@
       <div class="td-main">
         <div class="td-sec"><h3 class="td-h">Your run</h3><div id="tdRunSlot">
         <section class="card today-card" id="todayCard" style="display:none;">
-          <div class="section-head" style="margin-bottom:var(--sp-2);">
+          <div class="section-head u-mb2">
             <div>
               <div class="eyebrow" id="tmEyebrow">Today</div>
               <div class="tm-main"><span class="tm-type" id="tmType"></span><span class="tm-miles num" id="tmMiles"></span></div>
@@ -1858,7 +1785,7 @@
           <div class="tm-reason" id="tmReason" style="display:none;"></div>
           <div class="tm-done" id="tmDone" style="display:none;"></div>
           <div class="tm-today" id="tmNext"></div>
-          <div class="cluster" style="margin-top:var(--sp-3);">
+          <div class="cluster u-mt3">
             <button type="button" class="ghost sm-btn" id="tmCant">Can't do this</button>
             <button type="button" class="ghost sm-btn" id="tmReset" style="display:none;">Back to the plan</button>
             <button type="button" class="ghost sm-btn" id="tmAsk">Ask Kestrel AI</button>
@@ -2052,7 +1979,7 @@
         <section class="card" id="weekCard" style="display:none;">
           <div class="card-title">This week</div>
           <div class="stat-grid" id="weekStats"></div>
-          <div class="hint" id="weekHint" style="margin-top:var(--sp-2);"></div>
+          <div class="hint u-mt2" id="weekHint"></div>
         </section>
         <section class="card" id="levelCard" style="display:none;">
           <div class="card-title">Your level</div>
@@ -2113,7 +2040,7 @@
           <button class="navbtn" id="tlNext" type="button" aria-label="Next month">›</button>
         </div>
         <div class="stat-grid" id="tlStats"></div>
-        <div class="hint" id="tlHint" style="margin-top:var(--sp-3);"></div>
+        <div class="hint u-mt3" id="tlHint"></div>
         <div class="tl-grid" id="tlGrid"></div>
         <div class="legend">
           <span><i style="background:var(--int-1-bg);box-shadow:inset 0 0 0 1px var(--int-1)"></i>Easy 1-3</span>
@@ -2129,7 +2056,7 @@
           <div class="week-bars" id="tlWeekBars"></div>
         </section>
         <section class="card tl-empty" id="tlEmpty">
-          <div class="card-title" style="margin-bottom:var(--sp-2);">Pick a day</div>
+          <div class="card-title u-mb2">Pick a day</div>
           <div class="hint">Tap any day to see its sessions and Kestrel AI's report. Days synced from your watch fill in on their own.</div>
         </section>
         <section class="card" id="tlDayCard" style="display:none;">
@@ -2273,13 +2200,13 @@
           <div class="fit-hero" id="fitHero"></div>
           <div class="fit-table" id="fitTable"></div>
           <div class="fit-trend" id="fitTrend"></div>
-          <div class="hint" id="predNote" style="margin-top:var(--sp-2);"></div>
+          <div class="hint u-mt2" id="predNote"></div>
         </section>
         <section class="card">
           <div class="card-title">Race-day calculators</div>
           <details>
             <summary><b>Heat and hills</b>: what the weather costs your race</summary>
-            <div class="stack" style="margin-top:var(--sp-3);">
+            <div class="stack u-mt3">
               <div class="hint">Enter the time you would run on a cool, flat day and the conditions. Uses the temperature + dew point chart behind the rest of Kestrel.</div>
               <div class="cluster">
                 <label class="field"><span>Race</span><select id="calcHeatRace"><option value="1600">Mile / 1600</option><option value="3200">3200</option><option value="5K" selected>5K</option><option value="10K">10K</option><option value="half">Half marathon</option><option value="marathon">Marathon</option></select></label>
@@ -2294,9 +2221,9 @@
               <div id="calcHeatOut" class="hint"></div>
             </div>
           </details>
-          <details style="margin-top:var(--sp-3);">
+          <details class="u-mt3">
             <summary><b>Taper</b>: miles for the last weeks before a race</summary>
-            <div class="stack" style="margin-top:var(--sp-3);">
+            <div class="stack u-mt3">
               <div class="cluster">
                 <label class="field"><span>Race</span><select id="calcTaperRace"><option value="1600">Mile / 1600</option><option value="3200">3200</option><option value="5K" selected>5K</option><option value="10K">10K</option><option value="half">Half marathon</option><option value="marathon">Marathon</option></select></label>
                 <label class="field"><span>Peak week (miles)</span><input type="number" id="calcTaperMiles" value="40" min="5" max="150"></label>
@@ -2306,9 +2233,9 @@
               <div id="calcTaperOut" class="stack"></div>
             </div>
           </details>
-          <details style="margin-top:var(--sp-3);">
+          <details class="u-mt3">
             <summary><b>Runners like you</b>: your marathon training next to real marathoners</summary>
-            <div class="stack" style="margin-top:var(--sp-3);">
+            <div class="stack u-mt3">
               <div class="hint">Compares your last 16 weeks of watch runs with 14,000 real marathon runners. Add a goal time to see what runners at that time trained.</div>
               <div class="cluster">
                 <label class="field"><span>Goal marathon time (optional)</span><input type="text" id="calcCohortGoal" placeholder="3:30:00" maxlength="8" inputmode="numeric"></label>
@@ -2332,15 +2259,15 @@
         <section class="card">
           <div class="card-title">Based on</div>
           <div class="list" id="fitSources"></div>
-          <div class="cluster" style="margin-top:var(--sp-3);">
+          <div class="cluster u-mt3">
             <button type="button" class="ghost" id="fitRefresh">Recalculate</button>
             <button type="button" class="ghost" id="fitAddPrs">Update PRs</button>
           </div>
         </section>
         <section class="card">
           <details class="fit-how">
-            <summary><span class="card-title" style="margin:0;">How it works</span></summary>
-            <div class="stack" style="margin-top:var(--sp-3);">
+            <summary><span class="card-title u-m0">How it works</span></summary>
+            <div class="stack u-mt3">
               <p><b>Every run is searched for races.</b> Any run that covered a race distance (1600 to 10K) at race effort counts, whatever it was labelled, and if it beats a PR on file Kestrel updates the PR. The fastest stretches inside your runs (from your watch, through intervals.icu) count too.</p>
               <p><b>Course and weather are taken out.</b> Every race and hard run is credited back to a flat course on a cool day. Van Cortlandt runs about 5.5% slow (about a minute on an 18-minute 5K), other cross-country courses about 2.5% plus their hills, and heat by temperature plus dew point (about 1% at 120, 3% at 140, 6% at 160). Heart rate on steady runs is read the same way. Your PRs stay the real times, and a cross-country race counts toward your XC PR, never your track one.</p>
               <p><b>KestrelPredict reads your results.</b> Your races and PRs from the last two years (a 5K you typed in only counts when nothing newer exists) go into KestrelPredict-Lite, a small model trained on collegiate and Ontario high-school race results. It predicts a time for every event from 400 to the half marathon, with an 80% range, and learns your own speed-vs-endurance shape from the distances you have run. Your race VO2max (the oxygen use your times are worth) is read off its 1600, 3200 and 5K times and sets your training zones.</p>
@@ -2401,7 +2328,7 @@
         <div class="stat-grid stat-grid-3" id="teamStats"></div>
         <div class="team-bars" id="teamBars"></div>
         <hr class="divider">
-        <div class="section-head" style="margin-bottom:var(--sp-2);">
+        <div class="section-head u-mb2">
           <div class="card-title" style="font-size:var(--fs-headline);">This week</div>
           <div class="seg seg-sm" id="teamSort" role="tablist" aria-label="Sort by">
             <button type="button" class="seg-btn active" data-sort="this_week">Week</button>
@@ -2572,7 +2499,7 @@
           <span><span class="swatch" style="background:var(--pain);"></span>Pain</span>
         </div>
         <div class="hint" id="bodyMapHint" style="margin-top:10px;">Tap a body part to mark it — tap again to cycle sore → pain → clear.</div>
-        <button type="button" class="ghost full-btn" id="bodyKaiBtn" style="margin-top:var(--sp-3);">Tell Kestrel AI how it feels</button>
+        <button type="button" class="ghost full-btn u-mt3" id="bodyKaiBtn">Tell Kestrel AI how it feels</button>
       </div>
     </div>
     <div id="youIntegrationsView" class="you-stack" style="display:none;">
@@ -2615,9 +2542,9 @@
             </div>
           </li>
         </ol>
-        <details class="fit-how" style="margin-top:var(--sp-3);">
+        <details class="fit-how u-mt3">
           <summary><span class="hint"><b>Using a COROS, Garmin or Strava connector in Claude instead?</b></span></summary>
-          <div class="stack" style="margin-top:var(--sp-3);">
+          <div class="stack u-mt3">
             <div class="seg" id="coachSource" role="tablist" aria-label="Watch">
               <button type="button" class="seg-btn" data-src="intervals">Watch sync</button>
               <button type="button" class="seg-btn" data-src="coros">COROS</button>
@@ -2680,7 +2607,7 @@
                   <button class="ghost" id="icuDisconnectBtn" type="button">Disconnect</button>
                 </div>
                 <div class="hint" id="icuSyncMsg"></div>
-                <div class="stack" style="margin-top:var(--sp-3);">
+                <div class="stack u-mt3">
                   <b>Send your plan to your watch</b>
                   <div class="hint">Sends the next 14 days of your plan to intervals.icu as workouts with your own paces. Garmin and COROS pick them up from there once "upload planned workouts" is on in intervals.icu (Settings, Connections). Sending again updates the same workouts.</div>
                   <div class="cluster"><button class="ghost" id="icuPlanPreviewBtn" type="button">Preview</button><button id="icuPlanPushBtn" type="button">Send to my watch</button></div>
@@ -2705,7 +2632,7 @@
       <div class="card" id="calendarFeedCard" style="display:none;">
         <div class="card-title">Meets in your calendar app</div>
         <div class="hint">Paste this into Google Calendar → Settings → Add calendar → From URL, and it'll stay in sync with meets (not practices) and your RSVPs.</div>
-        <div class="copy-row" style="margin-top:8px;">
+        <div class="copy-row u-mt2">
           <textarea id="calendarFeedUrl" readonly rows="1"></textarea>
           <button id="copyCalendarFeedBtn">Copy</button>
         </div>
@@ -2929,7 +2856,7 @@ const BODY_PAIN_INTENSITY = 8;
 
 const EVENT_TYPES = {
   practice: { label: 'Practice', color: 'var(--practice)', bg: 'var(--practice-bg)', text: 'var(--ink)' },
-  meet:     { label: 'Meet',     color: 'var(--meet)',     bg: 'var(--meet-bg)',     text: 'var(--meet)' },
+  meet:     { label: 'Meet',     color: 'var(--meet)',     bg: 'var(--meet-bg)',     text: 'var(--accent-ink)' },
   other:    { label: 'Other',    color: 'var(--other)',    bg: 'var(--other-bg)',    text: 'var(--other)' },
 };
 const EVENT_TYPE_KEYS = Object.keys(EVENT_TYPES);
@@ -3152,7 +3079,7 @@ function renderCalendar(){
       ? availablePeople.slice(0,10).map(p=>`<span class="d" style="background:${p.color}"></span>`).join('')
       : '';
     // Desktop has room for the event names themselves (CSS hides these on phones).
-    const chips = dayEvents.slice(0, 3).map(ev=>{ const st = eventStyle(ev); return `<span class="ev-chip" style="background:${st.bg};color:${st.text}">${escapeHtml(ev.title)}</span>`; }).join('')
+    const chips = dayEvents.slice(0, 3).map(ev=>{ const st = eventStyle(ev); return `<span class="ev-chip" title="${escapeHtml(ev.title)}" style="background:${st.bg};color:${st.text}">${escapeHtml(ev.title)}</span>`; }).join('')
       + (dayEvents.length > 3 ? `<span class="ev-more">+${dayEvents.length - 3} more</span>` : '');
     html += `<div class="${cls}" data-date="${dk}">
       <div class="num">${d}</div>
@@ -3667,10 +3594,10 @@ function renderPostItem(post){
   const authorName = postAuthorName(post.personId);
   const isNew = Date.now() - post.createdAt < POST_UNREAD_MS;
   return `<div class="post-item">
-    <div class="post-avatar" style="background:${postAuthorColor(post.personId)}">${escapeHtml(initialsOf(authorName))}</div>
+    <div class="post-avatar" style="--av:${postAuthorColor(post.personId)}">${escapeHtml(initialsOf(authorName))}</div>
     <div class="post-main">
       <div class="post-top-row">
-        <span class="post-author">${escapeHtml(authorName)}</span>
+        <span class="post-author" title="${escapeHtml(authorName)}">${escapeHtml(authorName)}</span>
         ${isNew ? '<span class="post-unread-dot" aria-label="New"></span>' : ''}
         <span class="post-time">${relativeTime(post.createdAt)}</span>
       </div>
@@ -6150,7 +6077,7 @@ async function renderLibrary(){
           <div class="list-title">${escapeHtml(w.name)}</div>
           <div class="cluster" style="gap:6px;margin-top:4px;">
             <span class="badge ${toneOf(w.type)}">${escapeHtml(lib.types[w.type].split(' /')[0])}</span>
-            <span class="list-meta" style="margin:0;">${w.total_min} min${firstGoal(pw) ? ` · ${escapeHtml(firstGoal(pw))}` : ''}</span>
+            <span class="list-meta u-m0">${w.total_min} min${firstGoal(pw) ? ` · ${escapeHtml(firstGoal(pw))}` : ''}</span>
           </div>
         </div>
       </summary>
@@ -6241,7 +6168,7 @@ function drawFitTable(){
   let html;
   if(fitEditing){
     // One list, shortest to longest (a steeplechase sits after the flat race of the same length).
-    html = `<div class="hint" style="margin-bottom:var(--sp-2);">Tap the events you want to see. Every estimate shows how sure it is: the dot and the ± are the width of its 80% range.</div>` +
+    html = `<div class="hint u-mb2">Tap the events you want to see. Every estimate shows how sure it is: the dot and the ± are the width of its 80% range.</div>` +
       byDistance(f.estimates).map(e=>rowHtml(e, true)).join('');
   }else{
     // The Van Cortlandt course rows sit in the list by distance too.
@@ -6287,7 +6214,7 @@ async function renderFitness(refresh){
     $('fitBadge').innerHTML = '';
     fitLast = null; fitEditing = false; $('fitEdit').style.display = 'none';
     $('fitHero').innerHTML = f ? statTile(f.mpw ?? '–', 'mi / week (4 wk)') : '';
-    $('fitTable').innerHTML = `<div class="fit-empty"><div class="card-title" style="margin-bottom:6px;">No fitness data yet</div><div class="hint" style="margin-bottom:var(--sp-3);">Add your PRs (with dates) or connect your watch, and Kestrel works out what you can race now.</div><div class="cluster" style="justify-content:center;"><button type="button" id="fitEmptyPrs">Add PRs</button><button type="button" class="ghost" id="fitEmptyWatch">Set up watch</button></div></div>`;
+    $('fitTable').innerHTML = `<div class="fit-empty"><div class="card-title" style="margin-bottom:6px;">No fitness data yet</div><div class="hint u-mb3">Add your PRs (with dates) or connect your watch, and Kestrel works out what you can race now.</div><div class="cluster" style="justify-content:center;"><button type="button" id="fitEmptyPrs">Add PRs</button><button type="button" class="ghost" id="fitEmptyWatch">Set up watch</button></div></div>`;
     $('fitEmptyPrs').onclick = goToPrs;
     $('fitEmptyWatch').onclick = ()=>{ setPage('you'); setYouView('integrations'); };
     ['fitTrend','fitZones','fitSources','predNote'].forEach(id=> $(id).innerHTML = '');
@@ -6311,7 +6238,7 @@ async function renderFitness(refresh){
   $('prFeed').innerHTML = prs.map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${escapeHtml(x.label.replace(/ \(.*$/, ''))}</div><div class="list-meta">${escapeHtml(new Date(x.date + 'T12:00:00').toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}))}${x.vo2r ? ' · race VO2max ' + x.vo2r : ''}</div></div><span class="badge tone-race pr-badge">PR</span></div>`).join('');
   const kindLabel = { race:'Race effort', pr:'PR', manual:'You entered', reps:'Workout', hr:'Heart rate', best:'Best effort', watch:'Watch' };
   $('fitSources').innerHTML = f.sources.map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${escapeHtml(x.label)}</div><div class="list-meta">${kindLabel[x.kind] || x.kind}${x.date ? ' · ' + escapeHtml(x.date) : ''}${x.vo2r ? ' · race VO2max ' + x.vo2r : ''} · weight ${Math.round(x.weight * 100)}%</div></div></div>`).join('')
-    + `<div class="hint" style="margin-top:var(--sp-2);">Profile: ${f.profile === 'speed' ? 'speed-leaning (your short races are relatively stronger)' : f.profile === 'endurance' ? 'endurance-leaning (your long races are relatively stronger)' : 'balanced'}.${f.cs ? ` Critical speed ${f.cs.per_mile}/mi (${f.cs.source === 'intervals.icu' ? 'fitted by intervals.icu to all your runs' : 'from your races'}).` : ''}</div>`;
+    + `<div class="hint u-mt2">Profile: ${f.profile === 'speed' ? 'speed-leaning (your short races are relatively stronger)' : f.profile === 'endurance' ? 'endurance-leaning (your long races are relatively stronger)' : 'balanced'}.${f.cs ? ` Critical speed ${f.cs.per_mile}/mi (${f.cs.source === 'intervals.icu' ? 'fitted by intervals.icu to all your runs' : 'from your races'}).` : ''}</div>`;
 }
 
 // KestrelPredict notes shown inside the Race fitness card (flagged on the server; empty when off).
@@ -6468,18 +6395,18 @@ function healthHtml(h){
       <div class="ready-score tone-${tone}"><b>${r.score ?? '–'}</b><span>${escapeHtml(r.label)}</span></div>
       <ul class="ready-why">${r.factors.length ? r.factors.slice(0, 4).map(f=>`<li class="${f.pts < 0 ? 'down' : f.pts > 0 ? 'up' : 'ask'}">${escapeHtml(f.why)}</li>`).join('') : r.score == null ? '<li class="ask">Log how runs feel, or wear your watch overnight, and this fills in.</li>' : '<li class="up">Nothing holding you back.</li>'}</ul>
     </div>
-    <div class="stat-grid" style="margin-top:var(--sp-3);">${tiles}</div>
+    <div class="stat-grid u-mt3">${tiles}</div>
     <div class="health-row"><span class="hint">Load</span><b>${h.load.ratio != null ? `${h.load.ratio}x your normal` : 'Not enough data yet'}</b></div>
     <div class="health-row"><span class="hint">Miles</span><b>${h.miles.last_7} in 7 days · ${h.miles.weekly_avg_4wk} avg a week</b></div>
     <div class="health-row"><span class="hint">Status</span><b>${escapeHtml(cap(h.status.health))}</b></div>
     <div class="cluster health-body" style="gap:4px;">${body}</div>
-    ${h.missing.length ? `<div class="hint" style="margin-top:var(--sp-2);">Not seeing: ${escapeHtml(h.missing.join(', '))}.${h.missing.some(m=>m.startsWith('watch')) ? ' Wear your watch overnight so Garmin sends resting HR, HRV and sleep.' : ''}</div>` : ''}`;
+    ${h.missing.length ? `<div class="hint u-mt2">Not seeing: ${escapeHtml(h.missing.join(', '))}.${h.missing.some(m=>m.startsWith('watch')) ? ' Wear your watch overnight so Garmin sends resting HR, HRV and sleep.' : ''}</div>` : ''}`;
 }
 
 function levelHtml(h){
   const l = h.level;
   if(!l) return '<div class="hint">Set your class on the You tab to get a plan.</div>';
-  const hist = h.level_history.length ? `<div class="list" style="margin-top:var(--sp-3);">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'kai' ? 'Kestrel AI' : x.source === 'captain' ? 'Captain' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
+  const hist = h.level_history.length ? `<div class="list u-mt3">${h.level_history.slice(0, 3).map(x=>`<div class="list-row"><div class="list-main"><div class="list-title">${x.from_miles} → ${x.to_miles} mi a week</div><div class="list-meta">${escapeHtml(x.date)} · ${x.source === 'auto' || x.source === 'kai' ? 'Kestrel AI' : x.source === 'captain' ? 'Captain' : 'Coach'} · ${escapeHtml(x.reason)}</div></div></div>`).join('')}</div>` : '';
   if(l.team) return `<div class="level-now"><b>${l.weekly_miles}</b><span>miles a week</span></div>
     <div class="hint" style="margin:var(--sp-2) 0;">Your captain sets your level.</div>${hist}`;
   return `<div class="level-now"><b>${l.weekly_miles}</b><span>miles a week</span>${l.next_weekly_miles ? `<i>Next: ${l.next_weekly_miles}</i>` : ''}</div>

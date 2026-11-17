@@ -316,10 +316,10 @@
       <div class="stack-cards">
         <section class="card">
           <div class="card-title">This week</div>
-          <div class="stat-grid" style="margin-top:var(--sp-3);">${tile(mins(w.xt_min), 'cross-training')}${tile(w.sessions, w.sessions === 1 ? 'session' : 'sessions')}${tile(w.load || '–', 'load (min × RPE)')}${tile(d.share_pct + '%', 'of training time')}</div>
+          <div class="stat-grid u-mt3">${tile(mins(w.xt_min), 'cross-training')}${tile(w.sessions, w.sessions === 1 ? 'session' : 'sessions')}${tile(w.load || '–', 'load (min × RPE)')}${tile(d.share_pct + '%', 'of training time')}</div>
           <div class="xt-bars" aria-label="Running and cross-training minutes, last 8 weeks">${d.weeks.map(x=> `<div class="xt-wk" title="Week of ${weekLabel(x.week)}: ${x.run_min} min running, ${x.xt_min} min cross-training"><div class="xt-stack"><i class="xt" style="height:${x.xt_min / top * 90}px"></i><i class="run" style="height:${x.run_min / top * 90}px"></i></div><span>${weekLabel(x.week).split(' ')[1]}</span></div>`).join('')}</div>
           <div class="legend"><span><i style="background:var(--gold)"></i>Running</span><span><i style="background:var(--int-2)"></i>Cross-training</span></div>
-          <div class="hint" style="margin-top:var(--sp-2);">You average ${mins(d.avg_min)} of cross-training a week over the last 7 weeks.</div>
+          <div class="hint u-mt2">You average ${mins(d.avg_min)} of cross-training a week over the last 7 weeks.</div>
         </section>
         <section class="card">
           <div class="section-head"><div><div class="card-title">Log cross-training</div><div class="hint">Bike, swim, lift, pool run… Rides and swims from your watch show up below on their own.</div></div></div>
@@ -336,7 +336,7 @@
           </form>
         </section>
         <section class="card">
-          <div class="card-title" style="margin-bottom:var(--sp-3);">Recent sessions</div>
+          <div class="card-title u-mb3">Recent sessions</div>
           ${d.entries.length ? Object.keys(byDate).map(date=> `<div class="xt-day"><div class="eyebrow">${esc(dayLabel(date))}</div>${byDate[date].map(e=> `<div class="xt-row">
               <span class="xt-what"><b>${esc(e.label)}</b>${e.name ? ` <span class="hint">${esc(e.name)}</span>` : ''}${e.notes ? `<span class="hint">${esc(e.notes)}</span>` : ''}</span>
               <span class="xt-num">${mins(e.minutes)}${e.distance_mi ? ` · ${e.distance_mi} mi` : ''}${e.rpe ? ` · RPE ${e.rpe}` : e.avg_hr ? ` · ${e.avg_hr} bpm` : ''}</span>
@@ -433,14 +433,14 @@
       <div class="stack-cards">
         <section class="card">
           <div class="month-nav"><button class="navbtn" type="button" id="fuPrev" aria-label="Previous day">‹</button><div class="label">${esc(dayLabel(d.date))}</div><button class="navbtn" type="button" id="fuNext" aria-label="Next day" ${d.date >= todayIso() ? 'disabled' : ''}>›</button></div>
-          <div class="eyebrow" style="margin-top:var(--sp-3);">What kind of day</div>
-          <div class="chip-scroll" style="margin-top:var(--sp-2);">${d.tiers.map(t=> `<button type="button" class="chip ${t.key === d.tier.key ? 'on' : ''}" data-tier="${t.key}">${esc(t.label)}${t.key === d.tier.auto_key ? ' ✓' : ''}</button>`).join('')}</div>
-          <div class="hint" style="margin-top:var(--sp-2);">${esc(d.tier.note)} ${d.training.minutes ? `You've logged ${mins(d.training.minutes)} of training${d.training.run_mi ? ` (${d.training.run_mi} mi running)` : ''} today, so ✓ marks the day type that matches.` : 'Nothing logged yet today; pick the day you have planned.'}</div>
+          <div class="eyebrow u-mt3">What kind of day</div>
+          <div class="chip-scroll u-mt2">${d.tiers.map(t=> `<button type="button" class="chip ${t.key === d.tier.key ? 'on' : ''}" data-tier="${t.key}">${esc(t.label)}${t.key === d.tier.auto_key ? ' ✓' : ''}</button>`).join('')}</div>
+          <div class="hint u-mt2">${esc(d.tier.note)} ${d.training.minutes ? `You've logged ${mins(d.training.minutes)} of training${d.training.run_mi ? ` (${d.training.run_mi} mi running)` : ''} today, so ✓ marks the day type that matches.` : 'Nothing logged yet today; pick the day you have planned.'}</div>
           ${d.targets ? `<div class="fu-macros">
               <div><div class="fu-name">Carbohydrate <span class="hint">${d.bands.carbs[0]}-${d.bands.carbs[1]} g/kg${d.bands.custom_carbs ? ' (yours)' : ''}</span></div>${rangeBar(d.totals.carbs_g, d.targets.carbs_g, 'g')}</div>
               <div><div class="fu-name">Protein <span class="hint">${d.bands.protein[0]}-${d.bands.protein[1]} g/kg${d.bands.custom_protein ? ' (yours)' : ''}</span></div>${rangeBar(d.totals.protein_g, d.targets.protein_g, 'g')}</div>
             </div>` : `<div class="fu-noweight"><b>Add your weight to get gram targets.</b> <span class="hint">Fuel needs scale with body size. Only you see it.</span> <button type="button" class="ghost sm-btn" id="fuWeight">Add weight</button></div>`}
-          <div class="stat-grid" style="margin-top:var(--sp-3);">${tile(Math.round(d.totals.carbs_g) + 'g', 'carbs')}${tile(Math.round(d.totals.protein_g) + 'g', 'protein')}${P.show_fluid ? tile(d.totals.fluid_ml ? (d.totals.fluid_ml / 1000).toFixed(1) + ' L' : '–', 'fluid') : ''}${P.show_kcal ? tile(d.totals.kcal || '–', 'kcal') : P.show_fat ? tile(Math.round(d.totals.fat_g) + 'g', 'fat') : tile(d.totals.entries, d.totals.entries === 1 ? 'entry' : 'entries')}</div>
+          <div class="stat-grid u-mt3">${tile(Math.round(d.totals.carbs_g) + 'g', 'carbs')}${tile(Math.round(d.totals.protein_g) + 'g', 'protein')}${P.show_fluid ? tile(d.totals.fluid_ml ? (d.totals.fluid_ml / 1000).toFixed(1) + ' L' : '–', 'fluid') : ''}${P.show_kcal ? tile(d.totals.kcal || '–', 'kcal') : P.show_fat ? tile(Math.round(d.totals.fat_g) + 'g', 'fat') : tile(d.totals.entries, d.totals.entries === 1 ? 'entry' : 'entries')}</div>
         </section>
         ${d.flag ? `<section class="card fu-flag" role="note"><div class="card-title">A note about fueling</div><p>${esc(d.flag)}</p></section>` : ''}
         <section class="card">
@@ -460,7 +460,7 @@
           </form>
         </section>
         <section class="card">
-          <div class="card-title" style="margin-bottom:var(--sp-2);">${esc(dayLabel(d.date))}</div>
+          <div class="card-title u-mb2">${esc(dayLabel(d.date))}</div>
           ${d.entries.length ? meals.filter(m=> byMeal[m.key]).map(m=> `<div class="xt-day"><div class="eyebrow">${esc(m.label)}</div>${byMeal[m.key].map(e=> `<div class="xt-row"><span class="xt-what"><b>${esc(e.name || 'Food')}</b><span class="hint">${esc(macro(e))}</span></span><button type="button" class="ghost sm-btn" data-fdel="${esc(e.id)}" aria-label="Remove ${esc(e.name || 'food')}">Remove</button></div>`).join('')}</div>`).join('') : '<div class="hint">Nothing logged for this day yet.</div>'}
         </section>
       </div>

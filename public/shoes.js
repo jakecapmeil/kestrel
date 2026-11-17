@@ -45,10 +45,10 @@
     // Two pairs for the same kind of run: the first listed gets those runs unless one is picked on the run.
     const shared = USES.map(([k, l])=> [l, active.filter((s)=> s.uses?.includes(k))]).filter(([, p])=> p.length > 1);
     el.innerHTML = shoes.length ? `${active.map(row).join('')}
-      ${shared.map(([l, p])=> `<div class="hint" style="margin-top:8px;">${esc(p.map((s)=> s.name).join(' and '))} are both for ${esc(l.toLowerCase())}. Those runs count toward ${esc(p[0].name)} unless you pick the other pair on the run.</div>`).join('')}
-      ${gaps.length ? `<div class="hint" style="margin-top:8px;">No pair is set for ${esc(gaps.join(', '))}. Those runs aren’t counted unless you pick shoes on the run.</div>` : ''}
+      ${shared.map(([l, p])=> `<div class="hint u-mt2">${esc(p.map((s)=> s.name).join(' and '))} are both for ${esc(l.toLowerCase())}. Those runs count toward ${esc(p[0].name)} unless you pick the other pair on the run.</div>`).join('')}
+      ${gaps.length ? `<div class="hint u-mt2">No pair is set for ${esc(gaps.join(', '))}. Those runs aren’t counted unless you pick shoes on the run.</div>` : ''}
       ${unassigned?.runs ? `<div class="hint" style="margin-top:4px;">${unassigned.miles} mi from ${unassigned.runs} run${unassigned.runs === 1 ? '' : 's'} in the last 60 days aren’t on any pair.</div>` : ''}
-      ${old.length ? `<details style="margin-top:8px;"><summary class="hint">Retired (${old.length})</summary>${old.map(row).join('')}</details>` : ''}`
+      ${old.length ? `<details class="u-mt2"><summary class="hint">Retired (${old.length})</summary>${old.map(row).join('')}</details>` : ''}`
       : '<div class="hint">No shoes yet. Add a pair, say which runs it’s for (easy days, workouts, races…), and Kestrel counts its miles from your runs.</div>';
     el.querySelectorAll('.shoe-row').forEach((r)=>{ r.querySelector('[data-edit]').onclick = ()=> edit(shoes.find((s)=> s.id === r.dataset.id)); });
   }
