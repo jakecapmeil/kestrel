@@ -429,15 +429,14 @@
   SCREENS.meets = async ()=>{
     if(!window.KESTREL?.teamId) return noTeam('its schedule');
     const today = todayKey(), all = allEvents(), type = V.schedType || 'all';
-    const up = all.filter(e=> e.date >= today && (type === 'all' || e.type === type));
     const past = all.filter(e=> e.date < today && e.type === 'meet').reverse();
     const nextMeet = all.find(e=> e.date >= today && e.type === 'meet');
     setSub(nextMeet ? `Next meet: ${nextMeet.title}, ${nice(nextMeet.date)}` : 'No meets coming up');
     const mon = iso(weekStart(new Date(today + 'T12:00:00')));
     const weekName = (m)=>{ const w = Math.round((Date.parse(m) - Date.parse(mon)) / 6048e5); return w === 0 ? 'This week' : w === 1 ? 'Next week' : 'Week of ' + nice(m, { month:'short', day:'numeric' }); };
-    const limit = V.schedAll ? Infinity : 8;
-    const weeks = [];
-    for(const e of up){ const m = iso(weekStart(new Date(e.date + 'T12:00:00'))); const last = weeks[weeks.length - 1]; if(last?.m === m) last.list.push(e); else weeks.push({ m, list:[e] }); }
+    // Only this week and next, whole weeks: days already past this week stay visible.
+    const nextMon = iso(new Date(Date.parse(mon + 'T12:00:00') + 7 * 864e5));
+    const weeks = [mon, nextMon].map(m=> ({ m, list: all.filter(e=> iso(weekStart(new Date(e.date + 'T12:00:00'))) === m && (type === 'all' || e.type === type)) }));
     const row = (e)=>{
       const st = own() ? getRsvp(e.id) : null, et = eventStyle(e), d = new Date(e.date + 'T12:00:00');
       const meta = [et.label, formatEventTimeRange(e), e.location].filter(Boolean).join(' · ');
@@ -447,15 +446,13 @@
     };
     const filters = `<div class="kv-chips" role="group" aria-label="Show">${[['all', 'All'], ['practice', 'Practices'], ['meet', 'Meets'], ['other', 'Other']].map(([v, l])=> `<button type="button" class="kv-chip ${type === v ? 'on' : ''}" aria-pressed="${type === v}" data-a="schedType" data-v="${v}">${l}</button>`).join('')}</div>`;
     const tools = `<div class="card kv-card kv-schedbar">${filters}<div class="kv-btns"><button type="button" class="pri" data-a="evAdd">Add</button>${lead() ? '<button type="button" data-a="evWeek">Week of practices</button>' : ''}<button type="button" data-a="evAi">Import with Kestrel AI</button></div></div>`;
-    const list = weeks.length ? weeks.slice(0, limit).map(w=> card(esc(weekName(w.m)), '', `<div class="kv-list">${w.list.map(row).join('')}</div>`)).join('')
-      + (weeks.length > limit ? `<div class="kv-btns" style="margin-top:0"><button type="button" data-a="schedMore">Show ${weeks.length - limit} more ${weeks.length - limit === 1 ? 'week' : 'weeks'}</button></div>` : '')
-      : card('', '', `<div class="kv-hint">${type === 'all' ? 'Nothing on the schedule yet.' : `No ${type === 'other' ? 'other events' : type + 's'} coming up.`} Add practices and meets here, or let Kestrel AI read a schedule you paste or attach.</div>`);
+    const none = type === 'all' ? 'Nothing scheduled.' : `No ${type === 'other' ? 'other events' : type + 's'}.`;
+    const list = weeks.map(w=> card(esc(weekName(w.m)), '', w.list.length ? `<div class="kv-list">${w.list.map(row).join('')}</div>` : `<div class="kv-hint">${none} Add practices and meets here, or let Kestrel AI read a schedule you paste or attach.</div>`)).join('');
     const results = card('Results', 'Past meets.', `<div class="kv-list">${past.slice(0, 6).map(e=> `<div class="kv-li"><div><b>${esc(e.title)}</b><span>${esc(nice(e.date))}${e.location ? ' · ' + esc(e.location) : ''}</span>${e.results ? `<span class="u-text">${esc(e.results)}</span>` : ''}</div>${canEditEv(e) ? `<button type="button" class="kv-link-sm" data-a="evEdit" data-v="${e.id}">${e.results ? 'Edit' : 'Add results'}</button>` : ''}</div>`).join('') || '<div class="kv-hint">No past meets yet.</div>'}</div>`);
     const places = card('Places', 'Courses, tracks and meeting spots.', `<div class="kv-list">${(locations || []).map(l=> `<div class="kv-li"><div><b>${esc(l.name)}</b><span>${esc(l.address || '')}</span></div><a class="kv-link-sm" href="${mapsSearchLink(l.address || l.name)}" target="_blank" rel="noopener">Map</a>${lead() ? `<button type="button" class="kv-link-sm" data-a="placeEdit" data-v="${l.id}">Edit</button>` : ''}</div>`).join('') || '<div class="kv-hint">No places saved yet.</div>'}</div><div class="kv-btns"><button type="button" data-a="placeAdd">Add a place</button></div>`);
     return `${tools}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${list}</div><div class="kv-stack">${results}${places}</div></div>`;
   };
-  ACT.schedType = (v)=>{ V.schedType = v; V.schedAll = false; redraw(); };
-  ACT.schedMore = ()=>{ V.schedAll = true; redraw(); };
+  ACT.schedType = (v)=>{ V.schedType = v; redraw(); };
   ACT.evAdd = ()=> window.kestrelEventForm?.({ type: V.schedType === 'meet' || V.schedType === 'other' ? V.schedType : 'practice', places: locations || [] });
   ACT.evEdit = (id)=>{ const e = evById(id); if(e) window.kestrelEventForm?.({ event:{ ...e, rsvps: rsvps[id] || {} }, places: locations || [] }); };
   ACT.evWeek = ()=> window.kestrelPracticeWeek?.({ places: locations || [] });
