@@ -2410,6 +2410,16 @@
         </div>
       </div>
       <div class="card" id="runnerCard" style="display:none;"></div>
+      <div class="card" id="shoeCard">
+        <div class="section-head">
+          <div>
+            <div class="card-title">Shoes</div>
+            <div class="hint">Kestrel counts the miles from your runs and tells you when a pair is nearly done (most last 300 to 500 miles).</div>
+          </div>
+          <button type="button" id="shoeAdd">Add shoes</button>
+        </div>
+        <div id="shoeList"></div>
+      </div>
     </div>
     <div id="youRecordsView" class="you-stack" style="display:none;">
       <div class="hint" id="recHint">Reload and pick your name to see your records.</div>
@@ -2451,16 +2461,6 @@
             <button type="button" id="recAddCourse">Add a course</button>
           </div>
           <div class="pr-grid" id="recCourseList"></div>
-        </div>
-        <div class="card" id="shoeCard">
-          <div class="section-head">
-            <div>
-              <div class="card-title">Shoes</div>
-              <div class="hint">Kestrel counts the miles from your runs and tells you when a pair is nearly done (most last 300 to 500 miles).</div>
-            </div>
-            <button type="button" id="shoeAdd">Add shoes</button>
-          </div>
-          <div id="shoeList"></div>
         </div>
       </div>
     </div>
@@ -3180,7 +3180,7 @@ function renderEvents(){
       <div class="event-row">
         <div class="event-header">
           <span class="event-bar" style="background:${et.color}"></span>
-          <span class="event-title">${escapeHtml(ev.title)}</span>
+          <span class="event-title" title="${escapeHtml(ev.title)}">${escapeHtml(ev.title)}</span>
           <span class="event-type-pill" style="background:${et.bg};color:${et.text}">${et.label}</span>
           <span class="event-time">${escapeHtml(formatEventTimeRange(ev))}</span>
         </div>
@@ -4061,7 +4061,7 @@ function renderYou(){
   $('youTitle').textContent = p ? (p.first_name || p.name) : activePersonId === COACH_ID ? 'Coach' : 'Guest';
   if(youView === 'records') window.kRecords?.render();
   else if(youView !== 'body') renderPersonal();
-  if(youView === 'profile') window.kTrack?.runnerCard($('runnerCard'));
+  if(youView === 'profile'){ window.kTrack?.runnerCard($('runnerCard')); window.kShoes?.load(); }
   else renderBodyMap();
 }
 

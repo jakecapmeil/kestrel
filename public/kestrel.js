@@ -970,12 +970,12 @@ window.kestrelRenderTeamTraining = async (el) => {
     await window.kestrelReload({ keepScreen: true });
     again();
   }, e.currentTarget);
-  if (r.custom) renderPlanGrid($('kPlanGrid'), r.plans, lead, async (plans) => {
-    await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans }) });
+  if (r.custom) renderPlanGrid($('kPlanGrid'), r.plans, lead, async (plans, levelMap) => {
+    await api(`/api/teams/${K.teamId}/plan`, { method: 'PUT', body: JSON.stringify({ plans, level_map: levelMap || null }) });
     await window.kestrelReload({ keepScreen: true });
     toast('Plan saved.');
     again();
-  });
+  }, lv?.athletes || []);
   if (lv) renderLevels($('kLevels'), lv);
   if (wk && $('kWeekTypes')) renderWeekTypes($('kWeekTypes'), wk);
   else if ($('kWeekTypes')) $('kWeekTypes').remove();
@@ -1060,7 +1060,7 @@ function dayLine(day, c) {
 }
 
 const planOpen = { team: null, set: new Set() };
-function renderPlanGrid(el, plans, lead, save) {
+function renderPlanGrid(el, plans, lead, save, athletes = []) {
   const levels = Object.keys(plans).map(Number).sort((a, b) => a - b);
   // The level this athlete trains from is marked and starts open.
   const myMiles = window.kestrelMyLevelMiles?.();
@@ -1078,7 +1078,7 @@ function renderPlanGrid(el, plans, lead, save) {
     });
     const total = (lvl, wi) => fmtMi(plans[lvl].days.reduce((a, d) => a + numOf(d.cells[wi]), 0));
     // The captain's edit buttons sit in the plan's toolbar when there is one, else above the table.
-    const tools = lead ? html`<button class="k-btn" type="button" id="kLvlEdit">Edit level mileage</button><button class="k-btn" type="button" id="kRefEdit">Edit workouts and notes</button>` : '';
+    const tools = lead ? html`<button class="k-btn" type="button" id="kLvlEdit">Edit levels</button><button class="k-btn" type="button" id="kRefEdit">Edit workouts and notes</button>` : '';
     const slot = $('kPlanTools');
     if (slot) slot.innerHTML = tools.s ?? tools;
     el.innerHTML = html`${lead && !slot ? html`<div class="k-toolbar">${tools}</div>` : ''}${mine ? html`<p class="k-small k-mine-note">You train from the <b>${plans[mine].weeks[0].miles} mi</b> level, marked below. Tap any day for the workout.</p>` : ''}<div class="k-pgrid" role="table" aria-label="Team training plan by level">
@@ -1092,41 +1092,221 @@ function renderPlanGrid(el, plans, lead, save) {
     if ($('kLvlEdit')) $('kLvlEdit').onclick = editLevels;
     if ($('kRefEdit')) $('kRefEdit').onclick = editRef;
   };
-  // Each level's weekly miles. Changing one scales every day of that level (normal, race week and taper) to match.
-  const scaleMiles = (txt, f) => String(txt).replace(/\d+(?:\.\d+)?/g, (n) => fmtMi(Math.max(0.5, Math.round(Number(n) * f * 2) / 2)));
+  // Miles text like "6 (3 WO)": every number scaled by f to the half mile. A 0 (a rest day) stays 0.
+  const NUM = /\d+(?:\.\d+)?/g;
+  const halfMi = (x) => Math.max(0.5, Math.round(x * 2) / 2);
+  const scaleMiles = (txt, f) => String(txt).replace(NUM, (n) => (Number(n) === 0 ? '0' : fmtMi(halfMi(Number(n) * f))));
+  // Two cells with the same shape ("6 (3 WO)" and "7 (4 WO)"): each number is fn(a, b), else null.
+  const blend = (ta, tb, fn) => {
+    const a = String(ta).match(NUM) || [], b = String(tb).match(NUM) || [];
+    if (!a.length || String(ta).replace(NUM, '#') !== String(tb).replace(NUM, '#')) return null;
+    const out = a.map((x, i) => (Number(x) === 0 && Number(b[i]) === 0 ? 0 : fn(Number(x), Number(b[i]))));
+    if (out.some((x) => !(x >= 0))) return null;
+    let i = 0;
+    return String(ta).replace(NUM, () => { const x = out[i++]; return x === 0 ? '0' : fmtMi(halfMi(x)); });
+  };
+  // A level's weekly miles changed by k: its race week and taper follow, and so does every day, rounded to half miles
+  // so each week still adds up to k times what it did. Blank fields (a new level not filled in yet) are left blank.
+  const scaleLevel = (p, k) => {
+    if (!(k > 0) || k === 1) return;
+    p.weeks.forEach((w, wi) => { if (wi && w.miles !== '') w.miles = Math.max(1, Math.round(Number(w.miles) * k)); });
+    for (let wi = 0; wi < 3; wi++) {
+      const cells = p.days.map((day) => day.cells[wi]).filter((c) => c.miles !== '' && c.type !== 'Off' && c.type !== 'Cross-train' && numOf(c) > 0);
+      const plain = cells.filter((c) => /^\s*\d+(\.\d+)?\s*$/.test(c.miles));
+      cells.filter((c) => !plain.includes(c)).forEach((c) => { c.miles = scaleMiles(c.miles, k); });
+      const goal = Math.round(plain.reduce((a, c) => a + numOf(c), 0) * k * 2) / 2;
+      const rawMi = plain.map((c) => Math.max(0.5, numOf(c) * k));
+      const out = rawMi.map((x) => Math.max(0.5, Math.floor(x * 2) / 2));
+      const order = rawMi.map((x, i) => [x * 2 - Math.floor(x * 2), i]).sort((a, b) => b[0] - a[0]);
+      for (let j = 0; out.reduce((a, x) => a + x, 0) < goal - 0.01 && j < order.length; j++) out[order[j][1]] += 0.5;
+      plain.forEach((c, i) => { c.miles = fmtMi(out[i]); });
+    }
+  };
+  // A new level's numbers, from the levels around it. Between two levels: halfway, day by day. Above the top or below
+  // the bottom: the step between the last two levels, continued (4, 4.5, 5 -> 5.5). A day whose two neighbours differ
+  // in kind or shape, or a plan with one level, scales the nearer level instead.
+  const suggestLevel = (lo, hi, lo2, hi2) => {
+    const near = lo || hi, far = lo && hi ? hi : lo ? lo2 : hi2;
+    const fn = lo && hi ? (x, y) => (x + y) / 2 : (x, y) => 2 * x - y;
+    const s = JSON.parse(JSON.stringify(near));
+    s.weeks = near.weeks.map((w, wi) => {
+      const a = Number(w.miles), b = far ? Number(far.weeks[wi].miles) : NaN;
+      let mi = far ? Math.round(fn(a, b)) : Math.round(a * (lo ? 1.15 : 0.85));
+      if (!(mi >= 1) || (!(lo && hi) && mi === a)) mi = Math.max(1, Math.round(a * (lo ? 1.15 : 0.85)));
+      return { ...w, miles: mi };
+    });
+    s.days.forEach((day, di) => day.cells.forEach((c, wi) => {
+      const k = s.weeks[wi].miles / (Number(near.weeks[wi].miles) || s.weeks[wi].miles);
+      const o = far?.days[di].cells[wi];
+      c.miles = (o && o.type === c.type && blend(c.miles, o.miles, fn)) || scaleMiles(c.miles, k);
+    }));
+    return s;
+  };
+
+  // Level mileage, laid out like a Google Form: a card per level, lightest first. Hover between two cards (or above the
+  // first, below the last) for "+ New level". Every number on a new level is suggested from its neighbours and shown
+  // faint until it is taken: Tab or a click takes one, Fill all takes the lot, and Save takes any still left.
+  // Removing a level that athletes are on asks where they go. Levels renumber on save; the server moves athletes with them.
   const editLevels = () => {
     const d = dialog();
-    d.innerHTML = html`<h2>Level mileage</h2><p class="k-small">Weekly miles for each level, lowest first. Changing a level scales all of its days, including its race week and taper, by the same amount. Athletes stay on their level.</p>
-      <form id="kLvlForm"><div class="k-lvls">${levels.map((l, i) => html`<div class="k-lvl"><span class="k-lname"><b>Level ${i + 1}</b><small>now ${plans[l].weeks[0].miles} mi</small></span><input class="k-input" type="number" min="1" max="150" step="1" name="l${l}" value="${plans[l].weeks[0].miles}" aria-label="Level ${i + 1} weekly miles" required></div>`)}</div>
-      <p class="k-small" id="kLvlWarn" role="status"></p>
-      <div class="k-row"><button class="k-btn primary" type="submit">Save levels</button><button class="k-link" type="button" id="kLvlClose">Cancel</button></div></form>`.s;
-    d.showModal();
-    $('kLvlClose').onclick = () => d.close();
-    $('kLvlForm').onsubmit = (e) => {
-      e.preventDefault();
-      const f = form(e.target);
-      const want = levels.map((l) => Number(f['l' + l]));
-      if (want.some((n, i) => i && n <= want[i - 1])) { $('kLvlWarn').textContent = 'Each level needs more miles than the one below it.'; return; }
-      const next = JSON.parse(JSON.stringify(plans));
-      levels.forEach((l, i) => {
-        const old = Number(plans[l].weeks[0].miles), k = want[i] / old;
-        if (!(k > 0) || k === 1) return;
-        next[l].weeks = next[l].weeks.map((w, wi) => ({ ...w, miles: wi === 0 ? want[i] : Math.max(1, Math.round(w.miles * k)) }));
-        // Each week column scales by k, rounded to half miles so the week still adds up to k times what it did.
-        for (let wi = 0; wi < 3; wi++) {
-          const cells = next[l].days.map((day) => day.cells[wi]).filter((c) => c.type !== 'Off' && c.type !== 'Cross-train' && numOf(c) > 0);
-          const plain = cells.filter((c) => /^\s*\d+(\.\d+)?\s*$/.test(c.miles));
-          cells.filter((c) => !plain.includes(c)).forEach((c) => { c.miles = scaleMiles(c.miles, k); });
-          const goal = Math.round(plain.reduce((a, c) => a + numOf(c), 0) * k * 2) / 2;
-          const raw = plain.map((c) => Math.max(0.5, numOf(c) * k));
-          const out = raw.map((x) => Math.max(0.5, Math.floor(x * 2) / 2));
-          const order = raw.map((x, i) => [x * 2 - Math.floor(x * 2), i]).sort((p, q) => q[0] - p[0]);
-          for (let j = 0; out.reduce((a, x) => a + x, 0) < goal - 0.01 && j < order.length; j++) out[order[j][1]] += 0.5;
-          plain.forEach((c, i) => { c.miles = fmtMi(out[i]); });
-        }
-      });
-      attempt(async () => { await save(next); d.close(); });
+    // Everything lives in a box inside the shared dialog, so its listeners go when another dialog replaces it.
+    d.innerHTML = '<div class="k-lvlx"></div>';
+    const box = d.firstChild;
+    const onLevel = (from) => athletes.filter((a) => !a.locked && Number(a.level) === from).length;
+    const copy = (x) => JSON.parse(JSON.stringify(x));
+    const blankOf = (p) => { const b = copy(p); b.weeks.forEach((w) => { w.miles = ''; }); b.days.forEach((day) => day.cells.forEach((c) => { c.miles = ''; })); return b; };
+    const get = (p, key) => (key[0] === 'w' ? p.weeks[+key[1]].miles : p.days[+key.slice(1, key.indexOf('-'))].cells[+key.slice(key.indexOf('-') + 1)].miles);
+    const put = (p, key, v) => { if (key[0] === 'w') p.weeks[+key[1]].miles = v; else p.days[+key.slice(1, key.indexOf('-'))].cells[+key.slice(key.indexOf('-') + 1)].miles = v; };
+    const KEYS = [0, 1, 2].flatMap((wi) => ['w' + wi, ...DAYS7.map((_, di) => `d${di}-${wi}`)]);
+    // What a card would save: its own numbers, with suggestions in any blanks.
+    const eff = (c) => { if (!c.sugg) return c.plan; const p = copy(c.plan); KEYS.forEach((k) => { if (String(get(p, k)) === '') put(p, k, get(c.sugg, k)); }); return p; };
+    const cards = levels.map((l) => ({ from: l, plan: copy(plans[l]) }));
+    const gone = []; // levels removed that athletes are on: { from, miles, n, to } where `to` is a card
+    const more = new Set(); // cards with race week and taper shown
+    const MAX = 15;
+    const suggestAt = (i) => suggestLevel(cards[i - 1] && eff(cards[i - 1]), cards[i] && eff(cards[i]), cards[i - 2] && eff(cards[i - 2]), cards[i + 1] && eff(cards[i + 1]));
+    const daySum = (p, wi) => fmtMi(p.days.reduce((a, day) => a + numOf(day.cells[wi]), 0));
+
+    const field = (c, ci, key, label, cls = '') => {
+      const v = String(get(c.plan, key)), s = c.sugg ? String(get(c.sugg, key)) : '';
+      return html`<label class="k-lf ${cls} ${s && v === '' ? 'ghost' : ''}"><span>${label}</span><input class="k-input" data-c="${ci}" data-k="${key}" value="${v}" placeholder="${s}" autocomplete="off" spellcheck="false" aria-label="Level ${ci + 1} ${key[0] === 'w' ? WEEKS[+key[1]][1] + ' weekly miles' : FULL_DAYS[+key.slice(1, key.indexOf('-'))] + ', ' + WEEKS[+key.slice(key.indexOf('-') + 1)][1]}"></label>`;
     };
+    const week = (c, ci, wi) => html`<div class="k-lc-days">${DAYS7.map((dn, di) => field(c, ci, `d${di}-${wi}`, dn, TYPE_CLASS[(c.sugg || c.plan).days[di].cells[wi].type] || ''))}</div>`;
+    const insert = (i) => (cards.length < MAX ? html`<button type="button" class="k-ins ${i === 0 || i === cards.length ? 'edge' : ''}" data-ins="${i}" aria-label="Add a level here, about ${suggestAt(i).weeks[0].miles} miles a week"><span data-hint="about ${suggestAt(i).weeks[0].miles} mi">+ New level</span></button>` : '');
+    const headText = (c) => {
+      const n = c.from ? onLevel(c.from) : 0, now = Number(eff(c).weeks[0].miles);
+      return `${c.from ? (Number(plans[c.from].weeks[0].miles) !== now ? `was ${plans[c.from].weeks[0].miles} mi` : '') : 'New'}${n ? ` · ${n} ${n === 1 ? 'athlete' : 'athletes'}` : ''}`;
+    };
+    // ci < 0: the faint preview shown while hovering "+ New level".
+    const card = (c, ci) => {
+      const p = eff(c), preview = ci < 0;
+      return html`<section class="k-lc ${c.sugg ? 'new' : ''}" data-card="${ci}">
+        <div class="k-lc-head"><b>${preview ? 'New level' : `Level ${ci + 1}`}</b><small>${preview ? 'Suggested. Click + New level to add it.' : headText(c)}</small>
+          ${c.sugg && !preview ? html`<button type="button" class="k-link" data-fill="${ci}">Fill all</button>` : ''}
+          ${preview ? '' : html`<button type="button" class="k-lc-del" data-del="${ci}" aria-label="Remove level ${ci + 1}" title="Remove level" ${cards.length < 2 ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`}</div>
+        <div class="k-lc-main">${field(c, ci, 'w0', 'Weekly miles', 'k-lw')}${week(c, ci, 0)}</div>
+        <p class="k-small k-lc-sum" data-sum="${ci}">Days add up to ${daySum(p, 0)} mi</p>
+        <details data-more="${ci}" ${more.has(c) ? 'open' : ''}><summary class="k-small">Race week and taper</summary>
+          ${[1, 2].map((wi) => html`<div class="k-lc-main sub">${field(c, ci, 'w' + wi, WEEKS[wi][1], 'k-lw')}${week(c, ci, wi)}</div>`)}
+        </details>
+      </section>`;
+    };
+    const draw = (focus) => {
+      const top = d.scrollTop;
+      box.innerHTML = html`<h2>Levels</h2><p class="k-small">One card per level, lightest first. Changing a level's weekly miles scales its days, race week and taper with it. Hover between levels to add one: its numbers are suggested from the levels around it. Press Tab or click a faint number to take it.</p>
+        <form id="kLvlForm" class="k-lcs" novalidate>
+          ${insert(0)}${cards.map((c, ci) => html`${card(c, ci)}${insert(ci + 1)}`)}
+          ${gone.length ? html`<div class="k-lc-gone"><b class="k-small">Athletes on removed levels</b>${gone.map((g, gi) => html`<div class="k-lvl"><span class="k-lname"><b>${g.miles} mi level</b><small>${g.n} ${g.n === 1 ? 'athlete' : 'athletes'}</small></span>
+            <select class="k-input" data-gone="${gi}" aria-label="Move athletes on the ${g.miles} mi level to">${cards.map((c, ci) => html`<option value="${ci}" ${g.to === c ? 'selected' : ''}>Level ${ci + 1} · ${eff(c).weeks[0].miles} mi</option>`)}</select></div>`)}</div>` : ''}
+          <p class="k-small" id="kLvlWarn" role="status"></p>
+          <div class="k-row"><button class="k-btn primary" type="submit">Save levels</button><button class="k-link" type="button" id="kLvlClose">Cancel</button></div>
+        </form>`.s;
+      d.scrollTop = top;
+      if (focus) box.querySelector(focus)?.focus();
+    };
+    // Hovering "+ New level" shows the level it would add, faint, in place. It is only a picture: clicking adds it.
+    const unpreview = () => box.querySelectorAll('.k-lc.preview').forEach((x) => x.remove());
+    box.addEventListener('pointerover', (e) => {
+      const ins = e.target.closest?.('[data-ins]');
+      if (!ins || ins.nextElementSibling?.classList.contains('preview')) return;
+      unpreview();
+      const sugg = suggestAt(Number(ins.dataset.ins));
+      ins.firstElementChild.dataset.hint = `about ${sugg.weeks[0].miles} mi`; // the levels around it may have changed
+      ins.setAttribute('aria-label', `Add a level here, about ${sugg.weeks[0].miles} miles a week`);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = card({ from: null, plan: blankOf(sugg), sugg }, -1).s;
+      const pv = tmp.firstElementChild;
+      pv.classList.add('preview');
+      pv.setAttribute('aria-hidden', 'true');
+      pv.querySelectorAll('input, button, details').forEach((x) => { x.tabIndex = -1; if (x.tagName !== 'DETAILS') x.disabled = true; });
+      ins.after(pv);
+    });
+    box.addEventListener('pointerout', (e) => { const ins = e.target.closest?.('[data-ins]'); if (ins && !ins.contains(e.relatedTarget)) unpreview(); });
+    const cardOf = (el) => cards[Number(el.dataset.c)];
+    const take = (inp) => { if (inp.value === '' && inp.placeholder) { inp.value = inp.placeholder; put(cardOf(inp).plan, inp.dataset.k, inp.placeholder); inp.closest('.k-lf').classList.remove('ghost'); refresh(inp); } };
+    const refresh = (inp) => { const ci = Number(inp.dataset.c), s = d.querySelector(`[data-sum="${ci}"]`); if (s) s.textContent = `Days add up to ${daySum(eff(cards[ci]), 0)} mi`; };
+    // Put a card's numbers back into its inputs without redrawing, so focus (and a click in progress) survives.
+    const syncCard = (ci) => {
+      const c = cards[ci];
+      box.querySelectorAll(`input[data-c="${ci}"]`).forEach((i) => {
+        const v = String(get(c.plan, i.dataset.k)), ph = c.sugg ? String(get(c.sugg, i.dataset.k)) : '';
+        if (i.value !== v) i.value = v;
+        i.placeholder = ph;
+        i.closest('.k-lf').classList.toggle('ghost', v === '' && !!ph);
+      });
+      const head = box.querySelector(`[data-card="${ci}"] .k-lc-head small`);
+      if (head) head.textContent = headText(c);
+      refresh({ dataset: { c: ci } });
+    };
+    const nearestCard = (miles) => cards.reduce((b, c) => (Math.abs(eff(c).weeks[0].miles - miles) < Math.abs(eff(b).weeks[0].miles - miles) ? c : b), cards[0]);
+
+    box.oninput = (e) => {
+      const inp = e.target.closest('input[data-k]'); if (!inp) return;
+      put(cardOf(inp).plan, inp.dataset.k, inp.value);
+      inp.closest('.k-lf').classList.toggle('ghost', inp.value === '' && !!inp.placeholder);
+      refresh(inp);
+    };
+    box.onkeydown = (e) => { const inp = e.target.closest?.('input[data-k]'); if (inp && e.key === 'Tab' && !e.shiftKey) take(inp); };
+    box.addEventListener('focusin', (e) => { const inp = e.target.closest?.('input[data-k="w0"]'); if (inp) inp.dataset.was = String(get(eff(cardOf(inp)), 'w0')); });
+    box.onchange = (e) => {
+      const inp = e.target.closest('input[data-k="w0"]');
+      if (inp) {
+        // A level's weekly miles: scale the rest of the level (and a new level's suggestions) to match.
+        const c = cardOf(inp), was = Number(inp.dataset.was), now = Number(inp.value);
+        if (was > 0 && now > 0 && now !== was) { scaleLevel(c.plan, now / was); if (c.sugg) { scaleLevel(c.sugg, now / was); c.sugg.weeks[0].miles = now; } inp.dataset.was = String(now); syncCard(Number(inp.dataset.c)); }
+        return;
+      }
+      const sel = e.target.closest('select[data-gone]');
+      if (sel) gone[Number(sel.dataset.gone)].to = cards[Number(sel.value)];
+    };
+    box.addEventListener('toggle', (e) => { const det = e.target.closest?.('details[data-more]'); if (det) { const c = cards[Number(det.dataset.more)]; det.open ? more.add(c) : more.delete(c); } }, true);
+    box.onclick = (e) => {
+      const t = e.target;
+      const inp = t.closest('input[data-k]');
+      if (inp) { take(inp); return; }
+      const ins = t.closest('[data-ins]');
+      if (ins) {
+        const i = Number(ins.dataset.ins), sugg = suggestAt(i);
+        cards.splice(i, 0, { from: null, plan: blankOf(sugg), sugg });
+        draw(`input[data-c="${i}"][data-k="w0"]`);
+        return;
+      }
+      const del = t.closest('[data-del]');
+      if (del) {
+        const c = cards[Number(del.dataset.del)];
+        if (cards.length < 2) return;
+        cards.splice(cards.indexOf(c), 1);
+        more.delete(c);
+        const n = c.from ? onLevel(c.from) : 0;
+        if (n) { const miles = Number(plans[c.from].weeks[0].miles); gone.push({ from: c.from, miles, n, to: nearestCard(miles) }); }
+        gone.forEach((g) => { if (!cards.includes(g.to)) g.to = nearestCard(g.miles); });
+        draw();
+        return;
+      }
+      const fill = t.closest('[data-fill]');
+      if (fill) { const c = cards[Number(fill.dataset.fill)]; KEYS.forEach((k) => { if (String(get(c.plan, k)) === '') put(c.plan, k, get(c.sugg, k)); }); draw(); return; }
+      if (t.id === 'kLvlClose') d.close();
+    };
+    box.onsubmit = (e) => {
+      e.preventDefault();
+      const warn = (m) => { $('kLvlWarn').textContent = m; };
+      const out = cards.map(eff).map(copy);
+      for (const [i, p] of out.entries()) {
+        for (const [wi, w] of p.weeks.entries()) {
+          w.miles = Number(w.miles);
+          if (!(w.miles >= 1 && w.miles <= 150)) return warn(`Level ${i + 1}: ${WEEKS[wi][1].toLowerCase()} needs 1 to 150 miles.`);
+        }
+        if (p.days.some((day) => day.cells.some((c) => String(c.miles).trim() === ''))) return warn(`Level ${i + 1} has a day with no miles. Put 0 for a rest day.`);
+      }
+      if (out.some((p, i) => i && p.weeks[0].miles <= out[i - 1].weeks[0].miles)) return warn('Each level needs more weekly miles than the one above it.');
+      const next = Object.fromEntries(out.map((p, i) => [i + 1, p]));
+      const map = {};
+      cards.forEach((c, i) => { if (c.from) map[c.from] = i + 1; });
+      gone.forEach((g) => { map[g.from] = cards.indexOf(g.to) + 1; });
+      attempt(async () => { await save(next, map); planOpen.set = new Set(); d.close(); }, e.submitter);
+    };
+    draw();
+    d.showModal();
   };
   // The workout menu, core and gym notes that come with the plan: for every level, or one level.
   const editRef = () => {

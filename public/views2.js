@@ -344,14 +344,46 @@
   ACT.foodSave = async (_, f)=>{ const b = Object.fromEntries(new FormData(f)); const r = await post('/api/food', { date:V.foodDate, ...b }); if(r.error) return alert(r.error); toast('Added'); redraw(); };
 
   // ---------------------------------------------------------------- Team › Feed
+  // Team › Feed: posts on one side; on the other, the last eight weeks of miles (a line you can hover) and the board for
+  // whichever week is picked. /api/team already sends eight weeks, oldest first, for the team and each sharing teammate.
+  const wkLabel = (w, i)=> i === 7 ? 'This week' : i === 6 ? 'Last week' : 'Week of ' + nice(w.week_of, { month:'short', day:'numeric' });
+  function milesChart(d, who){
+    const me = (d.athletes || []).find((r)=> r.id === activePersonId);
+    const pts = d.weeks.map((w, i)=> ({ i, w, mi: who === 'me' ? (me?.weeks?.[i] || 0) : w.miles }));
+    const W = 320, H = 132, L = 30, R = 10, T = 12, B = 22, top = Math.max(5, ...pts.map((p)=> p.mi));
+    const step = top <= 10 ? 2 : top <= 25 ? 5 : top <= 60 ? 10 : top <= 150 ? 25 : top <= 400 ? 50 : 100, max = Math.ceil(top / step) * step;
+    const x = (i)=> L + i * (W - L - R) / 7, y = (mi)=> T + (H - T - B) * (1 - mi / max);
+    const grid = [0, Math.round(max / 2), max].map((v)=> `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('');
+    const line = pts.map((p)=> `${x(p.i)},${y(p.mi)}`).join(' ');
+    const sel = V.feedWeek ?? 7;
+    return `<div class="kv-mchart" id="kvMiles"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${who === 'me' ? 'Your' : 'Team'} miles for the last eight weeks">
+      <g class="g">${grid}</g>
+      <polygon points="${line} ${x(7)},${y(0)} ${x(0)},${y(0)}" class="area"/><polyline points="${line}" class="ln"/>
+      ${pts.map((p)=> `<text x="${x(p.i)}" y="${H - 6}" text-anchor="middle" class="xl ${p.i === sel ? 'on' : ''}">${p.i === 7 ? 'Now' : nice(p.w.week_of, { month:'numeric', day:'numeric' })}</text><circle cx="${x(p.i)}" cy="${y(p.mi)}" r="${p.i === sel ? 5 : 3.5}" class="pt ${p.i === sel ? 'on' : ''}"/>`).join('')}
+      ${pts.map((p)=> `<rect x="${x(p.i) - (W - L - R) / 14}" y="0" width="${(W - L - R) / 7}" height="${H}" class="hit" tabindex="0" data-i="${p.i}" data-x="${x(p.i) / W}" data-y="${y(p.mi) / H}" data-tip="${esc(wkLabel(p.w, p.i))}|${Math.round(p.mi * 10) / 10} mi${who === 'me' ? '' : ` · ${p.w.athletes} ${p.w.athletes === 1 ? 'athlete' : 'athletes'}`}"><title>${esc(wkLabel(p.w, p.i))}: ${Math.round(p.mi * 10) / 10} miles</title></rect>`).join('')}
+    </svg><div class="kv-mtip" role="status" hidden></div></div>`;
+  }
   SCREENS.feed = async ()=>{
     if(!window.KESTREL?.teamId) return noTeam('the team feed');
-    const d = await getJson('/api/team');
+    // Stepping through weeks or switching the chart reuses the last answer; anything else fetches fresh.
+    const d = V.feedKeep && V.cache.team?.teamId === window.KESTREL.teamId ? V.cache.team.d : await getJson('/api/team');
+    if(!V.feedKeep) V.feedWeek = 7;
+    V.feedKeep = false;
+    if(d) V.cache.team = { teamId: window.KESTREL.teamId, d };
     setSub(d ? `${d.this_week} miles this week · ${d.logged}/${d.members} athletes logged` : '');
-    const rows = (d?.athletes || []).slice().sort((a, b)=> b.this_week - a.this_week || b.avg4 - a.avg4);
-    const top = Math.max(1, ...rows.map(r=> r.this_week), ...rows.map(r=> r.avg4));
-    const board = card('Miles this week', 'Only teammates who share their miles appear.', tiles([['Team', d?.this_week ?? '–', 'miles'], ['Last week', d?.last_week ?? '–', 'miles'], ['Logged', d ? `${d.logged}/${d.members}` : '–', 'athletes']], 3)
-      + `<div class="kv-board">${rows.map((r, i)=> `<div class="kv-lb ${r.id === activePersonId ? 'me' : ''}"><span class="rk">${r.this_week > 0 ? i + 1 : '–'}</span><span class="nm" title="${esc(r.name)}"><i style="background:${r.color}"></i>${esc(r.name)}</span><span class="kv-bar"><i style="width:${r.this_week / top * 100}%"></i></span><b>${r.this_week || '–'}</b></div>`).join('') || '<div class="kv-hint">Nobody shares their weekly miles yet.</div>'}</div>`);
+    const wk = Math.min(7, Math.max(0, V.feedWeek ?? 7));
+    const shares = (d?.athletes || []).some((r)=> r.id === activePersonId);
+    const who = V.feedWho === 'me' && shares ? 'me' : 'team';
+    const chart = d?.weeks?.length === 8 ? card('Weekly miles', 'The last eight weeks. Hover or tap a week; pick one to see its board.', milesChart(d, who),
+      shares ? `<div class="seg kv-seg kv-seg-sm">${[['team','Team'],['me','You']].map(([v, l])=> `<button type="button" class="seg-btn ${who === v ? 'active' : ''}" data-a="feedWho" data-v="${v}">${l}</button>`).join('')}</div>` : '') : '';
+    const wOf = (r)=> r.weeks?.[wk] ?? (wk === 7 ? r.this_week : 0);
+    const rows = (d?.athletes || []).slice().sort((a, b)=> wOf(b) - wOf(a) || b.avg4 - a.avg4);
+    const top = Math.max(1, ...rows.map(wOf));
+    const w = d?.weeks?.[wk], prev = d?.weeks?.[wk - 1];
+    const nav = d?.weeks ? `<div class="kv-wknav"><button type="button" class="kv-nav" data-a="feedWk" data-v="-1" aria-label="Earlier week" ${wk === 0 ? 'disabled' : ''}>‹</button><button type="button" class="kv-nav" data-a="feedWk" data-v="1" aria-label="Later week" ${wk === 7 ? 'disabled' : ''}>›</button></div>` : '';
+    const board = card(w ? (wk === 7 ? 'Miles this week' : `Miles · ${esc(wkLabel(w, wk).replace(/^Week of /, 'week of '))}`) : 'Miles this week', 'Only teammates who share their miles appear.',
+      tiles([['Team', w?.miles ?? '–', 'miles'], [wk === 7 ? 'Last week' : 'Before', prev?.miles ?? '–', 'miles'], ['Logged', w ? `${w.athletes}/${d.members}` : '–', 'athletes']], 3)
+      + `<div class="kv-board">${rows.map((r, i)=> `<div class="kv-lb ${r.id === activePersonId ? 'me' : ''}"><span class="rk">${wOf(r) > 0 ? i + 1 : '–'}</span><span class="nm" title="${esc(r.name)}"><i style="background:${r.color}"></i>${esc(r.name)}</span><span class="kv-bar"><i style="width:${wOf(r) / top * 100}%"></i></span><b>${wOf(r) || '–'}</b></div>`).join('') || '<div class="kv-hint">Nobody shares their weekly miles yet.</div>'}</div>`, nav);
     const sorted = [...posts].sort((a, b)=> b.createdAt - a.createdAt);
     const feed = `<form class="card kv-card kv-compose" data-f="post"><input name="text" placeholder="Post to the team" autocomplete="off" maxlength="2000"><button type="submit" class="pri">Post</button></form>
       <div class="card kv-card kv-posts" id="kvPosts">${sorted.length ? sorted.slice(0, 6).map(renderPostItem).join('') : '<div class="kv-hint">No posts yet.</div>'}</div>
@@ -361,12 +393,30 @@
     const nextKey = ev ? null : Object.keys(events).filter(k=> k > today && (events[k] || []).length).sort()[0];
     const next = nextKey && (new Date(nextKey + 'T12:00:00') - new Date(today + 'T12:00:00')) / 864e5 <= 7 ? events[nextKey][0] : null;
     const lead = hero({ eb:ev ? esc(['Team today', eventStyle(ev).label].filter(Boolean).join(' · ')) : 'Team today', big:ev ? esc(ev.title) : 'No practice',
-      unit:ev ? esc(formatEventTimeRange(ev) || '') : '',
-      lines:[ev?.location && esc(ev.location), next && `Next: ${esc(next.title)}, ${esc(nice(nextKey, { weekday:'long' }))}${next.time ? ' ' + esc(next.time) : ''}.`, d && `${d.this_week} team miles this week · ${d.logged} of ${d.members} logged.`],
+      lines:[ev && [formatEventTimeRange(ev), ev.location].filter(Boolean).map(esc).join(' · '), next && `Next: ${esc(next.title)}, ${esc(nice(nextKey, { weekday:'long' }))}${next.time ? ' ' + esc(next.time) : ''}.`, d && `${d.this_week} team miles this week · ${d.logged} of ${d.members} logged.`],
       btns:`<button type="button" data-a="go" data-v="calendar/team">Open the calendar</button>` });
-    return `${lead}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${feed}</div><div class="kv-stack">${board}</div></div>`;
+    return `${lead}<div class="kv-row" style="--c:1.3fr 1fr"><div class="kv-stack">${feed}</div><div class="kv-stack">${chart}${board}</div></div>`;
   };
-  SCREENS.feed.after = ()=>{ const p = $('kvPosts'); if(p && typeof wirePostItems === 'function') wirePostItems(p, redraw); if($('kvActivities')) window.kestrelRenderActivities?.($('kvActivities')); };
+  ACT.feedWk = (s)=>{ V.feedWeek = Math.min(7, Math.max(0, (V.feedWeek ?? 7) + Number(s))); V.feedKeep = true; redraw(); };
+  ACT.feedWho = (v)=>{ V.feedWho = v; V.feedKeep = true; redraw(); };
+  // Hover, focus or tap a week to see its miles; click (or Enter) picks that week for the board.
+  function wireMilesChart(){
+    const box = $('kvMiles'); if(!box) return;
+    const tip = box.querySelector('.kv-mtip');
+    const show = (h)=>{ const [a, b] = h.dataset.tip.split('|'); tip.innerHTML = `<span>${a}</span><b>${b}</b>`; tip.hidden = false;
+      tip.style.left = (Number(h.dataset.x) * 100) + '%'; tip.style.top = (Number(h.dataset.y) * 100) + '%'; tip.classList.toggle('l', Number(h.dataset.x) > .7); tip.classList.toggle('r', Number(h.dataset.x) < .3); };
+    const pick = (h)=>{ V.feedWeek = Number(h.dataset.i); V.feedKeep = true; redraw(); };
+    box.querySelectorAll('.hit').forEach((h)=>{
+      h.addEventListener('pointerenter', ()=> show(h)); h.addEventListener('focus', ()=> show(h));
+      h.addEventListener('click', ()=> pick(h)); h.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); pick(h); } });
+    });
+    box.addEventListener('pointerleave', ()=>{ tip.hidden = true; });
+    box.addEventListener('focusout', (e)=>{ if(!box.contains(e.relatedTarget)) tip.hidden = true; });
+    // A picked past week keeps its numbers showing (a tap on a phone has no hover to show them).
+    const picked = (V.feedWeek ?? 7) !== 7 && box.querySelector(`.hit[data-i="${V.feedWeek}"]`);
+    if(picked) show(picked);
+  }
+  SCREENS.feed.after = ()=>{ wireMilesChart(); const p = $('kvPosts'); if(p && typeof wirePostItems === 'function') wirePostItems(p, redraw); if($('kvActivities')) window.kestrelRenderActivities?.($('kvActivities')); };
   ACT.post = async (_, f)=>{ const text = f.elements.text.value.trim(); if(!text) return; const r = await createPostRemote(activePersonId, text, ''); posts.push(r?.post || { id:'post_' + Date.now(), personId:activePersonId, text, header:'', createdAt:Date.now() }); redraw(); };
 
   // ---------------------------------------------------------------- Team › Schedule (practices, meets, places)
