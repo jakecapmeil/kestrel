@@ -61,6 +61,8 @@
     const el = host(); if(!el) return;
     const key = V.stack.length ? V.stack[V.stack.length - 1] : V.key;
     const [k, arg] = key.split('|');
+    // Going anywhere but the day being edited drops the edit (Cancel and Back ask first when something was typed).
+    if(!(k === 'day' && window.KDay?.editing?.(arg))) window.KDay?.stopEdit?.();
     const name = SCREEN_OF[k] || k;
     const fn = SCREENS[name]; if(!fn) return;
     const shown = el.dataset.key === key && el.childElementCount > 0;

@@ -119,7 +119,6 @@
         ${K.dayEditHtml(x, wide(), typeof library !== 'undefined' ? library : null)}
         <div class="kde-bar"><button type="button" class="sm-btn" data-a="kdeCancel">Cancel</button><span class="kv-hint" id="kdeMsg"></span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div><div id="kvDayHost" hidden></div>`;
     }
-    if(K.editing()) K.stopEdit();
     const x = await loadDay(d);
     // A run gets the full layout; Edit unlocks its boxes in place. Other days show the app's day card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;

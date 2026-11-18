@@ -2426,7 +2426,11 @@ async function route(request, env, url) {
       await saveDay(db, me.id, date, fields);
       if ('split_reps' in fields || 'manual_miles' in fields) await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
     }
-    return json({ ok: true, runs });
+    // A PR Kestrel found from a run whose distance or time was just corrected came from the old numbers: search again.
+    const timed = (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && (e.distance_mi !== undefined || e.moving_sec !== undefined)).map((e) => str(e.strava_id, 80));
+    for (const id of timed) await dropAutoPrsFrom(db, me.id, id);
+    const fitness = timed.length || (Array.isArray(b.tags) && b.tags.length) ? await recomputeFitness(db, me.id, today).catch(() => null) : null;
+    return json({ ok: true, runs, new_prs: fitness?.new_prs || [] });
   }
   if (path === '/api/log/day') {
     // Watch days are locked: their miles, minutes, runs and difficulty come from the synced activities.

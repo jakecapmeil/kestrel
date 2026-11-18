@@ -511,11 +511,13 @@ export async function logWorkouts(db, person, list) {
 // everything the runner hasn't tagged, rescore what changes, and clear the "intervals"/"threshold" day types the
 // sync wrote for those days when no hard run is left on them. Safe to repeat; returns the runs it relabeled.
 const AUTO_HARD_TYPES = new Set(['["intervals"]', '["threshold"]', '["track"]', '["tempo"]']);
-export async function recheckCategories(db, person) {
+// upgradesOnly: look only at runs labeled easy, and only turn them into workouts (a rule change that adds an upgrade
+// shouldn't also re-judge every workout against today's paces).
+export async function recheckCategories(db, person, { upgradesOnly = false } = {}) {
   const rows = (await db.prepare(
     `SELECT strava_id, date, name, category, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, laps, elev_gain_ft,
        temp_f, dew_point_f, surface, course FROM workouts
-     WHERE person_id = ? AND category IN ('workout', 'easy', 'long') AND COALESCE(tag, '') = ''`
+     WHERE person_id = ? AND category IN (${upgradesOnly ? "'easy'" : "'workout', 'easy', 'long'"}) AND COALESCE(tag, '') = ''`
   ).bind(person.id).all()).results;
   if (!rows.length) return [];
   const gctx = { maxHr: await maxHrFor(db, person.id), vo2r: await vo2rFor(db, person.id) };
@@ -526,7 +528,7 @@ export async function recheckCategories(db, person) {
   const stmts = [];
   for (const row of rows) {
     const { category } = checkedCategory(row, gctx, { meetDay: meets.includes(row.date) });
-    if (category === row.category) continue;
+    if (category === row.category || (upgradesOnly && category !== 'workout')) continue;
     const w = { ...row, category };
     const g = gradeOfRun(w, gctx);
     const plan_score = planScoreOf(w, g.hr_effort, plannedFor(plan, w.date, meets));

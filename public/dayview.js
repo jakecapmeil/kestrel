@@ -631,7 +631,8 @@
       redrawSplits(s.main_id);
     }
   }
-  const editing = (d)=> !!E && (d == null || E.date === d);
+  // With no date: is an edit on screen now (the background refresh holds off while one is)?
+  const editing = (d)=> !!E && (d == null ? !!document.querySelector('#pageV .kde-on') : E.date === d);
   const stopEdit = ()=>{ E = null; };
   const dirty = ()=> !!E && JSON.stringify({ acts: E.acts, day: E.day }) !== E.orig;
 

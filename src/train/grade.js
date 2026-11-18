@@ -116,7 +116,8 @@ export function checkedCategory(w, ctx, { meetDay = false } = {}) {
     return { category: 'race', why: 'continuous hard effort on a meet day' };
   }
   // The other way too: an "easy" run whose whole average is tempo pace or faster wasn't easy, whoever labeled it.
-  if (cat === 'easy' && s.kind === 'steady') return { category: 'workout', why: `${s.run_zone} pace for the whole run` };
+  // (A run with one quick final mile isn't: its whole average has to be tempo pace or faster.)
+  if (cat === 'easy' && s.workout && s.run_pct != null && s.run_pct >= FAST_PCT) return { category: 'workout', why: `${s.run_zone} pace for the whole run` };
   if (cat !== 'workout' || s.workout || WORKOUT_WORDS.test(w.name || '')) return { category: cat };
   // Pace unknown (no fitness yet, no laps to compare): heart rate decides.
   if (!s.known && !(hrE != null && hrE <= 4)) return { category: cat };

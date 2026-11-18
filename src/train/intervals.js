@@ -604,16 +604,19 @@ async function syncBestEfforts(env, person, key) {
   return rows.length;
 }
 
-// Once per person (again whenever the rules change): the history is judged against today's paces, so repeating it
-// hourly would only drift. v2: an "easy" run averaging tempo pace or faster for a mile becomes a workout.
-const RECHECK = 'pace_check_v2';
+// Once per person: the history is judged against today's paces, so repeating it hourly would only drift.
+// v1 re-checked every untagged run both ways. v2 added one rule (an "easy" run averaging tempo pace or faster is a
+// workout), so it only looks for those.
 async function recheckOnce(db, person) {
   const row = await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first();
   let settings = {};
   try { settings = JSON.parse(row?.settings || '{}'); } catch { /* start fresh */ }
-  if (settings[RECHECK]) return 0;
-  const n = (await recheckCategories(db, person)).length;
-  await db.prepare("UPDATE people SET settings = json_set(COALESCE(NULLIF(settings, ''), '{}'), '$." + RECHECK + "', 1) WHERE id = ?").bind(person.id).run();
+  let n = 0;
+  for (const [key, opts] of [['pace_check_v1', {}], ['pace_check_v2', { upgradesOnly: true }]]) {
+    if (settings[key]) continue;
+    n += (await recheckCategories(db, person, opts)).length;
+    await db.prepare("UPDATE people SET settings = json_set(COALESCE(NULLIF(settings, ''), '{}'), '$." + key + "', 1) WHERE id = ?").bind(person.id).run();
+  }
   return n;
 }
 

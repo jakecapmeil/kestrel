@@ -14,6 +14,11 @@ const cases = [
   ['a warm-up at 7:55 stays easy', { category: 'easy', distance_mi: 1.95, moving_sec: 926, avg_hr: 142, laps: [] }, 'easy'],
   ['1.1 mi at 6:12 (steady, not tempo) stays easy', { category: 'easy', distance_mi: 1.11, moving_sec: 413, avg_hr: 137, laps: [] }, 'easy'],
   ['a half mile at 5:52 is too short to count', { category: 'easy', distance_mi: 0.5, moving_sec: 176, avg_hr: 140, laps: [] }, 'easy'],
+  // A tempo with the watch's own mile laps: every lap is fast, so it reads as a tempo stretch, not a whole-run pace.
+  ['3 mi at 5:55 with auto mile laps is a workout', { category: 'easy', distance_mi: 3, moving_sec: 3 * 355, avg_hr: 165,
+    laps: [lap(1609, 355, 160), lap(1609, 354, 166), lap(1609, 356, 170)] }, 'workout'],
+  ['6 mi easy with one quick last mile stays easy', { category: 'easy', distance_mi: 6, moving_sec: 5 * 480 + 370, avg_hr: 150,
+    laps: [...Array.from({ length: 5 }, () => lap(1609, 480, 145)), lap(1609, 370, 170)] }, 'easy'],
   ['a long run stays long', { category: 'long', distance_mi: 9, moving_sec: 9 * 360, avg_hr: 160, laps: [] }, 'long'],
   ['a "workout" at easy pace is easy', { category: 'workout', distance_mi: 5, moving_sec: 5 * 480, avg_hr: 140,
     laps: Array.from({ length: 5 }, () => lap(1609, 480, 140)) }, 'easy'],
