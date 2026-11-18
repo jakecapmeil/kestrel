@@ -123,8 +123,11 @@
       while(laps.length > 2 && norm(laps[laps.length - 1]) > ref * 1.22) laps = laps.slice(0, -1);
     }
     if(laps.length < 2) return null;
-    const groups = [];
-    laps.forEach((l, i)=>{ const g = groups[groups.length - 1]; if(g && Math.abs(l.m - g.m) <= Math.max(25, g.m * 0.06)) { g.n++; g.to = i; } else groups.push({ m: l.m, n: 1, from: i, to: i }); });
+    // A lap joins the set before it when it is about the same distance as that set's average. Off the track the
+    // distances are GPS, so one 300 m rep can read 272 m and the next 308 m: within 12% (or 25 m) is the same rep.
+    // A track's lines are exact, so there 6%.
+    const groups = [], tol = s.track ? 0.06 : 0.12;
+    laps.forEach((l, i)=>{ const g = groups[groups.length - 1], avg = g && g.sum / g.n; if(g && Math.abs(l.m - avg) <= Math.max(25, avg * tol)) { g.sum += l.m; g.n++; g.to = i; } else groups.push({ m: l.m, sum: l.m, n: 1, from: i, to: i }); });
     const rows = laps.map((l, i)=> ({ i, m: l.m, s: l.s, hr: l.hr || null, pace: l.s / (l.m / MI), rest: restLabel(l.rest) }));
     const R = statsOf(rows, groups, !!s.track);
     // Separate sets: two blocks of repeats (6 × 1 km + 4 × 200 m), or three or more blocks of 3+. A ladder stays one set.
