@@ -15,7 +15,7 @@ import { reportSessions, AiError } from './gemini.js';
 import { SUMMARY_RUBRIC, activityFacts, needsModel, templateReport, templateDayLine, allowedNumbers, ungroundedNumbers } from './runfacts.js';
 import { modelFor, accountAi } from './aiconfig.js';
 import { recomputeFitness } from './fitness.js';
-import { gradeRun, paceStructure } from './grade.js';
+import { gradeRun, paceStructure, pctVo2r } from './grade.js';
 import { VC_RE } from './conditions.js';
 import { courseAt } from './courses.js';
 import { vo2rFor, withPlans } from './coach.js';
@@ -265,11 +265,13 @@ const WORKOUT_NAME = /\d\s*x|x\s*\d|rep|interval|tempo|workout|track|fartlek|thr
 
 // Whether an activity's laps are worth a fetch: a workout, not auto-laps on
 // an easy run.
-function wantsLaps(a, maxHr) {
+function wantsLaps(a, maxHr, vo2r) {
   const n = a.icu_lap_count || 0;
   if (!RUN_TYPES.has(a.type) || n < 2 || n > 60) return false;
   const hrPct = a.average_heartrate ? a.average_heartrate / maxHr : 0;
-  return WORKOUT_NAME.test(a.name || '') || hrPct >= 0.8 || !!a.interval_summary?.length;
+  // A quick average at an easy heart rate (short pieces with standing rest) is still worth reading lap by lap.
+  const runPct = vo2r && a.distance > 0 && a.moving_time > 0 ? pctVo2r(vo2r, a.moving_time / (a.distance / 1609.344)) : 0;
+  return WORKOUT_NAME.test(a.name || '') || hrPct >= 0.8 || runPct >= 0.82 || !!a.interval_summary?.length;
 }
 
 // Extra numbers intervals.icu works out per activity, for the log. Speeds
@@ -400,12 +402,12 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
   let gpsFetches = 0;
   const runs = [];
   // Most likely workouts get their laps first.
-  const order = [...fresh].sort((x, y) => Number(wantsLaps(y, maxHr)) - Number(wantsLaps(x, maxHr)) || String(y.start_date_local).localeCompare(String(x.start_date_local)));
+  const order = [...fresh].sort((x, y) => Number(wantsLaps(y, maxHr, vo2r)) - Number(wantsLaps(x, maxHr, vo2r)) || String(y.start_date_local).localeCompare(String(x.start_date_local)));
   for (const a of order) {
     let work = [];
     let laps = [];
     let trackM = 0;
-    if (wantsLaps(a, maxHr) && lapFetches < lapBudget) {
+    if (wantsLaps(a, maxHr, vo2r) && lapFetches < lapBudget) {
       lapFetches++;
       try {
         const iv = await icu(key, `/activity/${encodeURIComponent(a.id)}/intervals`, env);
@@ -601,8 +603,9 @@ async function syncBestEfforts(env, person, key) {
   return rows.length;
 }
 
-// Once per person: the history is judged against today's paces, so repeating it hourly would only drift.
-const RECHECK = 'pace_check_v1';
+// Once per person (again whenever the rules change): the history is judged against today's paces, so repeating it
+// hourly would only drift. v2: an "easy" run averaging tempo pace or faster for a mile becomes a workout.
+const RECHECK = 'pace_check_v2';
 async function recheckOnce(db, person) {
   const row = await db.prepare('SELECT settings FROM people WHERE id = ?').bind(person.id).first();
   let settings = {};

@@ -85,8 +85,10 @@ export function paceStructure(w, { vo2r }) {
   const rep_pct = pctAt(rep_pace);
   const reps = fast.length >= 2 && fast.length < laps.length && fast_m >= 800;
   const tempo = !reps && fast_m >= 1600;
-  // A whole run at tempo pace, or a short one at threshold or faster (a rep saved as its own activity).
-  const steady = !reps && !tempo && run_pct != null && run_pct >= FAST_PCT && (mi >= 2 || (run_pct >= 0.88 && mi >= 0.4));
+  // A whole run at tempo pace for a mile or more (the same 1600 m a stretch of fast laps needs), or a short one at
+  // threshold or faster (a rep saved as its own activity). A 1.5 mi piece at 5:52 is a workout even when its laps
+  // are short pieces with standing rest that no single lap shows.
+  const steady = !reps && !tempo && run_pct != null && run_pct >= FAST_PCT && (mi >= 1 || (run_pct >= 0.88 && mi >= 0.4));
   // The slowest real lap: in a race it is still quick (a hill), in a rep session it is the jog.
   const slow_pct = vo2r && laps.length ? Math.min(...laps.map((l) => pctAt(lapPace(l)))) : null;
   const kind = reps ? 'reps' : tempo ? 'tempo' : steady ? 'steady' : null;
@@ -100,7 +102,8 @@ export function paceStructure(w, { vo2r }) {
 }
 
 // The category a run gets once its pace has been checked. A "workout" run at recovery or easy pace (no fast laps,
-// no fast stretch) becomes recovery, long or easy; a continuous hard effort on a meet day becomes a race. The
+// no fast stretch) becomes recovery, long or easy; an "easy" run averaging tempo pace or faster becomes a workout;
+// a continuous hard effort on a meet day becomes a race. The
 // athlete's own word wins: a name like "6x800" or "hills" keeps it a workout, and runner tags never reach here.
 export function checkedCategory(w, ctx, { meetDay = false } = {}) {
   const cat = w.category;
@@ -112,6 +115,8 @@ export function checkedCategory(w, ctx, { meetDay = false } = {}) {
   if (meetDay && continuous && mi >= 0.9 && mi <= 7.5 && ((hrE ?? 0) >= 7 || (s.run_pct ?? 0) >= 0.9) && (s.run_pct == null || s.run_pct >= 0.86)) {
     return { category: 'race', why: 'continuous hard effort on a meet day' };
   }
+  // The other way too: an "easy" run whose whole average is tempo pace or faster wasn't easy, whoever labeled it.
+  if (cat === 'easy' && s.kind === 'steady') return { category: 'workout', why: `${s.run_zone} pace for the whole run` };
   if (cat !== 'workout' || s.workout || WORKOUT_WORDS.test(w.name || '')) return { category: cat };
   // Pace unknown (no fitness yet, no laps to compare): heart rate decides.
   if (!s.known && !(hrE != null && hrE <= 4)) return { category: cat };
