@@ -13,7 +13,7 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell, addLevel, removeLevel } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { maxHrFor, vo2rFor } from './train/coach.js';
+import { maxHrFor, vo2rFor, editRuns, handLaps } from './train/coach.js';
 import { SUMMARY_RUBRIC, activityFacts, templateReport, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
 import { paceStructure } from './train/grade.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
@@ -2370,9 +2370,7 @@ async function route(request, env, url) {
   // Your own training (Kestrel paths)
   if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await kaiState(db, me.id)); }
   if (path === '/api/log/session-splits') {
-    const reps = (Array.isArray(b.reps) ? b.reps : []).slice(0, 40)
-      .map((r) => ({ m: Math.round(Number(r?.m)), s: Math.round(Number(r?.s) * 10) / 10, hr: r?.hr ? Math.round(Number(r.hr)) : null, rest: str(r?.rest, 12) }))
-      .filter((r) => r.m >= 50 && r.m <= 20000 && r.s > 0 && r.s < 7200);
+    const reps = handLaps(b.reps);
     const res = await db.prepare('UPDATE workouts SET laps = ? WHERE person_id = ? AND strava_id = ?').bind(reps.length ? JSON.stringify(reps) : '', me.id, str(b.strava_id, 60)).run();
     if (!res.meta.changes) throw new NotFound('Unknown session.');
     await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
@@ -2415,6 +2413,21 @@ async function route(request, env, url) {
     return json({ ok: true, course_id: id, new_prs: fitness?.new_prs || [], prs: await getPrs(db, me.id), fitness });
   }
   if (path === '/api/people/5k') return json({ ...(await setFiveK(db, me.id, b.time)), fitness: await recomputeFitness(db, me.id, today) });
+  // The day page's editor: corrections to synced runs (distance, time, laps), their run types, and the day's own
+  // fields, saved together. A hand-logged day's miles and minutes go in fields as on /api/log/day.
+  if (path === '/api/log/edit') {
+    const date = str(b.date, 10);
+    for (const t of (Array.isArray(b.tags) ? b.tags : []).slice(0, 20)) await setRunTag(db, me.id, str(t?.strava_id, 80), t?.tag);
+    const person = await loadPerson(db, me.id);
+    const runs = await editRuns(db, person, (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && typeof e === 'object'));
+    const fields = { ...(b.fields && typeof b.fields === 'object' ? b.fields : {}) };
+    if (await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND date = ? LIMIT 1').bind(me.id, date).first()) ['manual_miles', 'minutes', 'runs', 'difficulty'].forEach((k) => delete fields[k]);
+    if (Object.keys(fields).length) {
+      await saveDay(db, me.id, date, fields);
+      if ('split_reps' in fields || 'manual_miles' in fields) await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
+    }
+    return json({ ok: true, runs });
+  }
   if (path === '/api/log/day') {
     // Watch days are locked: their miles, minutes, runs and difficulty come from the synced activities.
     const date = str(b.date, 10);
@@ -2510,7 +2523,7 @@ export default {
       if (err instanceof Forbidden) return json({ error: err.message }, 403, cors);
       if (err instanceof NotFound) return json({ error: err.message }, 404, cors);
       if (err instanceof BadRequest || err instanceof ModelError || err instanceof AiError || err instanceof AiConfigError || err instanceof LogError
-        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError || err instanceof SupportError) return json({ error: err.message }, 400, cors);
+        || err instanceof IntervalsError || err instanceof CourseError || err instanceof PlanError || err instanceof CalcError || err instanceof PlanFormatError || err instanceof TrackError || err instanceof ShareError || err instanceof FoodError || err instanceof SupportError || err instanceof CoachError) return json({ error: err.message }, 400, cors);
       console.error('kestrel', err?.stack || String(err));
       return json({ error: 'Something went wrong on our side.' }, 500, cors);
     }

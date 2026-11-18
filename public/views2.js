@@ -105,25 +105,68 @@
   // The day: one sentence, its numbers, then every session. A session opens on its own page (phone) or beside the list (laptop).
   async function loadDay(d){
     const [lg] = await Promise.all([logRange(d, d)]);
+    window.KDay.setTags(lg?.tags);
     const x = window.KDay.prepare(lg?.days?.[0]); V.cache['day:' + d] = x;
     V.days = { [d]: x || { date:d, types:[], sessions:[], split_reps:[] } };
     return x;
   }
   SCREENS.day = async (d)=>{
+    const K = window.KDay;
+    // Editing keeps what was typed: the page is drawn from the day as it was when Edit was pressed.
+    if(K.editing(d) && V.cache['day:' + d]){
+      const x = V.cache['day:' + d];
+      return `<div class="kd-top kde-top"><button type="button" class="kv-back" data-a="kdeCancel">‹ Cancel</button><span class="kde-flag">Editing</span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div>
+        ${K.dayEditHtml(x, wide(), typeof library !== 'undefined' ? library : null)}
+        <div class="kde-bar"><button type="button" class="sm-btn" data-a="kdeCancel">Cancel</button><span class="kv-hint" id="kdeMsg"></span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div><div id="kvDayHost" hidden></div>`;
+    }
+    if(K.editing()) K.stopEdit();
     const x = await loadDay(d);
-    // A run gets the full layout, with the day card (the editor) kept out of sight until Edit. Other days show the card.
+    // A run gets the full layout; Edit unlocks its boxes in place. Other days show the app's day card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
     if(V.sessDay !== d){ V.sessDay = d; V.sessSel = null; }
-    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button><button type="button" class="sm-btn" data-a="dayEdit">Edit day</button></div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${own() ? '<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button>' : ''}</div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
   };
-  ACT.dayEdit = ()=>{
-    const h = document.getElementById('kvDayHost'); if(!h) return;
-    h.hidden = false; document.getElementById('tlEdit')?.click();
-    h.scrollIntoView({ behavior:'smooth', block:'start' });
+  ACT.dayEdit = async ()=>{
+    const d = (V.stack[V.stack.length - 1] || '').split('|')[1], x = V.cache['day:' + d];
+    if(!x || !own()) return;
+    try{ await loadLibrary(); }catch(e){ /* the library picker is optional */ }
+    window.KDay.startEdit(x);
+    window.scrollTo(0, 0);
+    redraw();
+  };
+  ACT.kdeCancel = ()=>{
+    if(window.KDay.dirty() && !confirm('Discard your changes?')) return;
+    window.KDay.stopEdit(); redraw();
+  };
+  ACT.kdeAdd = (k)=> window.KDay.addSplit(k);
+  ACT.kdeDel = (v)=>{ const i = v.lastIndexOf('|'); window.KDay.delSplit(v.slice(0, i), +v.slice(i + 1)); };
+  ACT.kdeJump = (key)=> document.getElementById('kde-' + String(key).replace(/[^\w-]/g, '_'))?.scrollIntoView({ behavior:'smooth', block:'start' });
+  ACT.kdeSave = async ()=>{
+    const K = window.KDay, d = (V.stack[V.stack.length - 1] || '').split('|')[1];
+    const p = K.editPayload(), msg = document.getElementById('kdeMsg');
+    const say = (t)=>{ if(msg) msg.textContent = t; else alert(t); };
+    if(!p) return;
+    if(p.error) return say(p.error);
+    if(!p.runs.length && !p.tags.length && !Object.keys(p.fields).length && p.track == null){ K.stopEdit(); return redraw(); }
+    document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = true; b.textContent = 'Saving…'; });
+    // The track toggle first: it resets a watch day's miles to the lines, and typed distances then go on top.
+    const t = p.track != null ? await post('/api/log/track', { personId:activePersonId, date:d, track:p.track }) : null;
+    const r = t?.error ? t : await post('/api/log/edit', { personId:activePersonId, date:d, runs:p.runs, tags:p.tags, fields:p.fields });
+    if(r?.error){
+      document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = false; b.textContent = 'Save changes'; });
+      return say(r.error);
+    }
+    K.stopEdit();
+    V.cache = {}; fitnessData = null; library = null;
+    toast('Saved');
+    redraw();
   };
   // Which session the page shows beside (or under) the day.
   const shownSession = (x)=> V.sessSel || (wide() || (x?.sessions || []).length === 1 ? document.querySelector('#pageV .ks')?.dataset.key : null);
-  SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); const x = V.days[d], k = shownSession(x); if(x?.miles && k) window.KDay.mountSession(x, k, own()); };
+  SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(window.KDay.editing(d)) return; const x = V.days[d], k = shownSession(x); if(x?.miles && k) window.KDay.mountSession(x, k, own()); };
+  // Leaving the day page drops an edit in progress (asking first when something was typed).
+  const back0 = ACT.back;
+  ACT.back = ()=>{ if(window.KDay.editing()){ if(window.KDay.dirty() && !confirm('Discard your changes?')) return; window.KDay.stopEdit(); } back0(); };
   // A session: on a laptop the day page swaps the one beside the list; on a phone it opens on its own page.
   ACT.sess = (key)=>{
     const d = String(key).split('#')[0];

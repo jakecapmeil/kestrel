@@ -232,7 +232,7 @@ function cleanLaps(v) {
   let arr = v;
   if (typeof v === 'string') { try { arr = JSON.parse(v); } catch { return ''; } }
   if (!Array.isArray(arr)) return '';
-  const out = arr.slice(0, 40).map((l) => ({ m: r(num(l?.m, { max: 20000 })), s: Math.round((num(l?.s, { max: 7200 }) || 0) * 10) / 10, hr: r(num(l?.hr, { min: 30, max: 250 })), ...(l?.f === 0 || l?.f === 1 ? { f: l.f } : {}) }))
+  const out = arr.slice(0, 40).map((l) => ({ m: r(num(l?.m, { max: 20000 })), s: Math.round((num(l?.s, { max: 7200 }) || 0) * 10) / 10, hr: r(num(l?.hr, { min: 30, max: 250 })), ...(l?.f === 0 || l?.f === 1 || l?.f === 2 ? { f: l.f } : {}) }))
     .filter((l) => l.m && l.s);
   return out.length ? JSON.stringify(out) : '';
 }
@@ -543,6 +543,67 @@ export async function recheckCategories(db, person) {
     if (day && AUTO_HARD_TYPES.has(day.types)) await db.prepare("UPDATE training_days SET types = '[]' WHERE person_id = ? AND date = ?").bind(person.id, date).run();
   }
   return changed;
+}
+
+// Laps the runner typed or corrected: [{ m, s, hr, rest }], marked f: 2 so a sync never swaps them back for the
+// watch file's laps.
+export function handLaps(v) {
+  return (Array.isArray(v) ? v : []).slice(0, 40)
+    .map((l) => ({ m: Math.round(Number(l?.m)), s: Math.round(Number(l?.s) * 10) / 10, hr: num(l?.hr, { min: 30, max: 250 }) ? Math.round(Number(l.hr)) : null, rest: clip(l?.rest, 12), f: 2 }))
+    .filter((l) => l.m >= 50 && l.m <= 20000 && l.s > 0 && l.s < 7200);
+}
+
+// The runner's own corrections to synced runs. edits: [{ strava_id, distance_mi?, moving_sec?, laps? }]. Each run is
+// then scored again the way a sync scores it: the pace check on its category (unless the runner tagged it),
+// difficulty, load and plan score. The edited distance is also the run's GPS distance from now on, so grading and the
+// track toggle both start from it. Returns [{ strava_id, category, effort }].
+export async function editRuns(db, person, edits) {
+  if (!Array.isArray(edits) || !edits.length) return [];
+  if (edits.length > 20) throw new CoachError('Edit at most 20 runs at once');
+  const ids = [...new Set(edits.map((e) => clip(e?.strava_id, 80)).filter(Boolean))];
+  if (!ids.length) return [];
+  const rows = (await db.prepare(
+    `SELECT strava_id, date, name, category, tag, distance_mi, raw_distance_mi, moving_sec, elapsed_sec, avg_hr, laps, elev_gain_ft,
+       temp_f, dew_point_f, surface, course FROM workouts WHERE person_id = ? AND strava_id IN (${ids.map(() => '?').join(',')})`
+  ).bind(person.id, ...ids).all()).results;
+  if (rows.length !== ids.length) throw new CoachError('Unknown run');
+  const gctx = { maxHr: await maxHrFor(db, person.id), vo2r: await vo2rFor(db, person.id) };
+  const dates = rows.map((w) => w.date).sort();
+  const meets = await meetDates(db, person.id, dates[0], addDays(dates[dates.length - 1], 6));
+  const plan = planFor(person);
+  const out = [];
+  const stmts = [];
+  for (const e of edits) {
+    const w = { ...rows.find((x) => x.strava_id === clip(e?.strava_id, 80)) };
+    if (!w.strava_id) continue;
+    if (e.distance_mi !== undefined) {
+      const mi = num(e.distance_mi, { min: 0.01, max: 200 });
+      if (mi === null) throw new CoachError('Distance must be between 0.01 and 200 miles');
+      w.distance_mi = Math.round(mi * 100) / 100;
+      w.raw_distance_mi = w.distance_mi;
+    }
+    if (e.moving_sec !== undefined) {
+      const sec = num(e.moving_sec, { min: 1, max: 86400 });
+      if (sec === null) throw new CoachError('Time must be between 1 second and 24 hours');
+      w.moving_sec = Math.round(sec);
+      if (!(w.elapsed_sec >= w.moving_sec)) w.elapsed_sec = w.moving_sec;
+    }
+    if (e.laps !== undefined) { const laps = handLaps(e.laps); w.laps = laps.length ? JSON.stringify(laps) : ''; }
+    if (!w.tag) w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date) }).category;
+    const g = gradeOfRun(w, gctx);
+    const plan_score = planScoreOf(w, g.hr_effort, plannedFor(plan, w.date, meets));
+    out.push({ strava_id: w.strava_id, category: w.category, effort: g.effort });
+    stmts.push(db.prepare(
+      `UPDATE workouts SET distance_mi = ?, raw_distance_mi = ?, moving_sec = ?, elapsed_sec = ?, laps = ?, category = ?, effort = ?, hr_effort = ?,
+         load = ?, plan_score = ?, rating = ?, updated_at = ? WHERE person_id = ? AND strava_id = ?`
+    ).bind(w.distance_mi, w.raw_distance_mi, w.moving_sec, w.elapsed_sec, w.laps || '', w.category, g.effort, g.hr_effort, loadOf(w, g.effort),
+      plan_score, gradeOf(plan_score), Date.now(), person.id, w.strava_id));
+  }
+  if (stmts.length) {
+    stmts.push(db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(person.id));
+    await db.batch(stmts);
+  }
+  return out;
 }
 
 // Runs logged before Kestrel read the weather: look it up, then rescore

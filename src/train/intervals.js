@@ -371,7 +371,8 @@ async function importRange(env, person, key, { oldest, newest, ai: useAi, lapBud
       if (reFetches >= lapBudget) break;
       let old = [];
       try { old = JSON.parse(w.laps || '[]'); } catch { /* none */ }
-      if (!old.length || old.some((l) => l.f === 0 || l.f === 1)) continue;
+      // f: 0 tried, 1 from the file, 2 typed or corrected by the runner (never replaced).
+      if (!old.length || old.some((l) => l.f === 0 || l.f === 1 || l.f === 2)) continue;
       reFetches++;
       const file = await fileSplits(key, w.strava_id.slice('intervals:'.length), env);
       const track = w.surface === 'track';

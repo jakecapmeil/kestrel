@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const window = {};
-new Function('window', 'document', fs.readFileSync(new URL('../public/dayview.js', import.meta.url), 'utf8'))(window, { getElementById: () => null, querySelector: () => null });
+new Function('window', 'document', fs.readFileSync(new URL('../public/dayview.js', import.meta.url), 'utf8'))(window, { getElementById: () => null, querySelector: () => null, addEventListener: () => {} });
 const { repsOf } = window.KDay;
 const mk = (laps, extra = {}) => ({ category: 'workout', splits: laps.map(([m, s]) => ({ m, s })), ...extra });
 const cases = [

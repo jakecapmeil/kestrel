@@ -6584,6 +6584,7 @@ async function init(){
   setInterval(async ()=>{
     const formOpen = $('eventFormRow').classList.contains('show')
       || editMode
+      || window.KDay?.editing?.()
       || document.querySelector('dialog[open], .modal-overlay.show')
       || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
     if(formOpen || document.hidden) return;
@@ -6596,7 +6597,7 @@ async function init(){
     if(document.hidden){ hiddenAt = Date.now(); return; }
     if(!hiddenAt || Date.now() - hiddenAt < 60000) return;
     hiddenAt = 0;
-    if(editMode || document.querySelector('dialog[open], .modal-overlay.show') || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    if(editMode || window.KDay?.editing?.() || document.querySelector('dialog[open], .modal-overlay.show') || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
     planCache = {}; kaiData = null; fitnessData = null;
     await loadState();
     renderAll();

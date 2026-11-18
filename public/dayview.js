@@ -595,5 +595,268 @@
     return rows.length ? splitsHtml(rows, 'Laps').replace('<span>Mile</span>', '<span>Lap</span>') : '';
   }
 
-  window.KDay = { setFiveK, prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits };
+  // ---------------------------------------------------------------- editing
+  // Edit keeps the day page as it is and unlocks its boxes: each session's distance and time (each part's, when a
+  // session is a warm-up, a workout and a cool-down saved apart), every split, the run type, and the day's own notes.
+  // Pace and the day's totals follow as you type; difficulty is scored again on save. E holds what is typed, so a
+  // redraw keeps it. Splits belong to one activity each (its own laps), or to the day when they were typed by hand.
+  let E = null, TAGS = { builtin: [], custom: [] };
+  const setTags = (t)=>{ if(t?.builtin) TAGS = t; };
+  const runActs = (s)=> s.manual ? [] : (s.activities || []).filter((a)=> a.category !== 'crosstrain');
+  const lapCopy = (ls)=> (ls || []).filter((l)=> l && l.m > 0 && l.s > 0).map((l)=> ({ m: l.m, s: l.s, hr: l.hr || null, rest: l.rest || '' }));
+  // Whose splits a session edits: 'day' (typed by hand) or each of its activities.
+  const splitKeys = (s)=> s.manual || s.splits_hand ? ['day'] : runActs(s).map((a)=> a.id);
+  function startEdit(x){
+    prepare(x);
+    const acts = {};
+    for(const s of x.sessions || []) for(const a of runActs(s)) acts[a.id] = { mi: a.miles ?? null, sec: a.moving_sec ?? (a.minutes != null ? a.minutes * 60 : null), laps: lapCopy(a.laps), tag: a.tag || '' };
+    const handReps = !x.locked || x.split_source === 'hand';
+    const day = { mi: x.locked ? null : x.miles ?? null, sec: x.locked ? null : x.minutes != null ? Math.round(x.minutes * 60) : null, difficulty: x.locked ? null : x.difficulty ?? null,
+      laps: handReps ? lapCopy(x.split_reps) : null, feel: x.feel ?? null, sleep_hours: x.sleep_hours ?? null, strength: !!x.strength, notes: x.notes || '', track: !!x.track, library_id: x.library_id || '' };
+    E = { date: x.date, locked: !!x.locked, acts, day, bad: new Set() };
+    E.orig = JSON.stringify({ acts, day });
+  }
+  // A run with no laps saved shows its GPS mile splits; editing starts from those, and they are saved only if changed.
+  async function seedSplits(x){
+    const e = E;
+    for(const s of x.sessions || []){
+      const a = e?.acts[s.main_id];
+      if(!a || a.laps.length || s.track || s.splits_hand) continue;
+      const r = await loadTrack(s.main_id);
+      if(E !== e || !r) continue;
+      const laps = mileSplits(r.pts).filter((z)=> z.pace).map((z)=>{ const m = /^\d+$/.test(z.label) ? Math.round(MI) : Math.round(+z.label * MI); return { m, s: Math.round(z.pace * m / MI * 10) / 10, hr: z.hr || null, rest: '' }; });
+      if(!laps.length) continue;
+      a.laps = laps;
+      const o = JSON.parse(e.orig); o.acts[s.main_id].laps = JSON.parse(JSON.stringify(laps)); e.orig = JSON.stringify(o);
+      redrawSplits(s.main_id);
+    }
+  }
+  const editing = (d)=> !!E && (d == null || E.date === d);
+  const stopEdit = ()=>{ E = null; };
+  const dirty = ()=> !!E && JSON.stringify({ acts: E.acts, day: E.day }) !== E.orig;
+
+  // Typed values. Run time: 45:12, 1:02:03, or minutes (45). Split time: 1:12.4, 72.4, or 245 for 2:45.
+  // Split distance: metres (400), or 1 mi, 0.75mi, 1.5k; a bare number under 50 is miles.
+  function parseRunTime(v){
+    const t = String(v ?? '').trim(); if(!t) return null;
+    if(/^\d+(\.\d+)?$/.test(t)) return Math.round(+t * 60);
+    const p = t.split(':'); if(p.length > 3 || p.some((x)=> !/^\d+(\.\d+)?$/.test(x))) return NaN;
+    return Math.round(p.reduce((a, x)=> a * 60 + +x, 0));
+  }
+  function parseLapTime(v){
+    let t = String(v ?? '').trim(); if(!t) return null;
+    if(/^\d{3,4}$/.test(t)) t = `${+t.slice(0, -2)}:${t.slice(-2)}`;
+    const p = t.split(':'); if(p.length > 2 || p.some((x)=> !/^\d+(\.\d+)?$/.test(x))) return NaN;
+    return Math.round(p.reduce((a, x)=> a * 60 + +x, 0) * 10) / 10;
+  }
+  function parseLapDist(v){
+    const m = String(v ?? '').trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(m|k|km|mi|mile|miles)?$/);
+    if(!m) return String(v ?? '').trim() ? NaN : null;
+    const n = +m[1], u = m[2];
+    return Math.round(u === 'mi' || u === 'mile' || u === 'miles' || (!u && n < 50) ? n * MI : u === 'k' || u === 'km' ? n * 1000 : n);
+  }
+  const numOr = (v)=>{ const t = String(v ?? '').trim(); return t === '' ? null : Number.isFinite(+t) ? +t : NaN; };
+  const lapDist = (m)=> m == null ? '' : m < 1000 || m % 100 === 0 ? String(m) : Math.abs(m / MI - Math.round(m / MI)) < 0.002 ? Math.round(m / MI) + ' mi' : (m / MI).toFixed(2) + ' mi';
+  const lapTime = (s)=> s == null ? '' : s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(Number.isInteger(s) ? 0 : 1).padStart(Number.isInteger(s) ? 2 : 4, '0')}` : String(s);
+  const runTime = (s)=> s == null ? '' : clock(s);
+  const paceTxt = (sec, mi)=> sec > 0 && mi > 0.05 ? clock(sec / mi) : '–';
+
+  // What a session adds up to while editing.
+  function sessTotals(s){
+    if(s.manual) return { mi: E.day.mi, sec: E.day.sec };
+    const as = runActs(s);
+    return { mi: as.reduce((a, z)=> a + (E.acts[z.id]?.mi || 0), 0), sec: as.reduce((a, z)=> a + (E.acts[z.id]?.sec || 0), 0) };
+  }
+  function dayTotals(x){
+    if(!E.locked) return { mi: E.day.mi, sec: E.day.sec };
+    const all = Object.values(E.acts);
+    return { mi: all.reduce((a, z)=> a + (z.mi || 0), 0), sec: all.reduce((a, z)=> a + (z.sec || 0), 0) };
+  }
+  const lapsFor = (k)=> k === 'day' ? E.day.laps : E.acts[k]?.laps;
+
+  const inBox = (attrs, val, unit, label, mode = 'decimal')=> `<label class="kde-box"><input class="kde-in" ${attrs} inputmode="${mode}" autocomplete="off" value="${esc(val)}" aria-label="${esc(label)}">${unit ? `<i>${unit}</i>` : ''}</label>`;
+  function typePick(s){
+    const id = s.main_id; if(!id || !E.acts[id]) return '';
+    const cur = E.acts[id].tag;
+    const opt = (v, l)=> `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`;
+    return `<label class="kde-type"><span>Run type</span><select class="kde-in" data-e="tag" data-id="${esc(id)}">${opt('', s.tag ? 'Auto (Kestrel decides by pace)' : `Auto · ${KIND[s.category] || 'Run'}`)}${TAGS.builtin.map((t)=> opt(t.id, t.label)).join('')}${(TAGS.custom || []).map((t)=> opt(t.name, t.name)).join('')}</select></label>`;
+  }
+  function editStats(s){
+    const as = runActs(s), one = s.manual ? 'day' : as.length === 1 ? as[0].id : null, t = sessTotals(s);
+    const src = one === 'day' ? E.day : one ? E.acts[one] : null;
+    const dist = src ? inBox(`data-e="mi" data-id="${esc(one)}"`, src.mi != null ? r2(src.mi) : '', 'mi', 'Distance in miles')
+      : `<b data-o="smi" data-k="${esc(s.key)}">${r2(t.mi || 0)}<i> mi</i></b>`;
+    const time = src ? inBox(`data-e="sec" data-id="${esc(one)}"`, runTime(src.sec), '', 'Moving time', 'text')
+      : `<b data-o="ssec" data-k="${esc(s.key)}">${t.sec ? clock(t.sec) : '–'}</b>`;
+    const diff = s.manual ? `<label class="kde-box"><select class="kde-in" data-e="difficulty" data-id="day" aria-label="Difficulty, 1 to 10"><option value="">–</option>${Array.from({ length:10 }, (_, i)=> `<option${E.day.difficulty === i + 1 ? ' selected' : ''}>${i + 1}</option>`).join('')}</select><i>/10</i></label>` : null;
+    return `<div class="kd-stats kde-stats">
+      <div class="kd-stat"><span>Distance</span>${dist}</div>
+      <div class="kd-stat"><span>Time</span>${time}</div>
+      <div class="kd-stat"><span>Pace</span><b data-o="space" data-k="${esc(s.key)}">${paceTxt(t.sec, t.mi)}<i>/mi</i></b></div>
+      <div class="kd-stat"><span>${s.manual ? 'Difficulty' : 'Effort'}</span>${diff || `<b>${s.effort ?? '–'}${s.effort ? '<i>/10</i>' : ''}</b>`}</div>
+      ${stat('Avg HR', s.avg_hr, ' bpm')}
+      ${s.track ? stat('Where', 'Track') : stat('Elev gain', s.elev_ft != null ? Math.round(s.elev_ft) : null, ' ft')}</div>`;
+  }
+  function editParts(s){
+    const as = runActs(s);
+    if(as.length < 2) return '';
+    return `<section class="card kv-card ks-parts kde-parts"><h2 class="kv-ct">Parts</h2>
+      ${as.map((z)=> `<div class="ks-part"><span class="m">${esc(ampm(z.start))}</span><b>${esc(ROLE[z.role] || KIND[z.category] || 'Run')}</b>
+        ${inBox(`data-e="mi" data-id="${esc(z.id)}"`, E.acts[z.id].mi != null ? r2(E.acts[z.id].mi) : '', 'mi', `${ROLE[z.role] || 'Run'} distance in miles`)}
+        ${inBox(`data-e="sec" data-id="${esc(z.id)}"`, runTime(E.acts[z.id].sec), '', `${ROLE[z.role] || 'Run'} moving time`, 'text')}
+        <span data-o="apace" data-id="${esc(z.id)}">${paceTxt(E.acts[z.id].sec, E.acts[z.id].mi)}<i>/mi</i></span></div>`).join('')}</section>`;
+  }
+  function splitRowsHtml(k){
+    const ls = lapsFor(k) || [];
+    return `${ls.length ? `<div class="kd-split hd kde-row"><span>#</span><span>Distance</span><span>Time</span><span>Pace</span><span>HR</span><span></span></div>` : '<p class="kv-hint">No splits saved for this run yet.</p>'}
+      ${ls.map((l, i)=> `<div class="kd-split kde-row"><span class="m">${i + 1}</span>
+        ${inBox(`data-e="lm" data-k="${esc(k)}" data-i="${i}"`, lapDist(l.m), '', `Split ${i + 1} distance`, 'text')}
+        ${inBox(`data-e="ls" data-k="${esc(k)}" data-i="${i}"`, lapTime(l.s), '', `Split ${i + 1} time`, 'text')}
+        <span data-o="lpace" data-k="${esc(k)}" data-i="${i}">${l.m > 0 && l.s > 0 ? clock(l.s / (l.m / MI)) : '–'}</span>
+        ${inBox(`data-e="lh" data-k="${esc(k)}" data-i="${i}"`, l.hr ?? '', '', `Split ${i + 1} heart rate`, 'numeric')}
+        <button type="button" class="kde-x" data-a="kdeDel" data-v="${esc(k)}|${i}" aria-label="Remove split ${i + 1}">×</button></div>`).join('')}
+      <div class="kde-foot"><button type="button" class="sm-btn" data-a="kdeAdd" data-v="${esc(k)}">+ Add split</button><span class="kv-hint" data-o="lsum" data-k="${esc(k)}">${lapSum(k)}</span></div>`;
+  }
+  function lapSum(k){
+    const ls = (lapsFor(k) || []).filter((l)=> l.m > 0 && l.s > 0);
+    return ls.length ? `Splits add up to ${r2(ls.reduce((a, l)=> a + l.m, 0) / MI)} mi in ${clock(ls.reduce((a, l)=> a + l.s, 0))}` : '';
+  }
+  function editSplits(s){
+    const ks = splitKeys(s), as = runActs(s);
+    const head = (k)=>{ if(ks.length < 2) return ''; const z = as.find((a)=> a.id === k); return `<div class="kr-sethd"><b>${esc(ROLE[z?.role] || KIND[z?.category] || 'Run')}</b><span>${esc(ampm(z?.start))}</span></div>`; };
+    return `<section class="card kv-card kd-splitcard kde-splits"><h2 class="kv-ct">Splits</h2>
+      <p class="kv-hint">Every lap, as the watch saved it. Fix a distance or a time, or add the ones it missed.</p>
+      ${ks.map((k)=> `${head(k)}<div data-sp="${esc(k)}">${splitRowsHtml(k)}</div>`).join('')}</section>`;
+  }
+  function sessionEditHtml(x, s){
+    const conds = [s.temp_f != null ? `${Math.round(s.temp_f)}°F` : '', s.track ? 'On the track' : ''].filter(Boolean).join(' · ');
+    const crossOnly = s.category === 'crosstrain';
+    return `<div class="ks inline kde" data-key="${esc(s.key)}" id="kde-${esc(s.key.replace(/[^\w-]/g, '_'))}"><div class="ks-a">
+      <section class="card kv-card ks-head">
+        <div class="kv-eb">${esc([partOfDay(s.start), timeSpan(s)].filter(Boolean).join(' · '))}${conds ? ' · ' + esc(conds) : ''}</div>
+        <div class="kv-ct big">${esc(sessionName(s))}</div>
+        ${crossOnly ? sessionStats(s) : editStats(s)}${crossOnly ? '' : typePick(s)}
+      </section>
+      ${crossOnly ? '' : editParts(s)}
+      </div><div class="ks-b">${crossOnly ? '' : editSplits(s)}</div></div>`;
+  }
+  // The day's own fields, under its summary.
+  function dayEditHtml(x, lib){
+    const d = E.day, opts = (n, cur)=> `<option value="">–</option>${Array.from({ length:n }, (_, i)=> `<option${cur === i + 1 ? ' selected' : ''}>${i + 1}</option>`).join('')}`;
+    return `<section class="card kv-card kde-day"><h2 class="kv-ct">How it went</h2>
+      <div class="kde-grid">
+        <label><span>Felt (1-10)</span><select class="kde-in" data-e="feel">${opts(10, d.feel)}</select></label>
+        <label><span>Sleep (hours)</span><input class="kde-in" data-e="sleep_hours" inputmode="decimal" value="${esc(d.sleep_hours ?? '')}"></label>
+      </div>
+      ${lib?.workouts?.length ? `<label><span>Workout from the library</span><select class="kde-in" data-e="library_id"><option value="">None</option>${lib.workouts.map((w)=> `<option value="${esc(w.id)}"${w.id === d.library_id ? ' selected' : ''}>${esc(w.name)}</option>`).join('')}</select></label>` : ''}
+      <label class="kde-check"><input type="checkbox" class="kde-in" data-e="strength"${d.strength ? ' checked' : ''}><span>Did strength or core</span></label>
+      <label class="kde-check"><input type="checkbox" class="kde-in" data-e="track"${d.track ? ' checked' : ''}><span>On the track <i>${E.locked ? 'The workout snaps to the lines: reps to 100 m, miles to eighths.' : 'Reps round to the nearest 100 m.'}</i></span></label>
+      <label><span>Notes</span><textarea class="kde-in" data-e="notes" rows="3" maxlength="2000" placeholder="How it felt, the weather, anything to remember">${esc(d.notes)}</textarea></label>
+    </section>`;
+  }
+  function dayEditStats(x){
+    const t = dayTotals(x), ss = runs(x), lv = levelOf(totals(x).difficulty);
+    return `<div class="kdd-stats">
+      <div class="kd-stat"><span>Miles</span><b data-o="dmi">${t.mi != null ? r2(t.mi) : '–'}</b></div>
+      <div class="kd-stat"><span>Time</span><b data-o="dsec">${t.sec ? clock(t.sec) : '–'}</b></div>
+      ${stat(ss.length === 1 ? 'Session' : 'Sessions', ss.length || '–')}
+      <div class="kd-stat"><span>Difficulty</span>${totals(x).difficulty ? `<em class="kd-pill l${lv}"><b>${totals(x).difficulty}</b>${LEVEL[lv]}</em>` : '<b>–</b>'}</div></div>`;
+  }
+  // The day page with its boxes unlocked: the same summary, then every session open, one under the other.
+  function dayEditHtml2(x, wide, lib){
+    prepare(x);
+    const ss = x?.sessions || [];
+    const sum = `<section class="card kv-card kdd-sum">
+        <div class="kd-eb">${eye}Day summary · editing</div>
+        ${daySentence(x) ? `<p class="kdd-line big">${esc(daySentence(x))}</p>` : ''}
+        ${dayEditStats(x)}
+        <p class="kv-hint">Difficulty, load and run type are scored again from what you save.</p>
+      </section>`;
+    const list = wide && ss.length > 1 ? `<section class="kdd-list"><h3 class="kdd-h">${ss.length} sessions</h3>${ss.map((s)=> sessionCard(s, false)).join('').replaceAll('data-a="sess"', 'data-a="kdeJump"')}</section>` : '';
+    const edits = ss.map((s)=> sessionEditHtml(x, s)).join('');
+    if(wide) return `<div class="kdd wide kde-on"><div class="kdd-side">${sum}${dayEditHtml(x, lib)}${list}</div><div class="kdd-main">${edits}</div></div>`;
+    return `<div class="kdd kde-on">${sum}${edits}${dayEditHtml(x, lib)}</div>`;
+  }
+
+  // Typing: keep E current and the numbers that follow from it (pace, totals) in step, without redrawing the inputs.
+  function onInput(el){
+    if(!E) return;
+    const k = el.dataset.e, id = el.dataset.id, lk = el.dataset.k, i = +el.dataset.i;
+    let bad = false;
+    if(k === 'mi' || k === 'sec'){
+      const v = k === 'mi' ? numOr(el.value) : parseRunTime(el.value);
+      bad = Number.isNaN(v) || (v != null && v <= 0);
+      const tgt = id === 'day' ? E.day : E.acts[id];
+      if(tgt && !bad) tgt[k] = v;
+    } else if(k === 'lm' || k === 'ls' || k === 'lh'){
+      const l = lapsFor(lk)?.[i]; if(!l) return;
+      const v = k === 'lm' ? parseLapDist(el.value) : k === 'ls' ? parseLapTime(el.value) : numOr(el.value);
+      bad = Number.isNaN(v) || (v != null && (k === 'lh' ? v < 30 || v > 250 : v <= 0));
+      if(!bad) l[k === 'lm' ? 'm' : k === 'ls' ? 's' : 'hr'] = v;
+    } else if(k === 'tag') E.acts[id].tag = el.value;
+    else if(k === 'difficulty' || k === 'feel') E.day[k] = el.value ? +el.value : null;
+    else if(k === 'sleep_hours'){ const v = numOr(el.value); bad = Number.isNaN(v) || (v != null && (v < 0 || v > 24)); if(!bad) E.day.sleep_hours = v; }
+    else if(k === 'strength' || k === 'track') E.day[k] = el.checked;
+    else if(k === 'notes' || k === 'library_id') E.day[k] = el.value;
+    el.classList.toggle('bad', bad); el.setAttribute('aria-invalid', String(bad));
+    const key = [k, id, lk, i].join('|');
+    if(bad) E.bad.add(key); else E.bad.delete(key);
+    live();
+  }
+  function live(){
+    const root = document.querySelector('.kde-on'); if(!root || !E) return;
+    const x = E.x;
+    root.querySelectorAll('[data-o]').forEach((o)=>{
+      const t = o.dataset.o;
+      if(t === 'dmi' || t === 'dsec'){ const d = dayTotals(x); o.textContent = t === 'dmi' ? (d.mi != null ? r2(d.mi) : '–') : d.sec ? clock(d.sec) : '–'; }
+      else if(t === 'smi' || t === 'ssec' || t === 'space'){
+        const s = sessionOf(x, o.dataset.k); if(!s) return; const v = sessTotals(s);
+        if(t === 'smi') o.innerHTML = `${r2(v.mi || 0)}<i> mi</i>`; else if(t === 'ssec') o.textContent = v.sec ? clock(v.sec) : '–'; else o.innerHTML = `${paceTxt(v.sec, v.mi)}<i>/mi</i>`;
+      } else if(t === 'apace'){ const a = E.acts[o.dataset.id]; if(a) o.innerHTML = `${paceTxt(a.sec, a.mi)}<i>/mi</i>`; }
+      else if(t === 'lpace'){ const l = lapsFor(o.dataset.k)?.[+o.dataset.i]; if(l) o.textContent = l.m > 0 && l.s > 0 ? clock(l.s / (l.m / MI)) : '–'; }
+      else if(t === 'lsum') o.textContent = lapSum(o.dataset.k);
+    });
+  }
+  function addSplit(k){
+    const ls = lapsFor(k); if(!ls) return;
+    if(ls.length >= 40) return alert('A run holds at most 40 splits.');
+    ls.push({ m: ls.length ? ls[ls.length - 1].m : 1609, s: null, hr: null, rest: '' });
+    redrawSplits(k);
+    document.querySelector(`.kde-on [data-e="ls"][data-k="${CSS.escape(k)}"][data-i="${ls.length - 1}"]`)?.focus();
+  }
+  function delSplit(k, i){ const ls = lapsFor(k); if(!ls) return; ls.splice(i, 1); [...E.bad].filter((b)=> b.includes(`|${k}|`)).forEach((b)=> E.bad.delete(b)); redrawSplits(k); }
+  function redrawSplits(k){ const el = document.querySelector(`.kde-on [data-sp="${CSS.escape(k)}"]`); if(el) el.innerHTML = splitRowsHtml(k); live(); }
+
+  // What changed, ready for /api/log/edit. -> { error } or { runs, tags, fields, track }
+  function editPayload(){
+    if(!E) return null;
+    if(E.bad.size) return { error: 'Some boxes don’t read as a number or a time. They’re outlined in red.' };
+    const o = JSON.parse(E.orig), runs = [], tags = [], fields = {};
+    const lapsOut = (ls)=> ls.map((l)=> ({ m: l.m, s: l.s, hr: l.hr || null, rest: l.rest || '' }));
+    const half = (ls)=> (ls || []).some((l)=> !(l.m > 0) || !(l.s > 0));
+    for(const [id, a] of Object.entries(E.acts)){
+      const b = o.acts[id], e = { strava_id: id };
+      if(a.mi !== b.mi) e.distance_mi = a.mi;
+      if(a.sec !== b.sec) e.moving_sec = a.sec;
+      if(JSON.stringify(a.laps) !== JSON.stringify(b.laps)){ if(half(a.laps)) return { error: 'Every split needs a distance and a time (or remove it).' }; e.laps = lapsOut(a.laps); }
+      if(e.distance_mi === null || e.moving_sec === null) return { error: 'A run needs a distance and a time.' };
+      if(Object.keys(e).length > 1) runs.push(e);
+      if(a.tag !== b.tag) tags.push({ strava_id: id, tag: a.tag });
+    }
+    const d = E.day, b = o.day;
+    if(!E.locked){
+      if(d.mi !== b.mi) fields.manual_miles = d.mi;
+      if(d.sec !== b.sec) fields.minutes = d.sec != null ? Math.round(d.sec / 6) / 10 : null;
+      if(d.difficulty !== b.difficulty) fields.difficulty = d.difficulty;
+      if(d.track !== b.track) fields.surface = d.track ? 'track' : '';
+    }
+    if(d.laps && JSON.stringify(d.laps) !== JSON.stringify(b.laps)){ if(half(d.laps)) return { error: 'Every split needs a distance and a time (or remove it).' }; fields.split_reps = lapsOut(d.laps); }
+    for(const k of ['feel', 'sleep_hours', 'strength', 'notes', 'library_id']) if(d[k] !== b[k]) fields[k] = d[k];
+    return { runs, tags, fields, track: E.locked && d.track !== b.track ? d.track : null };
+  }
+
+  window.KDay = { setFiveK, prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits,
+    setTags, startEdit(x){ startEdit(x); E.x = x; seedSplits(x); }, editing, stopEdit, dirty, dayEditHtml: dayEditHtml2, onInput, addSplit, delSplit, editPayload };
+  document.addEventListener('input', (e)=>{ const el = e.target.closest('.kde-on .kde-in'); if(el) onInput(el); });
+  document.addEventListener('change', (e)=>{ const el = e.target.closest('.kde-on .kde-in'); if(el && (el.tagName === 'SELECT' || el.type === 'checkbox')) onInput(el); });
 })();

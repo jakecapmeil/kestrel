@@ -760,3 +760,71 @@ button.kv-link-sm{background:none;border:0;box-shadow:none;height:auto;padding:4
   .kd-stats .kd-stat b{font-size:var(--fs-xl);white-space:normal;}
   .kd-stats .kd-stat b i{display:block;}
 }
+
+/* Editing a day: the same page with its boxes unlocked. Inputs sit where the numbers were, in the same type. */
+.kde-top{position:sticky;top:0;z-index:5;gap:10px;padding:8px 0;background:var(--bg);}
+.kde-flag{font:700 var(--fs-xs) var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-right:auto;}
+.kde-top .pri,.kde-bar .pri{background:var(--accent);color:var(--on-accent);border-color:transparent;}
+.kde-bar{display:flex;align-items:center;gap:10px;margin:4px 0 32px;}
+.kde-bar .kv-hint{flex:1;min-width:0;color:var(--danger);}
+.kde-box{display:flex;align-items:baseline;gap:4px;min-width:0;}
+.kde-in{min-width:0;width:100%;height:auto;margin:0;border:1px solid transparent;border-radius:var(--r-xs);background:var(--surface-2);color:var(--text);padding:6px 8px;font:600 var(--fs-lg)/1.2 var(--font-mono);}
+.kde-in:focus-visible{outline:2px solid var(--accent);outline-offset:0;background:var(--surface);}
+.kde-in.bad{border-color:var(--danger);background:var(--danger-subtle);}
+.kde-box .kde-in{flex:1 1 0;width:0;}
+.kde-box i{font-style:normal;font-size:var(--fs-sm);color:var(--text-2);font-weight:500;flex:none;}
+.kde-stats .kd-stat:nth-child(-n+2) .kde-in{font-size:var(--fs-xl);letter-spacing:-.02em;}
+@media (min-width:420px){ .kde-stats .kd-stat:nth-child(-n+2) .kde-in{font-size:var(--fs-2xl);} }
+.kde-stats .kd-stat:nth-child(4) .kde-box{max-width:120px;}
+.kde-type{display:flex;align-items:center;gap:10px;}
+.kde-type span,.kde-day label:not(.kde-check) > span,.kde-grid span{font-size:var(--fs-sm);color:var(--text-2);flex:none;}
+.kde-type select{width:auto;font-family:var(--font-ui);}
+/* Parts and splits fit their card, not the window: the day page's session column can be under 300px wide. */
+.kde-parts,.kde-splits{container-type:inline-size;}
+.kde-parts .ks-part{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 64px;grid-template-areas:"lab lab when" "dist time pace";gap:6px 8px;padding:8px 0;}
+.kde-parts .ks-part > span:first-child{grid-area:when;text-align:right;}
+.kde-parts .ks-part > b{grid-area:lab;}
+.kde-parts .ks-part > label:nth-of-type(1){grid-area:dist;}
+.kde-parts .ks-part > label:nth-of-type(2){grid-area:time;}
+.kde-parts .ks-part > span:last-child{grid-area:pace;text-align:right;}
+.kde-parts .ks-part .kde-in{font-size:var(--fs-md);}
+@container (min-width:460px){
+  .kde-parts .ks-part{grid-template-columns:64px minmax(0,1fr) 104px 104px 64px;grid-template-areas:"when lab dist time pace";padding:4px 0;}
+  .kde-parts .ks-part > span:first-child{text-align:left;}
+}
+/* Narrow: #, distance, time, remove; the pace sits under the time. Wider: pace gets its own column, then heart rate. */
+.kd-split.kde-row{grid-template-columns:18px minmax(0,1fr) minmax(0,1fr) 44px;gap:2px 6px;height:auto;min-height:48px;padding:6px 0;}
+.kd-split.kde-row > :nth-child(5){display:none;}
+.kd-split.kde-row > span:nth-child(4){grid-column:3;grid-row:2;text-align:left;padding-left:7px;font-size:var(--fs-xs);color:var(--text-2);}
+.kd-split.kde-row > span:nth-child(4)::after{content:"/mi";}
+.kd-split.kde-row > .kde-x{grid-column:4;grid-row:1;}
+.kd-split.kde-row.hd{min-height:0;}
+.kd-split.kde-row.hd > span:nth-child(4){display:none;}
+.kd-split.kde-row .kde-in{font-size:var(--fs-md);padding:6px;}
+@container (min-width:340px){
+  .kd-split.kde-row{grid-template-columns:20px minmax(0,1fr) minmax(0,1fr) 48px 44px;}
+  .kd-split.kde-row > span:nth-child(4){grid-column:auto;grid-row:auto;text-align:right;padding:0;font-size:inherit;}
+  .kd-split.kde-row > span:nth-child(4)::after{content:none;}
+  .kd-split.kde-row > .kde-x{grid-column:auto;grid-row:auto;}
+  .kd-split.kde-row.hd > span:nth-child(4){display:block;}
+}
+@container (min-width:400px){
+  .kd-split.kde-row{grid-template-columns:24px minmax(0,1.2fr) minmax(0,1fr) 56px 60px 44px;gap:8px;}
+  .kd-split.kde-row > :nth-child(5){display:flex;text-align:left;}
+  .kd-split.kde-row.hd > :nth-child(5){display:block;}
+}
+.kde-x{width:44px;height:44px;padding:0;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font:400 var(--fs-xl)/1 var(--font-ui);cursor:pointer;}
+.kde-x:hover{background:var(--surface-2);color:var(--danger);}
+.kde-foot{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding-top:12px;}
+.kde-splits > .kv-hint{margin:-4px 0 6px;}
+.kde-day{display:flex;flex-direction:column;gap:12px;}
+.kde-day .kv-ct{margin:0;}
+.kde-day label:not(.kde-check){display:flex;flex-direction:column;gap:6px;}
+.kde-day .kde-in{font-family:var(--font-ui);font-weight:500;}
+.kde-day textarea.kde-in{resize:vertical;line-height:1.45;}
+.kde-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.kde-grid label{display:flex;flex-direction:column;gap:6px;}
+.kde-check{display:flex;align-items:flex-start;gap:10px;font-size:var(--fs-md);}
+.kde-check input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent);}
+.kde-check > span{min-width:0;flex:1;}
+.kde-check i{display:block;font-style:normal;font-size:var(--fs-sm);color:var(--text-2);}
