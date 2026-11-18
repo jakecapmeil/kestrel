@@ -3,6 +3,7 @@
 (function(){
   const SCREENS = window.KV.screens, ACT = window.KV.act, V = window.KV.state;
   const { esc, sec, card, tiles, need, hero, empty, noTeam, toast, getJson, post, logRange, weekStart, intensity, runTitle, paceOf, saveDayFields, iso, nice, clock, secs, push, redraw, ICON, feelCard, eventCard, spark, latestPost } = window.KV._h;
+  const modOn = (id)=> window.kMods ? window.kMods.has(id) : true;
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   // ---------------------------------------------------------------- month grid (your training, or the team's events)
@@ -98,7 +99,7 @@
       ${p && !x?.miles ? `<div class="kv-hint">Planned: ${esc(p.type === 'Off' ? 'rest' : `${p.type} ${p.miles} mi`)}${sessionText(p) || p.base?.notes ? ' · ' + esc(sessionText(p) || p.base.notes) : ''}</div>` : ''}
       ${x?.plan ? `<div class="kv-hint">Plan: ${esc(x.plan.planned || x.plan.label || '')}</div>` : ''}
       ${x?.day_line ? `<div class="kv-note"><b>Kestrel AI:</b> ${esc(x.day_line)}</div>` : ''}</div>`;
-    return head + (d > todayKey() && p ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
+    return head + (d > todayKey() && p && modOn('coach') ? card('', '', `<div class="kv-hint">Can’t make it, or want something different? Kestrel AI moves it inside the guardrails.</div><div class="kv-btns"><button type="button" data-a="dayKai" data-v="${d}">Change this day</button></div>`) : '');
   }
   ACT.dayFull = (d)=>{ V.sel = d; push('day|' + d); };
   ACT.dayKai = (d)=> openKai(`About ${nice(d, { weekday:'long', month:'short', day:'numeric' })}: `, false);
@@ -267,12 +268,12 @@
       <div class="kv-bmchips">${Object.entries(marks).map(([id, st])=> `<span class="kv-bmchip ${st}">${esc(BODY_PART_LABELS[id] || id)}<button type="button" data-a="bmClear" data-v="${id}" aria-label="Clear">✕</button></span>`).join('')}</div>
       <button type="button" class="kv-bmflip" data-a="bmFlip">${ICON.flip}<span>${V.bmView === 'front' ? 'Front' : 'Back'}</span></button></div>
       <div class="kv-legend" style="justify-content:center"><span><i style="background:#94a3b8"></i>OK</span><span><i style="background:#f97316"></i>Sore</span><span><i style="background:#dc2626"></i>Pain</span></div>
-      <div class="kv-btns"><button type="button" data-a="bmKai">Tell Kestrel AI how it feels</button></div>`);
+      ${modOn('coach') ? '<div class="kv-btns"><button type="button" data-a="bmKai">Tell Kestrel AI how it feels</button></div>' : ''}`);
     const hs = h?.health || {}, sore = Object.keys(marks).length;
     const top = hero({ eb:'Readiness · today', big:rd?.score != null ? esc(rd.label) : 'Check in', unit:rd?.score != null ? rd.score : '',
       lines:[rd?.score != null ? [hs.resting_hr?.last7 != null && `Resting HR ${hs.resting_hr.last7}${hs.resting_hr.normal ? `, normal ${hs.resting_hr.normal}` : ''}.`, hs.sleep?.last7 != null && `Sleeping ${hs.sleep.last7} h a night.`].filter(Boolean).join(' ') : 'Log how you feel and how you slept for a few days, and Kestrel works out your readiness.',
         sore ? `${sore} ${sore === 1 ? 'spot' : 'spots'} marked on the body map.` : 'Nothing marked on the body map.'],
-      btns:`<button type="button" data-a="ask">Ask Kestrel AI</button>` });
+      btns:modOn('coach') ? `<button type="button" data-a="ask">Ask Kestrel AI</button>` : '' });
     return `${top}<div class="kv-row" style="--c:1.2fr 1fr"><div class="kv-stack">${feelCard(t, false)}${trend}${health}</div><div class="kv-stack">${map}</div></div>`;
   };
   SCREENS.recovery.after = ()=>{

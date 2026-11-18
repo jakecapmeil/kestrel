@@ -87,3 +87,25 @@ textarea.k-input{height:auto;min-height:96px;padding:var(--s-3) var(--s-4);line-
 /* Phones: a long button label wraps inside the pill instead of running out of its row. */
 @media (max-width:599px){ .k-btn{max-width:100%;white-space:normal;height:auto;min-height:var(--tap);padding-block:var(--s-2);text-align:center;line-height:1.2;} }
 
+
+/* ---------- Customize Kestrel (public/modules.js): runner-type presets, then one switch per tool */
+.km-box{max-width:520px;}
+.km-body{padding:var(--s-3) var(--s-4) var(--s-4);}
+.km-intro{margin:0 0 var(--s-3);}
+.km-presets{margin-bottom:var(--s-2);}
+.km-who{margin:0;}
+.km-group{margin-top:var(--s-4);}
+.km-group h4{margin:0 0 var(--s-1);font:700 var(--fs-sm) var(--font-ui);letter-spacing:.04em;text-transform:uppercase;color:var(--text-2);}
+.km-row{display:flex;align-items:center;gap:var(--s-3);min-height:var(--tap);padding:var(--s-3) 0;border-top:1px solid var(--line);cursor:pointer;}
+.km-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.km-text b{font:600 var(--fs-md)/1.25 var(--font-ui);}
+.km-text small{font:500 var(--fs-sm)/1.35 var(--font-ui);color:var(--text-2);}
+.km-text .km-hides{color:var(--text);}
+.km-row .km-sw{-webkit-appearance:none;appearance:none;flex:none;position:relative;width:44px;height:26px;min-width:44px;margin:0;padding:0;border:0;border-radius:var(--r-pill);background:color-mix(in srgb,var(--text) 22%,transparent);cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.km-row .km-sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--surface);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.km-row .km-sw:checked{background:var(--inverse);}
+.km-row .km-sw:checked::after{transform:translateX(18px);background:var(--on-inverse);}
+.km-core{margin:var(--s-4) 0 0;}
+.km-foot{display:flex;align-items:center;gap:var(--s-2);flex-shrink:0;padding:var(--s-3) var(--s-4) calc(var(--s-3) + env(safe-area-inset-bottom));border-top:1px solid var(--line);}
+.km-count{flex:1;min-width:0;font:600 var(--fs-sm) var(--font-ui);color:var(--text-2);}
+.km-actions{display:flex;gap:var(--s-2);margin-top:var(--s-3);}

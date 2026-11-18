@@ -305,7 +305,7 @@ const OB_STEPS = [
   { key: 'running', title: 'Your running', sub: 'Where you are today, so the plan starts at the right level.' },
   { key: 'week', title: 'Your week', sub: 'Your plan fits around your life, not the other way round.' },
   { key: 'prs', title: 'Personal records', sub: 'Your coach uses these to predict your races and set your paces.' },
-  { key: 'goals', title: 'Your goal', sub: 'What are you working towards? Kestrel tracks your progress in Train → Goals.' },
+  { key: 'goals', title: 'Your goal', sub: 'What are you working towards? Kestrel tracks your progress under Run → Goals.' },
   { key: 'coach', title: 'Your coach', sub: 'The rest of your training, fueling, and how you like to be coached.' },
 ];
 const OB_YEAR = new Date().getFullYear();
@@ -356,7 +356,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
       ${metric
         ? field('Height (cm)', num('height_cm', 'e.g. 172', 'min="100" max="230"'))
         : field('Height', html`<div class="k-row2">${num('ft', 'ft', 'min="3" max="7"')}${num('in', 'in', 'min="0" max="11.9"')}</div>`)}
-      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', metric ? 'min="25" max="220"' : 'min="55" max="485"'), 'Optional. Sets your fueling targets (Train → Fuel). Only you see it.')}
+      ${field(metric ? 'Weight (kg)' : 'Weight (lb)', num('weight', metric ? 'e.g. 62' : 'e.g. 135', metric ? 'min="25" max="220"' : 'min="55" max="485"'), 'Optional. Sets your fueling targets if you use Fuel. Only you see it.')}
       ${field('Resting heart rate (bpm)', num('resting_hr', 'e.g. 52', 'min="30" max="120"'), 'Optional. Your watch shows this.')}
       ${field('Max heart rate (bpm)', num('max_hr', 'e.g. 195', 'min="120" max="230"'), 'Optional. Leave blank and we estimate it from your age.')}`,
     running: () => html`
@@ -392,7 +392,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
     coach: () => html`
       <label class="k-label">Other training you do</label>
       <div class="k-chips">${XT.map(([v, l]) => html`<label class="k-chip k-tick"><input type="checkbox" name="xtrain" value="${v}" ${(d.xtrain || []).includes(v) ? 'checked' : ''}><span>${l}</span></label>`)}</div>
-      <p class="k-small">Log it in Train → Cross-train; your coach counts it in your load.</p>
+      <p class="k-small">You can log it under Body → Cross-train; your coach counts it in your load.</p>
       ${field('How do you eat?', sel('diet', [['', 'Prefer not to say'], ['none', 'Anything'], ['vegetarian', 'Vegetarian'], ['vegan', 'Vegan'], ['gluten_free', 'Gluten-free'], ['other', 'Something else']], d.diet))}
       ${field('Anything about fueling we should know?', html`<input class="k-input" name="fuel_notes" maxlength="200" placeholder="e.g. Gels upset my stomach; nut allergy" value="${d.fuel_notes ?? ''}">`)}
       ${field('How should your coach talk to you?', sel('coach_tone', [['', 'Whatever works'], ['encouraging', 'Encouraging and positive'], ['direct', 'Straight to the point'], ['detailed', 'The details and the why']], d.coach_tone))}
@@ -472,6 +472,7 @@ function renderOnboarding(step = 0, d = K.ob || (K.ob = { units: 'mi', age: fals
     if (!d.age) { toast('Please confirm your age to continue.', true); return; }
     attempt(async () => {
       K.me = await save();
+      K.justOnboarded = true;
       syncAi();
       const watch = d.watch;
       K.ob = null;
@@ -675,6 +676,11 @@ async function start() {
     await window.kestrelInit();
   } else {
     await window.kestrelReload();
+  }
+  // A brand-new runner chooses their tools once, starting from what setup told Kestrel (nothing is hidden until they confirm).
+  if (K.justOnboarded && !WANT_ADD_MODEL) {
+    K.justOnboarded = false;
+    await window.kMods?.welcome();
   }
   // /?ai=add (from Kestrel Lab or the plan builder): straight to You → Integrate with the Add model dialog open, once.
   if (WANT_ADD_MODEL && !K.addModelShown) {

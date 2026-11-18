@@ -13,6 +13,7 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 - **Fitness States.** Race estimates from 100 m to the marathon, each with an 80% range, plus race VO2max, pace zones and a fitness/fatigue/form score. Includes a heat-and-hills calculator, a taper builder, and "runners like you" (a comparison with 14,000 real marathoners).
 - **Workouts library.** Sessions written for your level, with rep targets from your own paces. You can send the next 14 days of your plan to your watch.
 - **Health, private.** Readiness, health status and a body map that only you and your coach see.
+- **Your tools, your choice.** Kestrel has a lot in it, so you pick what shows (You → Settings → Customize Kestrel). Start from a kind of runner (just getting started, school or club team, half or full marathon, coming back) and flip single tools: the coach, workouts, race estimates, goals, recovery, cross-training, fuel, shoes, records, team, watch sync, Record and Lab. Hiding a tool only hides it. See [docs/modules.md](docs/modules.md).
 
 **For a team**
 - Anyone can start a team for their school. Others join with an invite code or link.
@@ -48,6 +49,7 @@ Running apps charge for adaptive training plans and AI coaching. Kestrel makes t
 | `docs/model-research.md` | Which models are on Kestrel, which to add next, and how purposes and courses work. |
 | `src/models.js` | Kestrel Lab's model engine (purposes, courses, one evaluator per model kind, plus upload validation) and the adapters the fitness engine calls. |
 | `public/index.html` | The app (the Kestrel views). `public/kestrel.js` adds sign-in, teams, the AI choice and settings; `public/kestrel.css` is the design. |
+| `src/train/modules.js` | The tools a runner can turn off, the kinds-of-runner presets and the suggestion ([docs/modules.md](docs/modules.md)). `public/modules.js` is the menu and the gating. |
 | `src/train/courses.js` | Courses and course PRs. 48 built-in courses (each checked against a published source, with GPS start bounds so a run is matched to its course); courses people add live in the `courses` table, are shared, and are chosen by hand on the run. |
 | `public/records.js` | You → Records (PRs that update themselves, the courses you follow), the course picker, and a run's route (flat, elevation, and 3D terrain through MapLibre with OpenStreetMap and AWS terrain tiles). |
 | `public/lab/` | Kestrel Lab. |

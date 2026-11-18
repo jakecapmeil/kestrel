@@ -36,6 +36,7 @@ import { accountAi, setChoice, saveProvider, removeProvider, removeAll as remove
 import { modelList } from './train/aimodels.js';
 import { COURSE_DISTANCES, CourseError, listCourses, getCourse, coursesById, createCourse, setTracked, trackedOf, courseStats, parseCourseKey } from './train/courses.js';
 import { getTrack } from './train/tracks.js';
+import { moduleMeta } from './train/modules.js';
 import { TrackError, prefsOf, cleanPrefs, trackMeta, xtrainView, saveXtrain, deleteXtrain, foodView, saveFood, deleteFood, recentFoods, goalsView, saveGoal, deleteGoal, goalFromProfile } from './train/tracking.js';
 import { shareOf, cleanShare, ShareError, exportDataset } from './train/dataset.js';
 import { getDays, rolesOf } from './train/log.js';
@@ -90,11 +91,19 @@ async function loadMe(db, auth) {
   return row;
 }
 
-async function meView(db, me) {
-  const { results: teams } = await db.prepare(
+async function myTeams(db, personId) {
+  const { results } = await db.prepare(
     `SELECT t.id, t.name, t.school, CASE WHEN m.role = 'owner' THEN 'owner' WHEN m.leader = 1 THEN 'captain' ELSE 'member' END AS role, (SELECT COUNT(*) FROM team_members x WHERE x.team_id = t.id) AS members
      FROM teams t JOIN team_members m ON m.team_id = t.id WHERE m.person_id = ? ORDER BY m.joined_at`
-  ).bind(me.id).all();
+  ).bind(personId).all();
+  return results;
+}
+
+// The tools a runner can turn off, the runner-type presets worked out for them, and which one to suggest.
+const modulesFor = (me, teams) => moduleMeta({ profile: settingsOf(me).profile || {}, user: me, teams });
+
+async function meView(db, me) {
+  const teams = await myTeams(db, me.id);
   return {
     user: {
       id: me.id, email: me.email, name: me.name, color: me.color, sex: me.sex, class_year: me.class_year,
@@ -102,6 +111,7 @@ async function meView(db, me) {
     },
     profile: settingsOf(me).profile || {},
     prefs: prefsOf(settingsOf(me)),
+    modules: modulesFor(me, teams),
     models: { ...DEFAULTS, ...Object.fromEntries(Object.entries(settingsOf(me).models || {}).filter(([k]) => TASKS[k])) },
     event_models: settingsOf(me).event_models || {},
     data_share: shareOf(settingsOf(me)),
@@ -2020,11 +2030,11 @@ async function route(request, env, url) {
   // Which Train tabs to show and in what order, custom cross-training, fueling display and targets.
   if (path === '/api/me/prefs') {
     const cur = prefsOf(settingsOf(me));
-    if (method === 'GET') return json({ prefs: cur, ...trackMeta(cur) });
+    if (method === 'GET') return json({ prefs: cur, ...trackMeta(cur), modules: modulesFor(me, await myTeams(db, me.id)) });
     if (method === 'PUT') {
       const next = cleanPrefs(await readJson(request), cur);
       await db.prepare('UPDATE people SET settings = ? WHERE id = ?').bind(JSON.stringify({ ...settingsOf(me), prefs: next }), me.id).run();
-      return json({ prefs: next, ...trackMeta(next) });
+      return json({ prefs: next, ...trackMeta(next), modules: modulesFor(me, await myTeams(db, me.id)) });
     }
   }
   // The onboarding race goal becomes a tracked goal (once, if there are no goals yet).

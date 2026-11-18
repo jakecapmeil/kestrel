@@ -9,6 +9,7 @@
 // Race goals read the runner's Fitness States estimate; equivalent times at other distances use Riegel (t2 = t1 (d2/d1)^1.06).
 import { parseTime, fmtTime } from '../events.js';
 import { EVENTS as FIT_EVENTS, EXTRA_EVENTS } from './fitness.js';
+import { offOf, cleanOff, hiddenTools } from './modules.js';
 
 export class TrackError extends Error {}
 
@@ -79,11 +80,16 @@ const DEFAULT_PREFS = {
   food: { show_kcal: false, show_fat: false, show_fluid: true, carbs: null, protein: null },
 };
 
+// train_tabs is now only the order of the Run views; which tools show is modules_off (src/train/modules.js). A runner
+// who hid Run views before modules existed keeps them hidden until they save their modules.
 export function prefsOf(settings) {
   const p = settings?.prefs || {};
   const tabs = Array.isArray(p.train_tabs) ? p.train_tabs.filter((k) => TAB_KEYS.includes(k)) : DEFAULT_PREFS.train_tabs;
   return {
     train_tabs: tabs.includes('plan') ? tabs : ['plan', ...tabs],
+    modules_off: offOf(p),
+    // Set once the runner has looked at the menu (saved it, or said not now), so Kestrel stops offering it.
+    modules_seen: !!p.modules_seen,
     xt_sports: Array.isArray(p.xt_sports) ? p.xt_sports : [],
     food: { ...DEFAULT_PREFS.food, ...(p.food || {}) },
   };
@@ -96,6 +102,8 @@ export function cleanPrefs(b, current) {
     const tabs = [...new Set(b.train_tabs.map(String))].filter((k) => TAB_KEYS.includes(k));
     out.train_tabs = tabs.includes('plan') ? tabs : ['plan', ...tabs];
   }
+  if (Array.isArray(b.modules_off)) out.modules_off = cleanOff(b.modules_off);
+  if ('modules_seen' in b) out.modules_seen = !!b.modules_seen;
   if (Array.isArray(b.xt_sports)) out.xt_sports = [...new Set(b.xt_sports.map((s) => str(s, 30)).filter(Boolean))].slice(0, 12);
   if (b.food && typeof b.food === 'object') {
     const f = { ...current.food };
@@ -568,5 +576,7 @@ export async function coachTracking(db, person, today) {
     goals: goals.map((g) => ({ ...g, event: g.kind === 'race' ? eventOf(g.event)?.label || g.event : g.event, main: !!g.priority, priority: undefined, target: g.kind === 'race' ? fmtTime(g.target, false) : g.target })),
     cross_training_by_hand_last_14_days: xt.map((x) => ({ ...x, sport: sportLabel(x.sport) })),
     fuel_last_7_days: food.length ? { weight_kg: runner.weight_kg || null, days: food } : null,
+    // Tools the runner has turned off (You → Settings → Customize Kestrel): don't send them to those screens.
+    hidden_tools: hiddenTools(settings.prefs),
   };
 }

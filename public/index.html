@@ -1734,7 +1734,7 @@
 
   <header>
     <h1 class="wordmark"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="28" height="28"><span id="secretTapZone">kestrel</span></a></h1>
-    <div class="k-team" id="kTeam"></div>
+    <div class="k-team" id="kTeam" data-mod="team"></div>
     <div class="head-right">
     <div class="sync-wrap" id="syncWrap" hidden>
       <button type="button" class="sync-pill" id="syncPill" aria-haspopup="menu" aria-expanded="false" aria-label="Watch sync"><svg class="sicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg><span class="sdot"></span><span class="slabel" id="syncLabel">Sync</span></button>
@@ -1746,9 +1746,9 @@
         <button type="button" id="syncSetupItem">Watch setup</button>
       </div>
     </div>
-    <button type="button" class="rec-btn" id="kRecBtn" aria-label="Record a run"><i aria-hidden="true"></i><span>Record</span></button>
+    <button type="button" class="rec-btn" id="kRecBtn" data-mod="record" aria-label="Record a run"><i aria-hidden="true"></i><span>Record</span></button>
     <button type="button" class="k-who" id="kWho"></button>
-    <nav class="k-switch" aria-label="Product"><a href="/" aria-current="page">Run</a><a href="/lab">Lab</a></nav>
+    <nav class="k-switch" aria-label="Product" data-mod="lab"><a href="/" aria-current="page">Run</a><a href="/lab">Lab</a></nav>
     </div>
   </header>
 
@@ -2410,7 +2410,7 @@
         </div>
       </div>
       <div class="card" id="runnerCard" style="display:none;"></div>
-      <div class="card" id="shoeCard">
+      <div class="card" id="shoeCard" data-mod="shoes">
         <div class="section-head">
           <div>
             <div class="card-title">Shoes</div>
@@ -2645,6 +2645,10 @@
       </section>
     </div>
     <div id="youSettingsView" class="you-stack" style="display:none;">
+      <section class="you-sec">
+        <h3 class="you-h">Your Kestrel</h3>
+        <div class="card" id="kModsCard"></div>
+      </section>
       <section class="you-sec">
         <h3 class="you-h">Account</h3>
         <div class="card" id="kAccountCard"><div class="card-title">Account</div><div id="kAccountBody"></div></div>
@@ -3881,6 +3885,9 @@ const NAV = {
   you:{ segs:[['profile','Profile'],['records','Records'],['integrations','Integrate'],['settings','Settings']] },
   record:{ segs:[] },
 };
+// Which of these a runner sees is theirs to choose (modules.js; the list is src/train/modules.js). Today, Run → Plan,
+// Calendar → Training and You always show; everything else is a tool that can be turned off.
+const modOn = (id)=> window.kMods ? window.kMods.has(id) : true;
 let navLastTab = 'today';
 const navLastView = {};
 // Which tab and view the page on screen belongs to.
@@ -3899,6 +3906,8 @@ function navState(){
 }
 function navGo(tab, view){
   view = view || navLastView[tab] || (NAV[tab]?.segs[0] || [])[0];
+  // A screen the runner has turned off (a stale link, the tab remembered from last time) lands on one that is on.
+  if(window.kMods) [tab, view] = window.kMods.route(tab, view);
   // Views that have a redesigned screen draw in #pageV; the rest (Coach, You, Record) keep their pages.
   const kv = tab === 'today' ? 'today' : `${tab}/${view}`;
   if(window.KV?.has(kv)){ window.KV.show(kv); return setPage('v'); }
@@ -3924,6 +3933,13 @@ function navTitle(tab, view){
 }
 function renderNav(){
   const [tab, view] = navState();
+  // Safety net behind navGo: state set some other way (kestrelSetPage, goToPrs) can still land on a hidden screen.
+  if(window.kMods){
+    const [t2, v2] = window.kMods.route(tab, view);
+    if(t2 !== tab || v2 !== view) return navGo(t2, v2);
+    window.kMods.apply();
+    document.querySelectorAll('.page-tabs [data-nav]').forEach(b=>{ b.hidden = !window.kMods.tabAllowed(b.dataset.nav); });
+  }
   if(!['you','record'].includes(tab)){ navLastTab = tab; try{ localStorage.setItem('kestrel.nav', tab); }catch(e){} }
   if(view) navLastView[tab] = view;
   document.querySelectorAll('.page-tabs [data-nav]').forEach(b=>{
@@ -3935,15 +3951,16 @@ function renderNav(){
   $('navSub').textContent = currentPage === 'v' ? window.KV.sub() : tab === 'today' ? todaySubtitle() : '';
   document.body.classList.toggle('kv-spoke', currentPage === 'v' && !!window.KV.spoke());
   $('navBack').hidden = !['you','record'].includes(tab);
-  // Run's views follow the runner's choice (Customize); the view on screen always shows.
+  // Each tab shows the views the runner has on. Run keeps the order they saved before modules existed.
   const custom = tab === 'run' && isRealPerson() && window.kTrack;
-  const keep = custom ? window.kTrack.visibleTabs() : null;
-  const segs = (NAV[tab]?.segs || []).filter(([v])=> !keep || keep.includes(v) || v === view)
-    .sort((a, b)=> keep ? keep.indexOf(a[0]) - keep.indexOf(b[0]) : 0);
-  $('navSegs').hidden = !segs.length;
+  const order = custom ? window.kTrack.visibleTabs() : null;
+  const segs = (window.kMods ? window.kMods.viewsOf(tab) : (NAV[tab]?.segs || []))
+    .sort((a, b)=> order ? order.indexOf(a[0]) - order.indexOf(b[0]) : 0);
+  // One view left (Calendar with Team off) needs no switcher; Run keeps its bar because the gear lives there.
+  $('navSegs').hidden = !segs.length || (segs.length < 2 && !custom);
   $('navSegs').innerHTML = segs.map(([v, l])=> `<button type="button" class="seg-btn ${v === view ? 'active' : ''}" role="tab" aria-selected="${v === view}" data-navv="${v}">${l}</button>`).join('')
-    + (custom ? `<button type="button" class="seg-btn tk-gear" id="navCustomize" aria-label="Customize Run views" title="Customize Run views"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>` : '');
-  $('navCustomize')?.addEventListener('click', ()=> window.kTrack.customizeTabs());
+    + (custom ? `<button type="button" class="seg-btn tk-gear" id="navCustomize" aria-label="Customize Kestrel" title="Customize Kestrel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>` : '');
+  $('navCustomize')?.addEventListener('click', ()=> window.kMods.open());
   $('navSegs').querySelectorAll('[data-navv]').forEach(b=> b.addEventListener('click', ()=> navGo(tab, b.dataset.navv)));
   $('navSegs').querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
 }
@@ -4061,7 +4078,8 @@ function renderYou(){
   $('youTitle').textContent = p ? (p.first_name || p.name) : activePersonId === COACH_ID ? 'Coach' : 'Guest';
   if(youView === 'records') window.kRecords?.render();
   else if(youView !== 'body') renderPersonal();
-  if(youView === 'profile'){ window.kTrack?.runnerCard($('runnerCard')); window.kShoes?.load(); }
+  if(youView === 'settings') window.kMods?.settingsCard($('kModsCard'));
+  if(youView === 'profile'){ window.kTrack?.runnerCard($('runnerCard')); if(modOn('shoes')) window.kShoes?.load(); }
   else renderBodyMap();
 }
 
@@ -4336,7 +4354,7 @@ function monthLabel(dateKey){
 
 function renderSyncPill(){
   const p = isRealPerson() ? people.find(x=>x.id===activePersonId) : null;
-  $('syncWrap').hidden = !p;
+  $('syncWrap').hidden = !p || !modOn('sync');
   if(!p) return;
   const st = icuState[p.id];
   const err = st?.status?.startsWith('error');
@@ -4563,6 +4581,7 @@ async function kaiOpener(){
 // Kestrel AI lives in Training > Kestrel AI; anything that opens Kestrel AI goes there.
 async function openKai(question, ask){
   if(!isRealPerson()){ alert('Pick your name first so Kestrel AI knows whose training to look at.'); return; }
+  if(!modOn('coach')){ if(await window.kMods.need('coach')) openKai(question, ask); return; }
   trainingView = 'kai';
   setPage('training');
   await startKaiChat();
@@ -6616,6 +6635,7 @@ window.openTeamAdmin = ()=>{ showPastEvents = false; renderAdminModal(); $('admi
 </script>
 <script src="/records.js"></script>
 <script src="/track.js"></script>
+<script src="/modules.js"></script>
 <script src="/record.js"></script>
 <script src="/shoes.js"></script>
 <script src="/views.js"></script>

@@ -1,4 +1,4 @@
-// Train > Goals, Cross-train and Fuel, plus "Customize" for the Train tabs. The server (src/train/tracking.js) does
+// Train > Goals, Cross-train and Fuel, plus the prefs they save (which tools show is modules.js). The server (src/train/tracking.js) does
 // the maths; this draws it and saves what the runner types. Runs after the main script, which owns $, escapeHtml,
 // sparkline/drawSparks, openKai and the people list.
 (function(){
@@ -62,38 +62,20 @@
     return d;
   }
 
-  // The Run tab's views (Log, Cross-train and Fuel live under Calendar and Body now, so they aren't hideable here).
+  // The Run tab's views (Log, Cross-train and Fuel live under Calendar and Body now).
   const ALL_TABS = [['plan','Plan'],['library','Workouts'],['fitness','Fitness'],['goals','Goals'],['kai','Coach']];
-  // The view keys to show, in order. Before prefs load (or for a guest) every view shows.
+  // The view keys to show, in order. Which of them are on is the runner's modules (modules.js, Customize Kestrel); the
+  // order is what they saved with train_tabs before modules existed. Before prefs load (or for a guest) every view shows.
   function visibleTabs(){
     const p = T.prefs || window.KESTREL?.me?.prefs;
     const keys = ALL_TABS.map(t=> t[0]);
-    const mine = (p?.train_tabs || []).filter(k=> keys.includes(k));
-    return mine.length ? (mine.includes('plan') ? mine : ['plan', ...mine]) : keys;
+    const saved = (p?.train_tabs || []).filter(k=> keys.includes(k) && k !== 'plan');
+    const order = ['plan', ...saved, ...keys.filter(k=> k !== 'plan' && !saved.includes(k))];
+    return order.filter(k=> k === 'plan' || !window.kMods || window.kMods.allowed('run', k));
   }
 
-  function customizeTabs(){
-    let order = visibleTabs().slice();
-    const hidden = ()=> ALL_TABS.map(t=> t[0]).filter(k=> !order.includes(k));
-    const label = (k)=> ALL_TABS.find(t=> t[0] === k)[1];
-    const draw = (box)=>{
-      box.innerHTML = `<p class="hint">Choose the Run views you use and put them in your order. Plan always stays.</p>
-        <div class="tk-list">${order.map((k, i)=> `<div class="tk-row"><label class="check-row"><input type="checkbox" data-tab="${k}" checked ${k === 'plan' ? 'disabled' : ''}><span>${label(k)}</span></label>
-          <span class="tk-move"><button type="button" class="ghost" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move ${label(k)} up">↑</button><button type="button" class="ghost" data-down="${i}" ${i === order.length - 1 ? 'disabled' : ''} aria-label="Move ${label(k)} down">↓</button></span></div>`).join('')}
-        ${hidden().map(k=> `<div class="tk-row off"><label class="check-row"><input type="checkbox" data-tab="${k}"><span>${label(k)}</span></label><span class="hint">Hidden</span></div>`).join('')}</div>
-        <div class="cluster"><button type="button" id="tkSave">Save</button><button type="button" class="ghost" id="tkReset">Show all, default order</button></div>`;
-      box.querySelectorAll('[data-tab]').forEach(c=> c.onchange = ()=>{ const k = c.dataset.tab; order = c.checked ? [...order, k] : order.filter(x=> x !== k); draw(box); });
-      box.querySelectorAll('[data-up]').forEach(b=> b.onclick = ()=>{ const i = +b.dataset.up; [order[i-1], order[i]] = [order[i], order[i-1]]; draw(box); });
-      box.querySelectorAll('[data-down]').forEach(b=> b.onclick = ()=>{ const i = +b.dataset.down; [order[i+1], order[i]] = [order[i], order[i+1]]; draw(box); });
-      $('tkReset').onclick = ()=>{ order = ALL_TABS.map(t=> t[0]); draw(box); };
-      $('tkSave').onclick = async (e)=>{
-        e.target.disabled = true;
-        try{ await savePrefs({ train_tabs: order }); closeModal(); window.kTrack.paintTabs(); renderTraining(); window.renderNav?.(); }
-        catch(err){ alert(err.message); e.target.disabled = false; }
-      };
-    };
-    modal('Customize Run', '', draw);
-  }
+  // The old Run-views menu is now the module menu: every tool, not just the Run views.
+  function customizeTabs(){ window.kMods?.open(); }
 
   // Draws the Train tab bar from the runner's choice; returns the view to show.
   function paintTabs(){
@@ -101,7 +83,7 @@
     const tabs = visibleTabs();
     const view = typeof trainingView === 'string' ? trainingView : 'plan';
     bar.innerHTML = tabs.map(k=> `<button type="button" class="seg-btn ${k === view ? 'active' : ''}" role="tab" aria-selected="${k === view}" data-tview="${k}">${ALL_TABS.find(t=> t[0] === k)[1]}</button>`).join('')
-      + `<button type="button" class="seg-btn tk-gear" id="tpCustomize" aria-label="Customize Train tabs" title="Customize Train tabs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>`;
+      + `<button type="button" class="seg-btn tk-gear" id="tpCustomize" aria-label="Customize Kestrel" title="Customize Kestrel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>`;
     $('tpCustomize').onclick = customizeTabs;
     bar.querySelector('.seg-btn.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
   }
@@ -549,7 +531,7 @@
     el.style.display = '';
     el.innerHTML = `<div class="section-head"><div><div class="card-title">Runner profile</div><div class="hint">What your coach knows about you: goals, your week, injuries, fueling and how you like to be coached.</div></div></div>
       ${rows.length ? `<dl class="rp-list">${rows.map(([k, v])=> `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : '<p class="hint">Not filled in yet.</p>'}
-      <div class="cluster"><button type="button" id="rpEdit">Edit runner profile</button><button type="button" class="ghost" id="rpTabs">Customize Train tabs</button></div>`;
+      <div class="cluster"><button type="button" id="rpEdit">Edit runner profile</button><button type="button" class="ghost" id="rpTabs">Customize Kestrel</button></div>`;
     $('rpEdit').onclick = ()=> window.kestrelEditRunner?.(0);
     $('rpTabs').onclick = customizeTabs;
   }

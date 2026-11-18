@@ -356,7 +356,7 @@
     if(!s || !box) return;
     wireReps(box, repsOf(s));
     // Which shoes each run counts toward (your own log only).
-    if(own){
+    if(own && (window.kMods ? window.kMods.has('shoes') : true)){
       const acts = (s.activities || []).filter((z)=> z.id && z.category !== 'crosstrain');
       window.kShoes?.picker(document.getElementById('ksShoes'), acts.map((z)=> ({ id: z.id, label: `${acts.length > 1 ? (ROLE[z.role] || KIND[z.category] || 'Run') + ' · ' : ''}${r2(z.miles || 0)} mi` })));
     }
