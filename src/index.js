@@ -13,7 +13,7 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell, addLevel, removeLevel } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { maxHrFor, vo2rFor, editRuns, handLaps } from './train/coach.js';
+import { maxHrFor, vo2rFor, editRuns, handLaps, bodyStatus } from './train/coach.js';
 import { SUMMARY_RUBRIC, activityFacts, templateReport, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
 import { paceStructure } from './train/grade.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
@@ -27,7 +27,7 @@ import { cohortReport } from './train/cohorts.js';
 import { racePredictions } from './train/racepredict.js';
 import { BODY_PARTS } from './train/body.js';
 import { kaiState, applyPlanChange, resetPlanDay, changeLevel, healthSummary, levelStatus, setRank, PlanError } from './train/kai.js';
-import { sessionReportChat, ethosOf, askFood } from './train/gemini.js';
+import { sessionReportChat, ethosOf, askFood, reportSessions } from './train/gemini.js';
 import { foodChat, cleanFoodEstimate, cleanImages, FoodError } from './train/food.js';
 import { redeemCode, cleanAppearance, ACCENTS, SupportError } from './train/support.js';
 import { SECTIONS as ETHOS_SECTIONS, ETHOS_VERSION, cleanEthos } from './train/ethos.js';
@@ -2486,6 +2486,35 @@ async function route(request, env, url) {
     if (ungroundedNumbers(report, allowedNumbers(facts)).length) report = templateReport({ main_id: sess.main_id, facts });
     await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
     return json({ ok: true, report });
+  }
+  // Kestrel AI looks at a session again (after its splits were edited), on the server's model for run summaries: the
+  // free default or a key saved on the account. A model that runs in the browser uses /api/ai/session/prompt instead.
+  if (path === '/api/ai/session/reassess') {
+    const key = str(b.key, 20), date = key.split('#')[0];
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(date) ? (await getDays(db, me.id, date, date))[0] : null;
+    const sess = day?.sessions?.find((x) => x.key === key);
+    if (!sess) throw new NotFound('That session is gone.');
+    if (!sess.main_id || sess.manual) throw new BadRequest('Kestrel AI reviews sessions from your watch. Ask about this one in chat.');
+    const person = await loadPerson(db, me.id);
+    const facts = await sessionFacts(db, me.id, sess);
+    const one = { key, date, main_id: String(sess.main_id), activities: facts };
+    let out = null, note = '';
+    try {
+      out = await reportSessions(env, db, person, [one], { rubric: SUMMARY_RUBRIC, maxHr: await maxHrFor(db, me.id), today, body: await bodyStatus(db, me.id) });
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err;
+      note = err.message;
+    }
+    let report = String(out?.sessions?.find((x) => x?.key === key)?.report || '').trim();
+    // A number that isn't in the facts means the model made it up: the written note stands in, as on a sync.
+    if (report && ungroundedNumbers(report, allowedNumbers(facts)).length) report = '';
+    const wrote = !report;
+    if (!report) report = templateReport({ main_id: one.main_id, facts });
+    await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, me.id, sess.main_id).run();
+    // The day's one line too, when this is the day's only session (otherwise it would leave the others out).
+    const line = String(out?.days?.find((x) => x?.date === date)?.line || '').trim();
+    if ((day.sessions || []).length === 1 && line && !ungroundedNumbers(line, allowedNumbers(facts)).length) await saveDay(db, me.id, date, { day_line: line });
+    return json({ ok: true, report, wrote, note: note || undefined });
   }
   if (path === '/api/coach/link') {
     const token = await issueCoachToken(db, me.id, b.regenerate === true);

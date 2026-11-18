@@ -828,3 +828,5 @@ button.kv-link-sm{background:none;border:0;box-shadow:none;height:auto;padding:4
 .kde-check input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--accent);}
 .kde-check > span{min-width:0;flex:1;}
 .kde-check i{display:block;font-style:normal;font-size:var(--fs-sm);color:var(--text-2);}
+.kd-reassess{margin-bottom:12px;}
+.kd-reassess p{margin:6px 0 0;}

@@ -1922,6 +1922,11 @@ window.kestrelWriteReport = async (key) => {
   const text = await AI.complete(ai, chat.system, [{ role: 'user', content: chat.prompt }]);
   return (await api('/api/ai/session/save', { method: 'POST', body: JSON.stringify({ key, main_id: chat.main_id, report: text }) })).report;
 };
+// Reassess a session after its splits were edited: on the server for Kestrel free or a saved key, in this browser for a local model.
+window.kestrelReassess = async (key) => {
+  if (!AI.onServer(AI.forTask(K.ai, 'summary'))) return await window.kestrelWriteReport(key);
+  return (await api('/api/ai/session/reassess', { method: 'POST', body: JSON.stringify({ key }) })).report;
+};
 window.kestrelFoodEstimate = async ({ images = [], text = '', meal = '' }) => {
   const ai = AI.forTask(K.ai, 'food');
   if (AI.onServer(ai)) return await api('/api/ai/food', { method: 'POST', body: JSON.stringify({ images, text, meal }) });

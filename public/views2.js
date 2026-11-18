@@ -123,7 +123,7 @@
     // A run gets the full layout; Edit unlocks its boxes in place. Other days show the app's day card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
     if(V.sessDay !== d){ V.sessDay = d; V.sessSel = null; }
-    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${own() ? '<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button>' : ''}</div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${own() ? '<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button>' : ''}</div>${own() ? reassessHtml(d) : ''}${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
   };
   ACT.dayEdit = async ()=>{
     const d = (V.stack[V.stack.length - 1] || '').split('|')[1], x = V.cache['day:' + d];
@@ -155,9 +155,42 @@
       document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = false; b.textContent = 'Save changes'; });
       return say(r.error);
     }
+    // Sessions whose splits changed: Kestrel AI's report on them was written from the old splits, so offer to redo it.
+    const lapIds = new Set(p.runs.filter((e)=> e.laps).map((e)=> String(e.strava_id)));
+    const keys = (E0(d)?.sessions || []).filter((s)=> !s.manual && s.main_id && (s.activities || []).some((z)=> lapIds.has(String(z.id)))).map((s)=> s.key);
+    const ai = window.kestrelAiTask?.('summary');
+    V.reassess = keys.length && !ai?.serverOwn ? { date:d, keys, label: ai?.label || 'Kestrel AI' } : null;
     K.stopEdit();
     V.cache = {}; fitnessData = null; library = null;
     toast('Saved');
+    redraw();
+  };
+  const E0 = (d)=> V.cache['day:' + d];
+  // The prompt after a split edit, at the top of the day page.
+  const reassessHtml = (d)=>{
+    const r = V.reassess;
+    if(!r || r.date !== d) return '';
+    const n = r.keys.length;
+    return `<section class="card kv-card kd-reassess" id="kdReassess" role="status"><div class="kd-eb">Splits changed</div>
+      <p>Have Kestrel AI reassess ${n > 1 ? `these ${n} sessions` : 'this workout'} with your new splits?</p>
+      <p class="kv-hint" id="kdReassessMsg">It rewrites the report${n > 1 ? 's' : ''} using ${esc(r.label)}.</p>
+      <div class="kv-btns"><button type="button" class="pri" data-a="reassessGo">Reassess</button><button type="button" data-a="reassessNo">Not now</button></div></section>`;
+  };
+  ACT.reassessNo = ()=>{ V.reassess = null; document.getElementById('kdReassess')?.remove(); };
+  ACT.reassessGo = async ()=>{
+    const r = V.reassess, box = document.getElementById('kdReassess');
+    if(!r || !box) return;
+    box.querySelectorAll('button').forEach((b)=> b.disabled = true);
+    box.querySelector('.pri').textContent = 'Reassessing…';
+    try{ for(const k of r.keys) await window.kestrelReassess(k); }
+    catch(e){
+      box.querySelectorAll('button').forEach((b)=> b.disabled = false);
+      box.querySelector('.pri').textContent = 'Try again';
+      document.getElementById('kdReassessMsg').textContent = e.message || 'Kestrel AI couldn’t reassess it. Try again in a minute.';
+      return;
+    }
+    V.reassess = null; delete V.cache['day:' + r.date];
+    toast('Kestrel AI reassessed your workout');
     redraw();
   };
   // Which session the page shows beside (or under) the day.
