@@ -632,6 +632,7 @@ async function refreshMe() {
 
 let signingIn = null;
 function afterSignIn() {
+  if (location.pathname.startsWith('/s/')) history.replaceState(null, '', '/');
   if (!signingIn) signingIn = (async () => {
     if (K.me) return;
     const me = await attempt(() => api('/api/me'));
@@ -2211,6 +2212,8 @@ window.kestrelAsk = async (turns) => {
 // ---------- boot
 
 async function boot() {
+  const sm = location.pathname.match(/^\/s\/([0-9a-f]{20,64})$/);
+  const shareTok = sm ? sm[1] : '';
   const m = location.pathname.match(/^\/join\/([A-Za-z0-9-]{4,20})/);
   if (m) { store.set('kestrel.join', m[1].toUpperCase()); history.replaceState(null, '', '/'); }
   K.cfg = await fetch('/api/config').then((r) => r.json());
@@ -2268,7 +2271,52 @@ async function boot() {
     return;
   }
   if (data.session) await afterSignIn();
+  else if (shareTok && !fromLink) await renderPublicSchedule(shareTok);
   else renderLanding(fromLink ? 'signin' : undefined, fromLink ? 'Your email is confirmed. Sign in to continue.' : '');
 }
+
+// ---------- the public schedule: opened from a team's share link, no sign-in needed
+
+async function renderPublicSchedule(token) {
+  const m = document.createElement('meta'); m.name = 'robots'; m.content = 'noindex'; document.head.appendChild(m);
+  const signIn = () => { location.href = '/'; };
+  let data = null, err = '';
+  try { data = await api(`/api/public/schedule/${token}`); } catch (e) { err = e.message; }
+  if (!data) {
+    gate(html`<header class="k-top"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="44" height="44"><span class="k-top-word">kestrel</span></a><button class="k-btn primary small" type="button" id="kPubSignIn">Sign in</button></header><div class="k-landing"><div><h1 class="k-section-title">Schedule unavailable</h1><p class="k-small">${err}</p></div></div>`);
+    $('kPubSignIn').onclick = signIn;
+    return;
+  }
+  openApp();
+  window.kestrelPublic(data, signIn);
+}
+
+// Copy the schedule link: any member copies it once it is on; the owner or a captain turns it on, off or makes a new one.
+window.kestrelShareSchedule = async () => {
+  if (!K.teamId) { toast('Join or pick a team first.', true); return; }
+  const first = await attempt(() => api(`/api/teams/${K.teamId}/share`));
+  if (!first) return;
+  const d = dialog();
+  const paint = (r) => {
+    const link = r.token ? `${location.origin}/s/${r.token}` : '';
+    d.innerHTML = html`<h2>Share the schedule</h2>
+      <p class="k-small">${r.token ? 'Anyone with this link can view the team schedule, with no account. They see practices and meets only, never the roster, RSVPs, notes or training. A Sign in button at the top takes them to the full app.' : 'Make a link anyone can open to view the team schedule without signing in.'}</p>
+      ${r.token ? html`<div class="k-invite-box"><div class="k-invite-link"><input class="k-input" id="kShLink" readonly value="${link}" aria-label="Schedule link"><button class="k-btn primary" type="button" id="kShCopy" autofocus>Copy link</button></div></div>` : ''}
+      ${!r.token && !r.canEdit ? html`<p class="k-small">Ask a captain or the owner to turn the link on.</p>` : ''}
+      <div class="k-row k-dialog-foot">${r.canEdit ? (r.token ? html`<button class="k-link" type="button" id="kShOff">Turn off</button><button class="k-link" type="button" id="kShNew">Make a new link</button>` : html`<button class="k-btn primary" type="button" id="kShOn">Create link</button>`) : ''}<button class="k-btn" type="button" id="kShClose">Done</button></div>`.s;
+    $('kShClose').onclick = () => d.close();
+    const act = (id, action, msg, ask) => { if ($(id)) $(id).onclick = (e) => attempt(async () => { if (ask && !confirm(ask)) return; paint(await api(`/api/teams/${K.teamId}/share`, { method: 'POST', body: JSON.stringify({ action }) })); toast(msg); }, e.currentTarget); };
+    act('kShOn', 'on', 'Schedule link is on.');
+    act('kShOff', 'off', 'Schedule link is off.', 'Turn off the link? Anyone using it loses access.');
+    act('kShNew', 'new', 'New link made.', 'Make a new link? The old one stops working.');
+    if ($('kShLink')) $('kShLink').onfocus = (e) => e.target.select();
+    if ($('kShCopy')) $('kShCopy').onclick = async (e) => {
+      try { await navigator.clipboard.writeText(link); } catch { $('kShLink').select(); document.execCommand?.('copy'); }
+      const b = e.currentTarget; b.textContent = 'Copied'; setTimeout(() => { if (b.isConnected) b.textContent = 'Copy link'; }, 1600);
+    };
+  };
+  paint(first);
+  if (!d.open) d.showModal();
+};
 
 boot().catch((err) => { console.error(err); gate(html`<p class="k-small">Kestrel could not start: ${err.message}</p>`); });

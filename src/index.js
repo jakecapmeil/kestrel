@@ -1851,6 +1851,14 @@ async function route(request, env, url) {
     const feed = await icsFeed(db, ics[1]);
     return feed ? new Response(feed, { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Content-Disposition': 'inline; filename="kestrel-meets.ics"' } }) : new Response('Not found', { status: 404 });
   }
+  // The public schedule: anyone with the team's share link sees events only (no people, RSVPs, notes, posts or training).
+  const pubSched = path.match(/^\/api\/public\/schedule\/([0-9a-f]{20,64})$/);
+  if (pubSched && method === 'GET') {
+    const team = await db.prepare('SELECT id, name, school FROM teams WHERE share_token = ?').bind(pubSched[1]).first();
+    if (!team) throw new NotFound('This schedule link is not active. Ask your team for a new one.');
+    const { results } = await db.prepare('SELECT date, title, time, end_time, description, type, kind, location FROM events WHERE team_id = ? AND date >= ? ORDER BY date, time').bind(team.id, addDays(todayInTz(), -120)).all();
+    return json({ team: { name: team.name, school: team.school }, today: todayInTz(), events: results.map((e) => ({ date: e.date, title: e.title, time: e.time || '', endTime: e.end_time || '', desc: e.description || '', type: e.type, kind: e.kind || '', location: e.location || '' })) }, 200, { 'X-Robots-Tag': 'noindex', 'Cache-Control': 'no-store' });
+  }
   const mcp = path.match(/^\/mcp\/coach\/([a-f0-9]{20,64})$/);
   if (mcp) {
     if (method === 'OPTIONS') return new Response(null, { status: 204, headers: { ...CORS, 'Access-Control-Allow-Headers': 'Content-Type, Mcp-Protocol-Version, Mcp-Session-Id' } });
@@ -2153,6 +2161,19 @@ async function route(request, env, url) {
       if (!owner) throw new Forbidden('Only the team owner can make a new invite code.');
       await db.prepare('UPDATE teams SET invite_code = ? WHERE id = ?').bind(inviteCode(), teamId).run();
       return json(await teamView(db, teamId, role));
+    }
+    if (sub === 'share' && (method === 'GET' || method === 'POST')) {
+      const cur = await db.prepare('SELECT share_token FROM teams WHERE id = ?').bind(teamId).first();
+      let token = cur?.share_token || null;
+      if (method === 'POST') {
+        if (!isLead(role)) throw new Forbidden('Only the team owner or a captain can change the schedule link.');
+        const act = (await readJson(request)).action;
+        if (act === 'off') token = null;
+        else if (act === 'on' || act === 'new') { if (act === 'new' || !token) token = [...crypto.getRandomValues(new Uint8Array(16))].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+        else throw new BadRequest('action must be on, off or new.');
+        await db.prepare('UPDATE teams SET share_token = ? WHERE id = ?').bind(token, teamId).run();
+      }
+      return json({ token, canEdit: isLead(role) });
     }
     const mm = sub.match(/^members\/(.+)$/);
     if (mm && method === 'DELETE') {

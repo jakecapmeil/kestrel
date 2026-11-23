@@ -530,3 +530,4 @@ body:has(.ka-screen){padding:0;}
   .k-lc-main{grid-template-columns:1fr;}
   .k-lc-days{grid-template-columns:repeat(3,minmax(0,1fr));}
 }
+

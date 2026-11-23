@@ -405,6 +405,13 @@
   .inset{background:var(--bg);border-radius:var(--r-control);padding:var(--sp-3);}
   .divider{height:1px;background:var(--line);margin:var(--sp-4) 0;border:0;}
 
+  /* Public schedule (share link): the same calendar page, with only a Sign in button for the rest of the app. */
+  #pubSignIn{display:none;}
+  body.pub-mode #pubSignIn{display:inline-flex;}
+  body.pub-mode .head-right > :not(#pubSignIn),body.pub-mode .k-team,body.pub-mode .page-tabs,body.pub-mode #navSegs,body.pub-mode #navBack,body.pub-mode #shareSchedBtn,body.pub-mode .pub-hide,body.pub-mode .event-actions,body.pub-mode .rsvp-summary{display:none !important;}
+  @media (max-width:1023px){ body.pub-mode .nav-head .nav-titles{display:block !important;} }
+  .share-sched-btn{width:auto !important;flex:none;grid-area:sub;justify-self:start;margin-top:var(--sp-2);padding:6px 14px;font-size:var(--fs-footnote);}
+  .share-sched-btn[hidden]{display:none !important;}
   .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--sp-4);flex-wrap:wrap;margin:var(--sp-1) 0 var(--sp-4);}
   .page-title{
     margin:2px 0 0;font-size:var(--fs-title2);line-height:var(--lh-title2);
@@ -1736,6 +1743,7 @@
     <h1 class="wordmark"><a class="k-brand" href="/"><img src="/kestrel.svg" alt="" width="28" height="28"><span id="secretTapZone">kestrel</span></a></h1>
     <div class="k-team" id="kTeam" data-mod="team"></div>
     <div class="head-right">
+    <button type="button" class="k-btn primary small" id="pubSignIn">Sign in</button>
     <div class="sync-wrap" id="syncWrap" hidden>
       <button type="button" class="sync-pill" id="syncPill" aria-haspopup="menu" aria-expanded="false" aria-label="Watch sync"><svg class="sicon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8"/><path d="M4 3v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16"/><path d="M20 21v-5h-5"/></svg><span class="sdot"></span><span class="slabel" id="syncLabel">Sync</span></button>
       <div class="pop-menu sync-menu" id="syncMenu" role="menu">
@@ -1762,7 +1770,7 @@
 
   <!-- One heading row for every page: what you're looking at, and its views. -->
   <div class="nav-head" id="navHead">
-    <div class="nav-titles"><button type="button" class="nav-back" id="navBack" hidden>‹ Back</button><h2 class="page-title" id="navTitle"></h2><div class="nav-sub" id="navSub"></div></div>
+    <div class="nav-titles"><button type="button" class="nav-back" id="navBack" hidden>‹ Back</button><h2 class="page-title" id="navTitle"></h2><div class="nav-sub" id="navSub"></div><button type="button" class="ghost share-sched-btn" id="shareSchedBtn" hidden title="Copy a link anyone can open to view the schedule, no sign-in needed">Share link</button></div>
     <div class="seg" id="navSegs" role="tablist" aria-label="Views"></div>
   </div>
 
@@ -1829,15 +1837,15 @@
         </div>
         <div class="cal-toolbar">
           <div class="cal-toolbar-left">
-            <button class="chip-toggle" id="availToggle" type="button" aria-pressed="false"
+            <button class="chip-toggle pub-hide" id="availToggle" type="button" aria-pressed="false"
                     title="Show or hide who's available on each day">
               <span class="chip-dots"><i></i><i></i><i></i></span>Availability
             </button>
             <button class="ghost" id="todayBtn">Jump to today</button>
           </div>
-          <button id="editModeBtn">Edit availability</button>
+          <button id="editModeBtn" class="pub-hide">Edit availability</button>
         </div>
-        <div class="edit-banner" id="editBanner">
+        <div class="edit-banner pub-hide" id="editBanner">
           <span>Tap days to toggle your availability</span>
           <div class="edit-banner-actions">
             <button type="button" id="alwaysFreeBtn">Always free</button>
@@ -1855,8 +1863,8 @@
 
       <div class="section-label">Events</div>
       <div id="eventsList"></div>
-      <button class="ghost" id="toggleEventForm">+ Add event</button>
-      <div id="eventFormRow">
+      <button class="ghost pub-hide" id="toggleEventForm">+ Add event</button>
+      <div id="eventFormRow" class="pub-hide">
         <input type="text" id="eventTitle" placeholder="Event title (e.g. Track practice, County Invitational)">
         <input type="text" id="eventTime" placeholder="Time (e.g. 4:00 PM)">
         <input type="text" id="eventEndTime" placeholder="End time (optional, e.g. 5:30 PM)">
@@ -1887,17 +1895,17 @@
       </div>
       <datalist id="knownLocations"></datalist>
 
-      <div class="section-label">Availability</div>
-      <div id="detailList"></div>
+      <div class="section-label pub-hide">Availability</div>
+      <div id="detailList" class="pub-hide"></div>
 
-      <div class="section-label">Notes</div>
-      <div id="notesList"></div>
-      <div class="note-form" id="noteForm" style="display:none;">
+      <div class="section-label pub-hide">Notes</div>
+      <div id="notesList" class="pub-hide"></div>
+      <div class="note-form pub-hide" id="noteForm" style="display:none;">
         <textarea id="dayNote" placeholder="Add a note about your availability (optional)"></textarea>
         <button id="saveNoteBtn">Save note</button>
       </div>
 
-      <div class="copy-row">
+      <div class="copy-row pub-hide">
         <textarea id="copyString" readonly rows="1"></textarea>
         <button id="copyBtn">Copy</button>
       </div>
@@ -3951,6 +3959,7 @@ function renderNav(){
   $('navSub').textContent = currentPage === 'v' ? window.KV.sub() : tab === 'today' ? todaySubtitle() : '';
   document.body.classList.toggle('kv-spoke', currentPage === 'v' && !!window.KV.spoke());
   $('navBack').hidden = !['you','record'].includes(tab);
+  $('shareSchedBtn').hidden = !((tab === 'calendar' && view !== 'log') || (tab === 'team' && view === 'meets'));
   // Each tab shows the views the runner has on. Run keeps the order they saved before modules existed.
   const custom = tab === 'run' && isRealPerson() && window.kTrack;
   const order = custom ? window.kTrack.visibleTabs() : null;
@@ -3960,6 +3969,7 @@ function renderNav(){
   $('navSegs').hidden = !segs.length || (segs.length < 2 && !custom);
   $('navSegs').innerHTML = segs.map(([v, l])=> `<button type="button" class="seg-btn ${v === view ? 'active' : ''}" role="tab" aria-selected="${v === view}" data-navv="${v}">${l}</button>`).join('')
     + (custom ? `<button type="button" class="seg-btn tk-gear" id="navCustomize" aria-label="Customize Kestrel" title="Customize Kestrel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>` : '');
+  $('shareSchedBtn').onclick = ()=> window.kestrelShareSchedule();
   $('navCustomize')?.addEventListener('click', ()=> window.kMods.open());
   $('navSegs').querySelectorAll('[data-navv]').forEach(b=> b.addEventListener('click', ()=> navGo(tab, b.dataset.navv)));
   $('navSegs').querySelector('.active')?.scrollIntoView({ block:'nearest', inline:'nearest' });
@@ -6623,6 +6633,25 @@ async function init(){
   });
 }
 
+// A team's public schedule (share link, nobody signed in): the same calendar and day view, read-only.
+window.kestrelPublic = (data, onSignIn)=>{
+  document.body.classList.add('pub-mode');
+  document.body.dataset.nav = 'calendar';
+  events = {};
+  for(const e of data.events) (events[e.date] ||= []).push(e);
+  people = []; activePersonId = null;
+  const [y, m] = data.today.split('-').map(Number);
+  viewYear = y; viewMonth = m - 1; selectedDate = data.today;
+  PAGES.forEach(name=>{ $('page' + name[0].toUpperCase() + name.slice(1)).style.display = name === 'schedule' ? '' : 'none'; });
+  $('navTitle').textContent = data.team.name;
+  $('navSub').textContent = 'Team schedule';
+  const go = ()=>{ renderCalendar(); renderDayDetail(); };
+  $('prevMonth').onclick = ()=>{ viewMonth--; if(viewMonth < 0){ viewMonth = 11; viewYear--; } renderCalendar(); };
+  $('nextMonth').onclick = ()=>{ viewMonth++; if(viewMonth > 11){ viewMonth = 0; viewYear++; } renderCalendar(); };
+  $('todayBtn').onclick = ()=>{ viewYear = y; viewMonth = m - 1; selectedDate = data.today; go(); };
+  $('pubSignIn').onclick = onSignIn;
+  renderDow(); go();
+};
 // kestrel.js starts the app once someone is signed in, and reloads it when they switch teams.
 window.kestrelInit = init;
 // keepScreen: fresh data everywhere, but the redesigned screen on show is redrawn by the caller (no flash, no scroll jump).
