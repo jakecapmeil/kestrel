@@ -69,7 +69,10 @@
   const ROLE = { warmup:'Warm-up', cooldown:'Cool-down' };
   const SEG = { warmup:'Warm', cooldown:'Cool' };
   // Names a watch gives on its own ("Morning Run", Garmin's "New York Running"): the session's reps or kind say more.
-  const GENERIC = /^(morning|afternoon|evening|lunch|night|midday)? ?(run|running|activity|workout)$|^[\p{L} .'-]{1,40} running$/iu;
+  // Names a watch gives on its own: "Morning Run", and Garmin's place names ("New York Running", capitalised as Garmin
+  // writes them; a runner's own "hill running" stays).
+  const GENERIC = { test: (n)=> /^(?:(?:morning|afternoon|evening|lunch|night|midday) )?(?:run|running|activity|workout)$/i.test(n)
+    || /^(?:\p{Lu}[\p{L}.'-]*\s){1,4}Running$/u.test(n) };
   const runs = (x)=> (x?.sessions || []).filter((s)=> s.category !== 'crosstrain');
   // A day as the pages show it. Logged by hand (no watch): one session from the day's own numbers and reps.
   // Hand-built reps on a watch day replace the workout session's laps (they were typed to fix them).
@@ -253,10 +256,16 @@
   // ---------------------------------------------------------------- the day page
   // The day on top (one sentence, its numbers), then its sessions. On a phone a session opens on its own page;
   // on a laptop the chosen session sits beside the list. A one-session day shows that session straight away.
+  // The session a day page shows in full: the one picked, else (one session, or a laptop with room beside the list)
+  // the day's main one. null on a phone with several sessions (they open on their own pages).
+  function shownOf(x, selKey, wide){
+    const ss = x?.sessions || [];
+    return sessionOf(x, selKey) || (ss.length === 1 || wide ? mainSession(x) || ss[0] || null : null);
+  }
   function dayHtml(x, selKey, wide){
     prepare(x);
     const ss = x?.sessions || [];
-    const sel = sessionOf(x, selKey) || (ss.length === 1 || wide ? mainSession(x) || ss[0] : null);
+    const sel = shownOf(x, selKey, wide);
     const ai = x?.summary || x?.coach_note;
     const sum = `<section class="card kv-card kdd-sum">
         <div class="kd-eb">${eye}Day summary</div>
@@ -633,14 +642,15 @@
     const handReps = !x.locked || x.split_source === 'hand';
     const day = { mi: x.locked ? null : x.miles ?? null, sec: x.locked ? null : x.minutes != null ? Math.round(x.minutes * 60) : null, difficulty: x.locked ? null : x.difficulty ?? null,
       laps: handReps ? lapCopy(x.split_reps) : null, feel: x.feel ?? null, sleep_hours: x.sleep_hours ?? null, strength: !!x.strength, notes: x.notes || '', track: !!x.track, library_id: x.library_id || '' };
-    // watch: each run's distance as saved, what a save compares against. hand: runs whose laps the runner typed.
-    // auto: runs whose distance was set from those laps (lapsRule) rather than typed.
-    E = { date: x.date, locked: !!x.locked, acts, day, bad: new Set(), typed: new Set(), base: {}, watch: {}, hand: new Set(), auto: new Set() };
-    for(const s of x.sessions || []) for(const a of runActs(s)){ E.watch[a.id] = acts[a.id].mi; if((a.laps || []).some((l)=> l?.f === 2)) E.hand.add(a.id); }
+    // typedBoxes: distance and time boxes the runner typed in (the laps stop moving those). savedMi: each run's distance
+    // as saved, what a save compares against. handLaps: runs whose laps the runner typed. lapsMi: runs whose distance
+    // was set from those laps (lapsRule) rather than typed.
+    E = { date: x.date, locked: !!x.locked, acts, day, bad: new Set(), typedBoxes: new Set(), base: {}, savedMi: {}, handLaps: new Set(), lapsMi: new Set() };
+    for(const s of x.sessions || []) for(const a of runActs(s)){ E.savedMi[a.id] = acts[a.id].mi; if((a.laps || []).some((l)=> l?.f === 2)) E.handLaps.add(a.id); }
     // A run whose typed laps already say otherwise opens at their distance, and saving keeps it (editPayload).
     for(const id of Object.keys(acts)){
       const v = lapsRule(id);
-      if(v != null){ acts[id].mi = v; E.auto.add(id); }
+      if(v != null){ acts[id].mi = v; E.lapsMi.add(id); }
       E.base[id] = baseOf(acts[id]);
     }
     E.orig = JSON.stringify({ acts, day });
@@ -651,8 +661,12 @@
   // run). Only then do distance and time follow the laps: fix a 384 m lap to 600 m and the run gains 216 m.
   function baseOf(a){
     const t = lapTotals(a.laps), m = (a.mi || 0) * MI;
-    return { mi: a.mi, sec: a.sec, m: t.m, s: t.s, cover: t.n > 0 && m > 0 && a.sec > 0 && Math.abs(t.m - m) <= Math.max(40, m * 0.1) && Math.abs(t.s - a.sec) <= Math.max(10, a.sec * 0.1) };
+    return { mi: a.mi, sec: a.sec, m: t.m, s: t.s, cover: t.n > 0 && m > 0 && a.sec > 0 && nearM(t.m, m) && nearS(t.s, a.sec) };
   }
+  // Close enough that laps and run are the same thing (GPS, auto-pause): within 10%, or 80 m and 15 s. The server's
+  // rule uses the same numbers (coach.js lapsMiles).
+  const nearM = (lapM, runM)=> Math.abs(lapM - runM) <= Math.max(80, runM * 0.1);
+  const nearS = (lapS, runS)=> Math.abs(lapS - runS) <= Math.max(15, runS * 0.1);
   // Put a new value in a run's distance or time box (unless the runner is typing in it).
   function setBox(e, id, v){
     document.querySelectorAll(`.kde-on [data-e="${e}"][data-id="${CSS.escape(id)}"]`).forEach((el)=>{
@@ -663,31 +677,31 @@
     E.bad.delete([e, id, undefined, NaN].join('|'));
   }
   // After a split changes: the run's distance and time move by as much as its laps did, unless the runner typed them.
-  function follow(k){
+  function followLaps(k){
     const a = E.acts[k], b = E.base[k];
     if(!a) return;
-    E.hand.add(k);
+    E.handLaps.add(k);
     // Laps that didn't cover the run before: once they take as long as it, the run is what they add up to.
     if(!b?.cover){
-      if(E.typed.has(k + '|mi')) return;
+      if(E.typedBoxes.has(k + '|mi')) return;
       const v = lapsRule(k);
-      if(v != null){ a.mi = v; E.auto.add(k); setBox('mi', k, v); }
-      else if(E.auto.delete(k)){ a.mi = E.watch[k]; setBox('mi', k, a.mi); }
+      if(v != null){ a.mi = v; E.lapsMi.add(k); setBox('mi', k, v); }
+      else if(E.lapsMi.delete(k)){ a.mi = E.savedMi[k]; setBox('mi', k, a.mi); }
       return;
     }
     const t = lapTotals(a.laps);
-    if(!E.typed.has(k + '|mi')){ a.mi = Math.max(0.01, Math.round((b.mi + (t.m - b.m) / MI) * 100) / 100); setBox('mi', k, a.mi); }
-    if(!E.typed.has(k + '|sec')){ a.sec = Math.max(1, Math.round(b.sec + (t.s - b.s))); setBox('sec', k, a.sec); }
+    if(!E.typedBoxes.has(k + '|mi')){ a.mi = Math.max(0.01, Math.round((b.mi + (t.m - b.m) / MI) * 100) / 100); setBox('mi', k, a.mi); }
+    if(!E.typedBoxes.has(k + '|sec')){ a.sec = Math.max(1, Math.round(b.sec + (t.s - b.s))); setBox('sec', k, a.sec); }
   }
   // Laps the runner typed that take as long as the run (within 10%, or 15 s) are the run: a watch indoors reads
   // 0.87 mi for 2400 m of reps. The miles they add up to when the saved distance is more than 10% (or 80 m) off, or
   // null. The server applies the same rule (coach.js lapsMiles).
   function lapsRule(k){
     const a = E.acts[k];
-    if(!a || !E.hand.has(k) || E.typed.has(k + '|mi')) return null;
+    if(!a || !E.handLaps.has(k) || E.typedBoxes.has(k + '|mi')) return null;
     const t = lapTotals(a.laps); if(!t.n || !t.all || !(a.sec > 0)) return null;
-    const m = (E.watch[k] || 0) * MI;
-    if(Math.abs(t.s - a.sec) > Math.max(15, a.sec * 0.1) || Math.abs(t.m - m) <= Math.max(80, m * 0.1)) return null;
+    const m = (E.savedMi[k] || 0) * MI;
+    if(!nearS(t.s, a.sec) || nearM(t.m, m)) return null;
     return Math.round(t.m / MI * 100) / 100;
   }
   // The laps and the run disagree (the GPS read 0.87 mi for 2400 m of reps): make the run what its laps add up to.
@@ -695,18 +709,18 @@
     const a = E.acts[k]; if(!a) return;
     const t = lapTotals(a.laps); if(!t.n || !t.all) return;
     a.mi = Math.round(t.m / MI * 100) / 100; a.sec = Math.round(t.s);
-    E.typed.delete(k + '|mi'); E.typed.delete(k + '|sec');
+    E.typedBoxes.delete(k + '|mi'); E.typedBoxes.delete(k + '|sec');
     E.base[k] = { mi: a.mi, sec: a.sec, m: t.m, s: t.s, cover: true };
     setBox('mi', k, a.mi); setBox('sec', k, a.sec);
     live();
   }
   // Do a run's laps and its own distance and time disagree? Beyond what a watch's laps, GPS and auto-pause leave
-  // (the same 10% that decides whether laps cover a run), so untouched watch laps never ask.
+  // (nearM/nearS, the rule that decides whether laps cover a run), so untouched watch laps never ask.
   function lapsDisagree(k){
     const a = E.acts[k]; if(!a) return null;
     const t = lapTotals(a.laps); if(!t.n || !t.all || !(a.mi > 0) || !(a.sec > 0)) return null;
     const m = a.mi * MI;
-    return Math.abs(t.m - m) > Math.max(80, m * 0.1) || Math.abs(t.s - a.sec) > Math.max(15, a.sec * 0.1) ? t : null;
+    return !nearM(t.m, m) || !nearS(t.s, a.sec) ? t : null;
   }
   // A run with no laps saved shows its GPS mile splits; editing starts from those, and they are saved only if changed.
   async function seedSplits(x){
@@ -817,7 +831,7 @@
     if(!t.n) return '';
     const sum = `Splits add up to ${r2(t.m / MI)} mi in ${clock(t.s)}.`;
     const a = E.acts[k];
-    if(k !== 'day' && E.auto.has(k) && !E.typed.has(k + '|mi')) return esc(`${sum} The watch read ${r2(E.watch[k])} mi, so the run counts your splits’ ${r2(a.mi)} mi.`);
+    if(k !== 'day' && E.lapsMi.has(k) && !E.typedBoxes.has(k + '|mi')) return esc(`${sum} The watch read ${r2(E.savedMi[k])} mi, so the run counts your splits’ ${r2(a.mi)} mi.`);
     if(k === 'day' || !lapsDisagree(k)) return esc(sum);
     return `${esc(sum)} This run reads ${r2(a.mi)} mi in ${clock(a.sec)}. <button type="button" class="sm-btn kde-use" data-a="kdeUseLaps" data-v="${esc(k)}">Use ${r2(t.m / MI)} mi · ${clock(t.s)}</button>`;
   }
@@ -896,13 +910,13 @@
       const tgt = id === 'day' ? E.day : E.acts[id];
       if(tgt && !bad) tgt[k] = v;
       // Typed by hand: the laps stop moving it.
-      if(id !== 'day') E.typed.add(id + '|' + k);
+      if(id !== 'day') E.typedBoxes.add(id + '|' + k);
     } else if(k === 'lm' || k === 'ls' || k === 'lh'){
       const l = lapsFor(lk)?.[i]; if(!l) return;
       const v = k === 'lm' ? parseLapDist(el.value) : k === 'ls' ? parseLapTime(el.value) : numOr(el.value);
       bad = Number.isNaN(v) || (v != null && (k === 'lh' ? v < 30 || v > 250 : v <= 0));
       if(!bad) l[k === 'lm' ? 'm' : k === 'ls' ? 's' : 'hr'] = v;
-      if(!bad && k !== 'lh') follow(lk);
+      if(!bad && k !== 'lh') followLaps(lk);
     } else if(k === 'tag') E.acts[id].tag = el.value;
     else if(k === 'difficulty' || k === 'feel') E.day[k] = el.value ? +el.value : null;
     else if(k === 'sleep_hours'){ const v = numOr(el.value); bad = Number.isNaN(v) || (v != null && (v < 0 || v > 24)); if(!bad) E.day.sleep_hours = v; }
@@ -934,7 +948,7 @@
     redrawSplits(k);
     document.querySelector(`.kde-on [data-e="ls"][data-k="${CSS.escape(k)}"][data-i="${ls.length - 1}"]`)?.focus();
   }
-  function delSplit(k, i){ const ls = lapsFor(k); if(!ls) return; ls.splice(i, 1); [...E.bad].filter((b)=> b.includes(`|${k}|`)).forEach((b)=> E.bad.delete(b)); follow(k); redrawSplits(k); }
+  function delSplit(k, i){ const ls = lapsFor(k); if(!ls) return; ls.splice(i, 1); [...E.bad].filter((b)=> b.includes(`|${k}|`)).forEach((b)=> E.bad.delete(b)); followLaps(k); redrawSplits(k); }
   function redrawSplits(k){ const el = document.querySelector(`.kde-on [data-sp="${CSS.escape(k)}"]`); if(el) el.innerHTML = splitRowsHtml(k); live(); }
 
   // What changed, ready for /api/log/edit. -> { error } or { runs, tags, fields, track }
@@ -947,7 +961,7 @@
     for(const [id, a] of Object.entries(E.acts)){
       const b = o.acts[id], e = { strava_id: id };
       // Against the distance as saved: a run that opened at its typed laps' distance (lapsRule) saves it.
-      if(a.mi !== (id in E.watch ? E.watch[id] : b.mi)) e.distance_mi = a.mi;
+      if(a.mi !== (id in E.savedMi ? E.savedMi[id] : b.mi)) e.distance_mi = a.mi;
       if(a.sec !== b.sec) e.moving_sec = a.sec;
       if(JSON.stringify(a.laps) !== JSON.stringify(b.laps)){ if(half(a.laps)) return { error: 'Every split needs a distance and a time (or remove it).' }; e.laps = lapsOut(a.laps); }
       if(e.distance_mi === null || e.moving_sec === null) return { error: 'A run needs a distance and a time.' };
@@ -966,7 +980,7 @@
     return { runs, tags, fields, track: E.locked && d.track !== b.track ? d.track : null };
   }
 
-  window.KDay = { setFiveK, prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits,
+  window.KDay = { setFiveK, prepare, writeReport, peekHtml, mountPeek, dayHtml, sessionHtml, mountSession, sessionOf, shownOf, sessionName, repsOf, notchesHtml, levelOf, mileSplits,
     setTags, startEdit(x){ startEdit(x); E.x = x; seedSplits(x); }, editing, stopEdit, dirty, dayEditHtml: dayEditHtml2, sessionEditHtml: sessionEditPage, onInput, addSplit, delSplit, useLaps, editPayload };
   document.addEventListener('input', (e)=>{ const el = e.target.closest('.kde-on .kde-in'); if(el) onInput(el); });
   document.addEventListener('change', (e)=>{ const el = e.target.closest('.kde-on .kde-in'); if(el && (el.tagName === 'SELECT' || el.type === 'checkbox')) onInput(el); });

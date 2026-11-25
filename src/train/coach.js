@@ -404,7 +404,8 @@ async function mergeDuplicates(db, personId, clean) {
   const dates = [...new Set(clean.map((w) => w.date))];
   if (!dates.length) return;
   const rows = (await db.prepare(
-    `SELECT strava_id, date, distance_mi, COALESCE(raw_distance_mi, distance_mi) AS gps_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, temp_f, dew_point_f FROM workouts WHERE person_id = ? AND date IN (${dates.map(() => '?').join(',')})`
+    `SELECT strava_id, date, distance_mi, COALESCE(raw_distance_mi, distance_mi) AS gps_mi, moving_sec, elapsed_sec, avg_hr, max_hr, avg_cadence, elev_gain_ft, temp_f, dew_point_f,
+       laps LIKE '%"f":2%' AS hand FROM workouts WHERE person_id = ? AND date IN (${dates.map(() => '?').join(',')})`
   ).bind(personId, ...dates).all()).results;
   const srcOf = (id) => (id.includes(':') ? id.split(':')[0] : 'strava');
   const sameDistance = (a, b) => a && b && Math.abs(a - b) <= Math.max(0.02, 0.015 * Math.max(a, b));
@@ -413,9 +414,11 @@ async function mergeDuplicates(db, personId, clean) {
   const sameElapsed = (a, b) => a && b && Math.abs(a - b) <= Math.max(5, 0.05 * Math.max(a, b));
   for (const w of clean) {
     if (rows.some((r) => r.strava_id === w.strava_id)) continue;
+    // A run the runner corrected by typing its laps no longer has the watch's distance (0.87 mi became 1.49): the same
+    // activity from another source is known by its times instead.
     const twin = rows.find((r) => r.date === w.date && srcOf(r.strava_id) !== srcOf(w.strava_id)
-      && sameDistance(r.gps_mi, w.raw_distance_mi ?? w.distance_mi)
-      && (sameTime(r.moving_sec, w.moving_sec) || sameElapsed(r.elapsed_sec, w.elapsed_sec) || sameElapsed(r.moving_sec, w.elapsed_sec))
+      && (r.hand ? sameElapsed(r.moving_sec, w.moving_sec) && sameElapsed(r.elapsed_sec, w.elapsed_sec) : sameDistance(r.gps_mi, w.raw_distance_mi ?? w.distance_mi)
+        && (sameTime(r.moving_sec, w.moving_sec) || sameElapsed(r.elapsed_sec, w.elapsed_sec) || sameElapsed(r.moving_sec, w.elapsed_sec)))
       && !clean.some((o) => o !== w && o.strava_id === r.strava_id));
     if (twin) w.strava_id = twin.strava_id;
   }
@@ -470,7 +473,11 @@ export async function logWorkouts(db, person, list) {
   const results = [];
   const stmts = clean.map((w) => {
     const mine = own.get(w.strava_id);
-    if (mine) Object.assign(w, { laps: mine.laps, distance_mi: mine.distance_mi, raw_distance_mi: mine.raw_distance_mi, moving_sec: mine.moving_sec });
+    if (mine) {
+      // A report sent with the watch's numbers describes a run that is no longer there: the corrected one keeps its own.
+      if (w.summary && (movedBy(w.distance_mi, mine.distance_mi, 0.05) || movedBy(w.moving_sec, mine.moving_sec, 10))) w.summary = '';
+      Object.assign(w, { laps: mine.laps, distance_mi: mine.distance_mi, raw_distance_mi: mine.raw_distance_mi, moving_sec: mine.moving_sec });
+    }
     // Whoever labeled the run (rules, Kestrel AI, Claude), its pace has the last word on "workout".
     w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date), handLaps: !!mine }).category;
     const planned = plannedFor(plan, w.date, meets);
@@ -580,8 +587,8 @@ const movedBy = (now, was, floor) => Math.abs((now || 0) - (was || 0)) > Math.ma
 // then scored again the way a sync scores it: the pace check on its category (unless the runner tagged it),
 // difficulty, load and plan score. The edited distance is also the run's GPS distance from now on, so grading and the
 // track toggle both start from it. Typed laps that are the whole run set its distance (lapsMiles).
-// Returns [{ strava_id, date, category, effort, moved?, timed?, laps_before?, laps_after?, track? }]: moved when the
-// type, distance or time changed enough to make a report wrong, timed when the distance or time changed at all.
+// Returns [{ strava_id, date, category, effort, stale?, remeasured?, laps_before?, laps_after?, track? }]: stale when
+// the type, distance or time changed enough to make a report wrong, remeasured when the distance or time changed at all.
 export async function editRuns(db, person, edits) {
   if (!Array.isArray(edits) || !edits.length) return [];
   if (edits.length > 20) throw new CoachError('Edit at most 20 runs at once');
@@ -634,8 +641,8 @@ export async function editRuns(db, person, edits) {
     out.push({ strava_id: w.strava_id, date: w.date, category: w.category, effort: g.effort,
       // What a report written from the old numbers would now get wrong: the run type, the distance or the time
       // (a tweak of a few hundredths leaves it standing).
-      ...(w.category !== saved.category || movedBy(w.distance_mi, saved.distance_mi, 0.05) || movedBy(w.moving_sec, saved.moving_sec, 10) ? { moved: true } : {}),
-      ...(w.distance_mi !== saved.distance_mi || w.moving_sec !== saved.moving_sec ? { timed: true } : {}),
+      ...(w.category !== saved.category || movedBy(w.distance_mi, saved.distance_mi, 0.05) || movedBy(w.moving_sec, saved.moving_sec, 10) ? { stale: true } : {}),
+      ...(w.distance_mi !== saved.distance_mi || w.moving_sec !== saved.moving_sec ? { remeasured: true } : {}),
       // The laps' record for the day's splits line: when they changed, or when they are the runner's own (a run whose
       // distance was just made to match its typed laps can only now become the day's workout).
       ...(e.laps !== undefined || typed ? { laps_before: lapsBefore, laps_after: w.laps || '', track: w.surface === 'track' } : {}) });
@@ -657,7 +664,7 @@ export async function editRuns(db, person, edits) {
 // corrected run is now the day's workout (a line the runner or the coach wrote in their own words stays).
 // changed: editRuns' own record, [{ date, category, laps_before, laps_after, track }]. text(laps, track) builds the line.
 const SYNC_SPLIT = String.raw`(?:\d+m|1 mi) (?:\d+:\d{2}|\d+s) \(\d+:\d{2}/mi(?:, \d+)?\)`;
-const SYNC_SPLITS = new RegExp(`^${SYNC_SPLIT}(?:; ${SYNC_SPLIT})*$`);
+export const SYNC_SPLITS = new RegExp(`^${SYNC_SPLIT}(?:; ${SYNC_SPLIT})*$`);
 export async function followSplitsText(db, personId, changed, text) {
   const parse = (s) => { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.filter((l) => l?.m > 0 && l?.s > 0) : []; } catch { return []; } };
   for (const c of changed) {

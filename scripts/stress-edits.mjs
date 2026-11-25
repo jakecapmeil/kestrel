@@ -3,7 +3,8 @@
 // Nothing may throw, and nothing a runner reads may say NaN, undefined or Infinity.
 // node --no-warnings scripts/stress-edits.mjs [runs]
 import assert from 'node:assert/strict';
-import { handLaps, lapsMiles } from '../src/train/coach.js';
+import { handLaps, lapsMiles, SYNC_SPLITS } from '../src/train/coach.js';
+import { splitsText } from '../src/train/intervals.js';
 import { paceStructure, checkedCategory, gradeRun, pctVo2r } from '../src/train/grade.js';
 import { activityFacts, templateReport, templateDayLine, setLabel, allowedNumbers, ungroundedNumbers } from '../src/train/runfacts.js';
 
@@ -121,4 +122,12 @@ for (let i = 0; i < 2000; i++) {
   const got = setLabel(laps, rnd() < 0.3);
   assert.ok(got === null || (typeof got === 'string' && !BAD.test(got)), `setLabel gave ${got}`);
 }
-console.log(`stress: ${tally.runs} runs (${tally.fromLaps} took their laps' miles, ${tally.reps} rep sessions, ${tally.sets} named sets, ${tally.workout} typed-lap workouts), 2000 set names, no errors`);
+// The day's splits line the sync writes must read as the sync's (coach.js SYNC_SPLITS): that is how an edit knows it
+// may rewrite the line rather than a runner's own words.
+let lines = 0;
+for (let i = 0; i < 3000; i++) {
+  const laps = handLaps(Array.from({ length: Math.floor(between(1, 40)) }, () => ({ m: pickOf([100, 200, 384, 400, 600, 800, 1000, 1609, 1609.3, 3200]) * between(0.9, 1.1), s: between(14, 1400), hr: rnd() < 0.7 ? Math.round(between(90, 210)) : null })));
+  if (!laps.length) continue;
+  for (const track of [false, true]) { const t = splitsText(laps, track); assert.ok(SYNC_SPLITS.test(t), `the sync's splits line doesn't match SYNC_SPLITS: ${t}`); lines++; }
+}
+console.log(`stress: ${tally.runs} runs (${tally.fromLaps} took their laps' miles, ${tally.reps} rep sessions, ${tally.sets} named sets, ${tally.workout} typed-lap workouts), 2000 set names, ${lines} splits lines, no errors`);

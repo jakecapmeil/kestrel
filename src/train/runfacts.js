@@ -44,8 +44,9 @@ TRACK: a session on a track (facts.on_track, or reps on 200/400/800/1600 marks o
 
 // A set of reps of different lengths, by name: "3 × (600 m + 200 m)", "4 × 1000 m + 4 × 200 m". null when the reps
 // are all one length (the count and average say it) or follow no pattern. The session page names them the same way
-// (public/dayview.js cycleLabel).
-const distWord = (m, track) => (Math.abs(m - MILE) <= 40 ? '1 mi' : `${track || m >= 150 ? Math.round(m / 100) * 100 : Math.round(m / 10) * 10} m`);
+// (public/dayview.js cycleLabel, distLabel).
+// Written exactly as the session page writes it (public/dayview.js distLabel), so the report and the page agree.
+const distWord = (m, track) => (!track && Math.abs(m - MILE) < 40 ? '1 mi' : `${m >= 200 ? Math.round(m / 100) * 100 : Math.round(m / 10) * 10} m`);
 export function setLabel(work, track = false) {
   const tol = track ? 0.06 : 0.12;
   const groups = [];
@@ -92,7 +93,9 @@ export function activityFacts(x, { maxHr }) {
   // No pace fitness to tell the fast laps by (a new runner), but the run was labelled a workout or race: its laps are the work.
   let lapWord = 'fast lap';
   if (work.length < 2 && ['workout', 'race'].includes(x.category)) {
-    const all = (x.laps || []).filter((l) => l?.m >= 250 && l?.s > 0);
+    // The same floor as the pace check: a watch's laps from 250 m, typed ones from 100 m (grade.js paceStructure).
+    const typed = (x.laps || []).some((l) => l?.f === 2);
+    const all = (x.laps || []).filter((l) => l?.m >= (typed ? 100 : 250) && l?.s > 0);
     if (all.length >= 2) { work = all; lapWord = 'lap'; }
   }
   if (work.length >= 2) {
@@ -100,7 +103,7 @@ export function activityFacts(x, { maxHr }) {
     // Fade and evenness compare like with like: in a mixed set, the reps as long as the first (the 600s, not a 600
     // against the last 200).
     const set = setLabel(work, x.track);
-    const like = set ? work.filter((l) => Math.abs(l.m - work[0].m) <= Math.max(25, work[0].m * 0.12)) : work;
+    const like = set ? work.filter((l) => Math.abs(l.m - work[0].m) <= Math.max(25, work[0].m * (x.track ? 0.06 : 0.12))) : work;
     const one = set && like.length >= 2 ? `${distWord(work[0].m, x.track)} rep` : lapWord;
     const paces = (like.length >= 2 ? like : work).map(secPerMile);
     const totalM = work.reduce((a, l) => a + l.m, 0), totalS = work.reduce((a, l) => a + l.s, 0);

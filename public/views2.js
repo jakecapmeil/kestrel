@@ -124,8 +124,9 @@
     // A run gets the full layout; Edit unlocks its boxes in place. Other days show the app's day card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
     if(V.sessDay !== d){ V.sessDay = d; V.sessSel = null; }
-    // On a laptop a session picked from the list sits beside the day: it can be edited on its own too.
-    const picked = wide() && (x.sessions || []).length > 1 && V.sessSel && window.KDay.sessionOf(x, V.sessSel) ? V.sessSel : null;
+    // The session shown in full on the day page (the only one, or on a laptop the one beside the list) can be edited on
+    // its own too.
+    const picked = window.KDay.shownOf(x, V.sessSel, wide())?.key || null;
     const btns = own() ? `<span class="kd-acts">${picked ? `<button type="button" class="sm-btn" data-a="sessEdit" data-v="${esc(picked)}">Edit session</button>` : ''}<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button></span>` : '';
     return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${btns}</div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
   };
@@ -151,9 +152,11 @@
     window.scrollTo(0, 0);
     redraw();
   };
+  // An edit ends (saved, cancelled or left): the editor's state and which session it was scoped to, together.
+  const endEdit = ()=>{ window.KDay.stopEdit(); V.editSess = null; };
   ACT.kdeCancel = ()=>{
     if(window.KDay.dirty() && !confirm('Discard your changes?')) return;
-    window.KDay.stopEdit(); V.editSess = null; redraw();
+    endEdit(); redraw();
   };
   ACT.kdeUseLaps = (k)=> window.KDay.useLaps(k);
   ACT.kdeAdd = (k)=> window.KDay.addSplit(k);
@@ -165,7 +168,7 @@
     const say = (t)=>{ if(msg) msg.textContent = t; else alert(t); };
     if(!p) return;
     if(p.error) return say(p.error);
-    if(!p.runs.length && !p.tags.length && !Object.keys(p.fields).length && p.track == null){ K.stopEdit(); V.editSess = null; return redraw(); }
+    if(!p.runs.length && !p.tags.length && !Object.keys(p.fields).length && p.track == null){ endEdit(); return redraw(); }
     document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = true; b.textContent = 'Saving…'; });
     // The track toggle first: it resets a watch day's miles to the lines, and typed distances then go on top.
     const t = p.track != null ? await post('/api/log/track', { personId:activePersonId, date:d, track:p.track }) : null;
@@ -181,7 +184,7 @@
     const keys = (E0(d)?.sessions || []).filter((s)=> !s.manual && s.main_id && (s.activities || []).some((z)=> ids.has(String(z.id)))).map((s)=> s.key);
     const ai = window.kestrelAiTask?.('summary');
     V.reassess = keys.length && !ai?.serverOwn ? { date:d, keys, label: ai?.label || 'Kestrel AI', splits: changed.some((e)=> e.laps) } : null;
-    K.stopEdit(); V.editSess = null;
+    endEdit();
     V.cache = {}; fitnessData = null; library = null;
     toast('Saved');
     await redraw();
@@ -215,7 +218,8 @@
   }
   function popAway(el){
     el.classList.add('out');
-    setTimeout(()=>{ if(el.classList.contains('out')) el.remove(); }, 320);
+    // After the slide-out (--t-med).
+    setTimeout(()=>{ if(el.classList.contains('out')) el.remove(); }, 260);
   }
   function wirePop(el){
     el.addEventListener('click', (e)=>{
@@ -256,7 +260,7 @@
   SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(window.KDay.editing(d)) return; const x = V.days[d], k = shownSession(x); if(x?.miles && k) window.KDay.mountSession(x, k, own()); };
   // Leaving the day page drops an edit in progress (asking first when something was typed).
   const back0 = ACT.back;
-  ACT.back = ()=>{ if(window.KDay.editing()){ if(window.KDay.dirty() && !confirm('Discard your changes?')) return; window.KDay.stopEdit(); V.editSess = null; } back0(); };
+  ACT.back = ()=>{ if(window.KDay.editing()){ if(window.KDay.dirty() && !confirm('Discard your changes?')) return; endEdit(); } back0(); };
   // A session: on a laptop the day page swaps the one beside the list; on a phone it opens on its own page.
   ACT.sess = (key)=>{
     const d = String(key).split('#')[0];

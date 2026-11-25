@@ -829,7 +829,7 @@ button.kv-link-sm{background:none;border:0;box-shadow:none;height:auto;padding:4
 .kde-check > span{min-width:0;flex:1;}
 .kde-check i{display:block;font-style:normal;font-size:var(--fs-sm);color:var(--text-2);}
 /* The editor's "use the splits' totals" button sits in the splits' sum line. */
-.kde-foot .kv-hint .kde-use{display:flex;width:fit-content;margin:8px 0 0;color:var(--accent-ink);background:var(--accent-subtle);border-color:transparent;}
+.kde-foot .kv-hint .kde-use{display:flex;width:fit-content;margin:8px 0 0;color:var(--text);background:var(--surface-2);border-color:transparent;}
 .kd-acts{display:flex;gap:8px;}
 .ks-top{flex-wrap:wrap;gap:8px;}
 .ks-top .ks-step{margin-inline:auto;}
@@ -840,23 +840,24 @@ button.kv-link-sm{background:none;border:0;box-shadow:none;height:auto;padding:4
   transform:translate3d(-50%,var(--dy,0px),0);padding:10px 16px 14px;border-radius:var(--r-lg);border:1px solid var(--line);
   background:color-mix(in srgb,var(--surface) 82%,transparent);-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);
   box-shadow:var(--shadow-2);color:var(--text);touch-action:none;user-select:none;-webkit-user-select:none;
-  animation:k-notif-in 520ms var(--spring) backwards;transition:transform 260ms var(--ease-out),opacity 260ms var(--ease-out);}
+  animation:k-notif-in var(--t-med) var(--ease-out) backwards;transition:transform var(--t-med) var(--ease-out),opacity var(--t-med) var(--ease-out);}
 .k-notif.drag{transition:none;}
 .k-notif.out{opacity:0;transform:translate3d(-50%,calc(-100% - 24px),0);pointer-events:none;}
 @keyframes k-notif-in{from{opacity:0;transform:translate3d(-50%,calc(-100% - 24px),0);}to{opacity:1;transform:translate3d(-50%,0,0);}}
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.k-notif{background:var(--surface);}}
 .k-notif-grab{width:36px;height:4px;margin:0 auto 8px;border-radius:var(--r-pill);background:var(--line);}
 .k-notif-top{display:flex;align-items:center;gap:8px;min-height:24px;}
-.k-notif-app{width:22px;height:22px;border-radius:6px;flex:none;}
+.k-notif-app{width:22px;height:22px;border-radius:var(--r-xs);flex:none;}
 .k-notif-src{font:600 var(--fs-xs) var(--font-ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);}
 .k-notif-when{font:500 var(--fs-xs) var(--font-ui);color:var(--text-2);margin-right:auto;}
-.k-notif-x{width:32px;height:32px;margin:-4px -8px -4px 0;padding:0;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font:400 var(--fs-xl)/1 var(--font-ui);cursor:pointer;}
+.k-notif-x{width:var(--tap);height:var(--tap);margin:-10px -12px -10px 0;padding:0;border:0;border-radius:var(--r-pill);background:transparent;color:var(--text-2);font:400 var(--fs-xl)/1 var(--font-ui);cursor:pointer;}
 .k-notif-x:hover{background:var(--surface-2);color:var(--text);}
 .k-notif-t{display:block;margin-top:8px;font:700 var(--fs-lg)/1.3 var(--font-ui);}
 .k-notif-b{margin:4px 0 0;font:400 var(--fs-md)/1.45 var(--font-ui);color:var(--text-2);}
 .k-notif-btns{display:flex;gap:8px;margin-top:12px;}
 .k-notif-btns button{flex:1;height:var(--tap);padding:0 16px;border-radius:var(--r-pill);border:0;background:var(--surface-2);color:var(--text);font:600 var(--fs-md) var(--font-ui);cursor:pointer;}
-.k-notif-btns button.pri{background:var(--accent);color:var(--on-accent);}
+/* Not red: the pop-up sits over screens that already have their one red action. */
+.k-notif-btns button.pri{background:var(--inverse);color:var(--on-inverse);}
 .k-notif-btns button:disabled{opacity:.6;cursor:default;}
 @media (min-width:1024px){ .k-notif{left:auto;right:24px;top:20px;transform:translate3d(0,var(--dy,0px),0);animation-name:k-notif-in-r;}
   .k-notif.out{transform:translate3d(0,calc(-100% - 24px),0);}
