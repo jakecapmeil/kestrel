@@ -114,7 +114,7 @@
   SCREENS.day = async (d)=>{
     const K = window.KDay;
     // Editing keeps what was typed: the page is drawn from the day as it was when Edit was pressed.
-    if(K.editing(d) && V.cache['day:' + d]){
+    if(K.editing(d) && !V.editSess && V.cache['day:' + d]){
       const x = V.cache['day:' + d];
       return `<div class="kd-top kde-top"><button type="button" class="kv-back" data-a="kdeCancel">‹ Cancel</button><span class="kde-flag">Editing</span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div>
         ${K.dayEditHtml(x, wide(), typeof library !== 'undefined' ? library : null)}
@@ -124,30 +124,48 @@
     // A run gets the full layout; Edit unlocks its boxes in place. Other days show the app's day card.
     if(!x?.miles) return `<button type="button" class="kv-back" data-a="back">‹ Back</button><div id="kvDayHost"></div>`;
     if(V.sessDay !== d){ V.sessDay = d; V.sessSel = null; }
-    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${own() ? '<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button>' : ''}</div>${own() ? reassessHtml(d) : ''}${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
+    // On a laptop a session picked from the list sits beside the day: it can be edited on its own too.
+    const picked = wide() && (x.sessions || []).length > 1 && V.sessSel && window.KDay.sessionOf(x, V.sessSel) ? V.sessSel : null;
+    const btns = own() ? `<span class="kd-acts">${picked ? `<button type="button" class="sm-btn" data-a="sessEdit" data-v="${esc(picked)}">Edit session</button>` : ''}<button type="button" class="sm-btn" data-a="dayEdit">Edit day</button></span>` : '';
+    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ Back</button>${btns}</div>${window.KDay.dayHtml(x, V.sessSel, wide())}<div id="kvDayHost" hidden></div>`;
   };
+  // The date of the page on top: a day page is "day|2026-11-24", a session page "sess|2026-11-24#0".
+  const topDate = ()=> ((V.stack[V.stack.length - 1] || '').split('|')[1] || '').split('#')[0];
   ACT.dayEdit = async ()=>{
-    const d = (V.stack[V.stack.length - 1] || '').split('|')[1], x = V.cache['day:' + d];
+    const d = topDate(), x = V.cache['day:' + d];
     if(!x || !own()) return;
     try{ await loadLibrary(); }catch(e){ /* the library picker is optional */ }
+    V.editSess = null;
     window.KDay.startEdit(x);
+    window.scrollTo(0, 0);
+    redraw();
+  };
+  // Edit one session from its own page: the same editor, scoped to that session's runs and splits.
+  ACT.sessEdit = (key)=>{
+    const d = String(key).split('#')[0], x = V.cache['day:' + d];
+    if(!x || !own()) return;
+    V.editSess = key;
+    window.KDay.startEdit(x);
+    // On a laptop the session sits beside the day: it opens on its own page to be edited.
+    if(V.stack[V.stack.length - 1] !== 'sess|' + key){ V.sessDay = d; V.sessSel = key; V.stack.push('sess|' + key); }
     window.scrollTo(0, 0);
     redraw();
   };
   ACT.kdeCancel = ()=>{
     if(window.KDay.dirty() && !confirm('Discard your changes?')) return;
-    window.KDay.stopEdit(); redraw();
+    window.KDay.stopEdit(); V.editSess = null; redraw();
   };
+  ACT.kdeUseLaps = (k)=> window.KDay.useLaps(k);
   ACT.kdeAdd = (k)=> window.KDay.addSplit(k);
   ACT.kdeDel = (v)=>{ const i = v.lastIndexOf('|'); window.KDay.delSplit(v.slice(0, i), +v.slice(i + 1)); };
   ACT.kdeJump = (key)=> document.getElementById('kde-' + String(key).replace(/[^\w-]/g, '_'))?.scrollIntoView({ behavior:'smooth', block:'start' });
   ACT.kdeSave = async ()=>{
-    const K = window.KDay, d = (V.stack[V.stack.length - 1] || '').split('|')[1];
+    const K = window.KDay, d = topDate();
     const p = K.editPayload(), msg = document.getElementById('kdeMsg');
     const say = (t)=>{ if(msg) msg.textContent = t; else alert(t); };
     if(!p) return;
     if(p.error) return say(p.error);
-    if(!p.runs.length && !p.tags.length && !Object.keys(p.fields).length && p.track == null){ K.stopEdit(); return redraw(); }
+    if(!p.runs.length && !p.tags.length && !Object.keys(p.fields).length && p.track == null){ K.stopEdit(); V.editSess = null; return redraw(); }
     document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = true; b.textContent = 'Saving…'; });
     // The track toggle first: it resets a watch day's miles to the lines, and typed distances then go on top.
     const t = p.track != null ? await post('/api/log/track', { personId:activePersonId, date:d, track:p.track }) : null;
@@ -156,50 +174,89 @@
       document.querySelectorAll('[data-a="kdeSave"]').forEach((b)=>{ b.disabled = false; b.textContent = 'Save changes'; });
       return say(r.error);
     }
-    // Sessions whose splits changed: Kestrel AI's report on them was written from the old splits, so offer to redo it.
-    const lapIds = new Set(p.runs.filter((e)=> e.laps).map((e)=> String(e.strava_id)));
-    const keys = (E0(d)?.sessions || []).filter((s)=> !s.manual && s.main_id && (s.activities || []).some((z)=> lapIds.has(String(z.id)))).map((s)=> s.key);
+    // Sessions whose splits, distance or time changed: Kestrel AI's report on them was written from the old numbers,
+    // so offer to redo it.
+    const changed = p.runs.filter((e)=> e.laps || e.distance_mi !== undefined || e.moving_sec !== undefined);
+    const ids = new Set(changed.map((e)=> String(e.strava_id)));
+    const keys = (E0(d)?.sessions || []).filter((s)=> !s.manual && s.main_id && (s.activities || []).some((z)=> ids.has(String(z.id)))).map((s)=> s.key);
     const ai = window.kestrelAiTask?.('summary');
-    V.reassess = keys.length && !ai?.serverOwn ? { date:d, keys, label: ai?.label || 'Kestrel AI' } : null;
-    K.stopEdit();
+    V.reassess = keys.length && !ai?.serverOwn ? { date:d, keys, label: ai?.label || 'Kestrel AI', splits: changed.some((e)=> e.laps) } : null;
+    K.stopEdit(); V.editSess = null;
     V.cache = {}; fitnessData = null; library = null;
     toast('Saved');
-    redraw();
+    await redraw();
+    reassessPop();
   };
   const E0 = (d)=> V.cache['day:' + d];
-  // The prompt after a split edit, at the top of the day page.
-  const reassessHtml = (d)=>{
+
+  // ---------------------------------------------------------------- the reassess prompt
+  // A banner that drops in over the screen from the top, the way a phone shows a notification: Kestrel's mark, who
+  // it is from, the question and two buttons. It sits above the page (not in it), so a redraw or moving to another
+  // screen keeps it until it is answered. Swipe it up (or ×) for Not now.
+  function reassessPop(){
     const r = V.reassess;
-    if(!r || r.date !== d) return '';
-    const n = r.keys.length;
-    return `<section class="card kv-card kd-reassess" id="kdReassess" role="status"><div class="kd-eb">Splits changed</div>
-      <p>Have Kestrel AI reassess ${n > 1 ? `these ${n} sessions` : 'this workout'} with your new splits?</p>
-      <p class="kv-hint" id="kdReassessMsg">It rewrites the report${n > 1 ? 's' : ''} using ${esc(r.label)}.</p>
-      <div class="kv-btns"><button type="button" class="pri" data-a="reassessGo">Reassess</button><button type="button" data-a="reassessNo">Not now</button></div></section>`;
-  };
-  ACT.reassessNo = ()=>{ V.reassess = null; document.getElementById('kdReassess')?.remove(); };
-  ACT.reassessGo = async ()=>{
+    let el = document.getElementById('kdReassess');
+    if(!r){ if(el) popAway(el); return; }
+    const n = r.keys.length, what = n > 1 ? `these ${n} sessions` : 'this session';
+    if(!el){
+      el = document.createElement('div');
+      el.id = 'kdReassess'; el.className = 'k-notif';
+      el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'false'); el.setAttribute('aria-labelledby', 'kdReassessT'); el.setAttribute('aria-describedby', 'kdReassessMsg');
+      document.body.appendChild(el);
+      wirePop(el);
+    }
+    el.classList.remove('out');
+    el.innerHTML = `<div class="k-notif-grab" aria-hidden="true"></div>
+      <div class="k-notif-top"><img class="k-notif-app" src="/favicon.svg" alt="" width="22" height="22"><span class="k-notif-src">Kestrel AI</span><span class="k-notif-when">now</span>
+        <button type="button" class="k-notif-x" data-r="no" aria-label="Not now">×</button></div>
+      <b class="k-notif-t" id="kdReassessT">${r.splits ? 'Splits changed' : 'Run changed'}</b>
+      <p class="k-notif-b" id="kdReassessMsg" aria-live="polite">Have Kestrel AI reassess ${what} with your new ${r.splits ? 'splits' : 'distance and time'}? It rewrites the report${n > 1 ? 's' : ''} using ${esc(r.label)}.</p>
+      <div class="k-notif-btns"><button type="button" class="pri" data-r="go">Reassess</button><button type="button" data-r="no">Not now</button></div>`;
+  }
+  function popAway(el){
+    el.classList.add('out');
+    setTimeout(()=>{ if(el.classList.contains('out')) el.remove(); }, 320);
+  }
+  function wirePop(el){
+    el.addEventListener('click', (e)=>{
+      const b = e.target.closest('[data-r]'); if(!b || b.disabled) return;
+      if(b.dataset.r === 'go') reassessGo(); else reassessNo();
+    });
+    el.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') reassessNo(); });
+    // Swipe up to put it away, as on a phone. It follows the finger up (and only a little down), then goes or settles back.
+    let y0 = null, dy = 0;
+    el.addEventListener('pointerdown', (e)=>{ if(e.target.closest('button')) return; y0 = e.clientY; dy = 0; el.classList.add('drag'); el.setPointerCapture?.(e.pointerId); });
+    el.addEventListener('pointermove', (e)=>{ if(y0 == null) return; dy = e.clientY - y0; el.style.setProperty('--dy', `${dy < 0 ? dy : Math.min(12, dy / 4)}px`); });
+    const end = ()=>{ if(y0 == null) return; y0 = null; el.classList.remove('drag'); el.style.removeProperty('--dy'); if(dy < -36) reassessNo(); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  }
+  function reassessNo(){ if(V.reassess?.busy) return; V.reassess = null; reassessPop(); }
+  async function reassessGo(){
     const r = V.reassess, box = document.getElementById('kdReassess');
-    if(!r || !box) return;
+    if(!r || !box || r.busy) return;
+    r.busy = true;
     box.querySelectorAll('button').forEach((b)=> b.disabled = true);
     box.querySelector('.pri').textContent = 'Reassessing…';
     try{ for(const k of r.keys) await window.kestrelReassess(k); }
     catch(e){
+      r.busy = false;
       box.querySelectorAll('button').forEach((b)=> b.disabled = false);
       box.querySelector('.pri').textContent = 'Try again';
       document.getElementById('kdReassessMsg').textContent = e.message || 'Kestrel AI couldn’t reassess it. Try again in a minute.';
       return;
     }
     V.reassess = null; delete V.cache['day:' + r.date];
-    toast('Kestrel AI reassessed your workout');
-    redraw();
-  };
+    reassessPop();
+    toast(r.keys.length > 1 ? 'Kestrel AI reassessed your sessions' : 'Kestrel AI reassessed your session');
+    // Only the page showing that day needs drawing again.
+    if(topDate() === r.date) redraw();
+  }
   // Which session the page shows beside (or under) the day.
   const shownSession = (x)=> V.sessSel || (wide() || (x?.sessions || []).length === 1 ? document.querySelector('#pageV .ks')?.dataset.key : null);
   SCREENS.day.after = (el, d)=>{ mountDay(d, V.days, true); if(window.KDay.editing(d)) return; const x = V.days[d], k = shownSession(x); if(x?.miles && k) window.KDay.mountSession(x, k, own()); };
   // Leaving the day page drops an edit in progress (asking first when something was typed).
   const back0 = ACT.back;
-  ACT.back = ()=>{ if(window.KDay.editing()){ if(window.KDay.dirty() && !confirm('Discard your changes?')) return; window.KDay.stopEdit(); } back0(); };
+  ACT.back = ()=>{ if(window.KDay.editing()){ if(window.KDay.dirty() && !confirm('Discard your changes?')) return; window.KDay.stopEdit(); V.editSess = null; } back0(); };
   // A session: on a laptop the day page swaps the one beside the list; on a phone it opens on its own page.
   ACT.sess = (key)=>{
     const d = String(key).split('#')[0];
@@ -213,11 +270,18 @@
     const x = V.cache['day:' + d]?.sessions ? V.cache['day:' + d] : await loadDay(d);
     const s = window.KDay.sessionOf(x, key);
     if(!s) return `<button type="button" class="kv-back" data-a="back">‹ Back</button>${need('That session is gone. It may have been merged or deleted on your watch.')}`;
+    // Editing this session: the same page with its boxes unlocked, saved or cancelled from the bar.
+    if(window.KDay.editing(d) && V.editSess === key){
+      return `<div class="kd-top kde-top"><button type="button" class="kv-back" data-a="kdeCancel">‹ Cancel</button><span class="kde-flag">Editing session</span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div>
+        ${window.KDay.sessionEditHtml(x, key)}
+        <div class="kde-bar"><button type="button" class="sm-btn" data-a="kdeCancel">Cancel</button><span class="kv-hint" id="kdeMsg"></span><button type="button" class="pri sm-btn" data-a="kdeSave">Save changes</button></div>`;
+    }
     const ss = x.sessions || [], i = ss.indexOf(s);
     const step = ss.length > 1 ? `<div class="ks-step">${i > 0 ? `<button type="button" class="sm-btn" data-a="sessGo" data-v="${esc(ss[i - 1].key)}" aria-label="Previous session">‹</button>` : ''}<span>${i + 1} of ${ss.length}</span>${i < ss.length - 1 ? `<button type="button" class="sm-btn" data-a="sessGo" data-v="${esc(ss[i + 1].key)}" aria-label="Next session">›</button>` : ''}</div>` : '';
-    return `<div class="kd-top"><button type="button" class="kv-back" data-a="back">‹ ${esc(nice(d, { weekday:'short', month:'short', day:'numeric' }))}</button>${step}</div>${window.KDay.sessionHtml(x, s)}`;
+    const edit = own() ? `<button type="button" class="sm-btn" data-a="sessEdit" data-v="${esc(s.key)}">Edit session</button>` : '';
+    return `<div class="kd-top ks-top"><button type="button" class="kv-back" data-a="back">‹ ${esc(nice(d, { weekday:'short', month:'short', day:'numeric' }))}</button>${step}${edit}</div>${window.KDay.sessionHtml(x, s)}`;
   };
-  SCREENS.sess.after = (el, key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.mountSession(x, key, own()); };
+  SCREENS.sess.after = (el, key)=>{ const d = String(key).split('#')[0], x = V.cache['day:' + d]; if(x && !window.KDay.editing(d)) window.KDay.mountSession(x, key, own()); };
   ACT.sumKestrel = async ()=>{ await window.kestrelSetSummary?.('kestrel'); redraw(); };
   ACT.sessReport = (key)=>{ const x = V.cache['day:' + String(key).split('#')[0]]; if(x) window.KDay.writeReport(x, key); };
   ACT.sessGo = (key)=>{ V.stack[V.stack.length - 1] = 'sess|' + key; V.sessSel = key; window.scrollTo(0, 0); redraw(); };

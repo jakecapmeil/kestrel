@@ -62,8 +62,10 @@
     const el = host(); if(!el) return;
     const key = V.stack.length ? V.stack[V.stack.length - 1] : V.key;
     const [k, arg] = key.split('|');
-    // Going anywhere but the day being edited drops the edit (Cancel and Back ask first when something was typed).
-    if(!(k === 'day' && window.KDay?.editing?.(arg))) window.KDay?.stopEdit?.();
+    // Going anywhere but the day (or the session) being edited drops the edit (Cancel and Back ask first when something
+    // was typed).
+    const editHere = k === 'day' ? !V.editSess && window.KDay?.editing?.(arg) : k === 'sess' && V.editSess === arg && window.KDay?.editing?.(String(arg).split('#')[0]);
+    if(!editHere){ window.KDay?.stopEdit?.(); V.editSess = null; }
     const name = SCREEN_OF[k] || k;
     const fn = SCREENS[name]; if(!fn) return;
     const shown = el.dataset.key === key && el.childElementCount > 0;

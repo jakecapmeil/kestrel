@@ -127,7 +127,7 @@ function fmtTime(sec) {
 
 // WORK intervals -> "800m 2:45 (5:32/mi, 178)" style splits. On the track
 // the reps read as the lines (nearest 100 m) and a mile is 1600 m.
-function splitsText(laps, track) {
+export function splitsText(laps, track) {
   return laps.slice(0, 20).map((l) => {
     const m = track ? snap100(l.m) : l.m;
     const mile = track ? TRACK_MILE_M : 1609.344;

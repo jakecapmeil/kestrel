@@ -488,7 +488,7 @@ export async function logWorkouts(db, person, list) {
          planned_type=excluded.planned_type, planned_miles=excluded.planned_miles, effort=excluded.effort,
          plan_score=excluded.plan_score, load=excluded.load, rating=excluded.rating,
          summary=COALESCE(NULLIF(excluded.summary, ''), summary), library_id=COALESCE(NULLIF(excluded.library_id, ''), library_id),
-         start_local=COALESCE(NULLIF(excluded.start_local, ''), start_local), laps=COALESCE(NULLIF(excluded.laps, ''), laps),
+         start_local=COALESCE(NULLIF(excluded.start_local, ''), start_local), laps=CASE WHEN laps LIKE '%"f":2%' THEN laps ELSE COALESCE(NULLIF(excluded.laps, ''), laps) END,
          surface=CASE WHEN excluded.surface = 'track' THEN 'track' ELSE surface END,
          raw_distance_mi=COALESCE(excluded.raw_distance_mi, raw_distance_mi), raw_elev_ft=COALESCE(excluded.raw_elev_ft, raw_elev_ft),
          temp_f=COALESCE(excluded.temp_f, temp_f), dew_point_f=COALESCE(excluded.dew_point_f, dew_point_f),
@@ -590,11 +590,18 @@ export async function editRuns(db, person, edits) {
       w.moving_sec = Math.round(sec);
       if (!(w.elapsed_sec >= w.moving_sec)) w.elapsed_sec = w.moving_sec;
     }
+    const lapsBefore = w.laps || '';
     if (e.laps !== undefined) { const laps = handLaps(e.laps); w.laps = laps.length ? JSON.stringify(laps) : ''; }
-    if (!w.tag) w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date) }).category;
+    // Laps the runner typed (now or before) are what was run, so they can make it a workout on their own.
+    let typed = false;
+    try { typed = (JSON.parse(w.laps || '[]') || []).some((l) => l?.f === 2); } catch { /* none */ }
+    if (!w.tag) w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date), handLaps: typed }).category;
     const g = gradeOfRun(w, gctx);
     const plan_score = planScoreOf(w, g.hr_effort, plannedFor(plan, w.date, meets));
-    out.push({ strava_id: w.strava_id, category: w.category, effort: g.effort });
+    out.push({ strava_id: w.strava_id, date: w.date, category: w.category, effort: g.effort,
+      // The laps' record for the day's splits line: when they changed, or when they are the runner's own (a run whose
+      // distance was just made to match its typed laps can only now become the day's workout).
+      ...(e.laps !== undefined || typed ? { laps_before: lapsBefore, laps_after: w.laps || '', track: w.surface === 'track' } : {}) });
     stmts.push(db.prepare(
       `UPDATE workouts SET distance_mi = ?, raw_distance_mi = ?, moving_sec = ?, elapsed_sec = ?, laps = ?, category = ?, effort = ?, hr_effort = ?,
          load = ?, plan_score = ?, rating = ?, updated_at = ? WHERE person_id = ? AND strava_id = ?`
@@ -606,6 +613,25 @@ export async function editRuns(db, person, edits) {
     await db.batch(stmts);
   }
   return out;
+}
+
+// The day's splits line was written from a run's laps at sync. When those laps are corrected, the line follows: when it
+// is still the one made from the old laps, or when it is a sync-written line ("384m 1:43 (7:11/mi, 145); ...") and the
+// corrected run is now the day's workout (a line the runner or the coach wrote in their own words stays).
+// changed: editRuns' own record, [{ date, category, laps_before, laps_after, track }]. text(laps, track) builds the line.
+const SYNC_SPLIT = String.raw`(?:\d+m|1 mi) (?:\d+:\d{2}|\d+s) \(\d+:\d{2}/mi(?:, \d+)?\)`;
+const SYNC_SPLITS = new RegExp(`^${SYNC_SPLIT}(?:; ${SYNC_SPLIT})*$`);
+export async function followSplitsText(db, personId, changed, text) {
+  const parse = (s) => { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.filter((l) => l?.m > 0 && l?.s > 0) : []; } catch { return []; } };
+  for (const c of changed) {
+    const before = parse(c.laps_before), after = parse(c.laps_after);
+    const day = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(personId, c.date).first();
+    if (!day?.splits) continue;
+    const fromOld = before.length && (day.splits === text(before, c.track) || day.splits === text(before, !c.track));
+    const synced = SYNC_SPLITS.test(day.splits) && (c.category === 'workout' || c.category === 'race') && after.length;
+    if (!fromOld && !synced) continue;
+    await db.prepare('UPDATE training_days SET splits = ? WHERE person_id = ? AND date = ?').bind(after.length ? text(after, c.track) : '', personId, c.date).run();
+  }
 }
 
 // Runs logged before Kestrel read the weather: look it up, then rescore

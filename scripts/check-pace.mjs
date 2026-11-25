@@ -24,4 +24,19 @@ const cases = [
     laps: Array.from({ length: 5 }, () => lap(1609, 480, 140)) }, 'easy'],
 ];
 for (const [name, w, want] of cases) assert.equal(checkedCategory(w, ctx).category, want, name);
-console.log(`pace: ${cases.length} categories as expected`);
+
+// 2026-11-24: 3 x (600 m + 200 m) saved as its own activity, GPS read 0.87 mi in 6:43 and the sync called it recovery.
+// The runner typed the real laps. Typed laps are what was run, so they make it a workout even at the GPS distance.
+const typed = [lap(600, 102.9, 145), lap(200, 31.5, 148), lap(600, 99, 140), lap(200, 30.7, 137), lap(600, 97.4, 151), lap(200, 29, 167)];
+const nov24 = { category: 'recovery', distance_mi: 0.87, moving_sec: 403, avg_hr: 144, elev_gain_ft: 12, laps: typed, name: 'New York Running' };
+const ctx2 = { vo2r: 61.7, maxHr: 206 };
+const typedCases = [
+  ['typed 600/200 reps on a "recovery" run make it a workout', nov24, { handLaps: true }, 'workout'],
+  ['the same laps from the watch leave it recovery (laps alone never say workout)', nov24, {}, 'recovery'],
+  ['typed reps at the corrected 1.49 mi make it a workout', { ...nov24, distance_mi: 1.49, moving_sec: 391 }, { handLaps: true }, 'workout'],
+  ['a recovery run averaging interval pace is a workout, typed or not', { ...nov24, distance_mi: 1.49, moving_sec: 391 }, {}, 'workout'],
+  ['a shakeout with typed even easy miles stays a shakeout', { category: 'shakeout', distance_mi: 2, moving_sec: 960, avg_hr: 130, laps: [lap(1609, 480, 128), lap(1609, 480, 132)] }, { handLaps: true }, 'shakeout'],
+  ['typed mile laps at recovery pace stay recovery', { category: 'recovery', distance_mi: 3, moving_sec: 1590, avg_hr: 130, laps: Array.from({ length: 3 }, () => lap(1609, 530, 130)) }, { handLaps: true }, 'recovery'],
+];
+for (const [name, w, opts, want] of typedCases) assert.equal(checkedCategory({ ...w, laps: JSON.stringify(w.laps) }, ctx2, opts).category, want, name);
+console.log(`pace: ${cases.length + typedCases.length} categories as expected`);

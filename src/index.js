@@ -13,11 +13,11 @@ import { BUILTIN, DEFAULTS, TASKS, KINDS, PURPOSES, SLOT_EVENTS, slotPurpose, co
 import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validateTeamPlans, expandPlanSpec, PlanFormatError, levelByMiles, scaleLevel, setPlanCell, addLevel, removeLevel } from './train/plans.js';
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
-import { maxHrFor, vo2rFor, editRuns, handLaps, bodyStatus } from './train/coach.js';
+import { maxHrFor, vo2rFor, editRuns, handLaps, bodyStatus, followSplitsText } from './train/coach.js';
 import { SUMMARY_RUBRIC, activityFacts, templateReport, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
 import { paceStructure } from './train/grade.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
-import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON } from './train/intervals.js';
+import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON, splitsText as icuSplitsText } from './train/intervals.js';
 import { getFitness, recomputeFitness, fitnessHistory, dropAutoPrsFrom } from './train/fitness.js';
 import { snapshotDue, calibrationFor } from './train/calibration.js';
 import { runnerAssessment } from './train/runnertype.js';
@@ -2400,12 +2400,14 @@ async function route(request, env, url) {
   if (path === '/api/posts/delete') { needTeam(); await deletePost(db, teamId, me, role, b.postId); return json({ ok: true }); }
   // Your own training (Kestrel paths)
   if (path === '/api/plan/reset') { await resetPlanDay(db, me.id, str(b.date, 10), b.keep === true); return json(await kaiState(db, me.id)); }
+  // The old day card's split builder on a watch session: the same save as the day editor's, so the run is scored
+  // again (category, difficulty, load) and the day's splits line follows.
   if (path === '/api/log/session-splits') {
-    const reps = handLaps(b.reps);
-    const res = await db.prepare('UPDATE workouts SET laps = ? WHERE person_id = ? AND strava_id = ?').bind(reps.length ? JSON.stringify(reps) : '', me.id, str(b.strava_id, 60)).run();
-    if (!res.meta.changes) throw new NotFound('Unknown session.');
-    await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
-    return json({ ok: true, reps });
+    const id = str(b.strava_id, 60);
+    if (!(await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND strava_id = ?').bind(me.id, id).first())) throw new NotFound('Unknown session.');
+    const runs = await editRuns(db, await loadPerson(db, me.id), [{ strava_id: id, laps: Array.isArray(b.reps) ? b.reps : [] }]);
+    await followSplitsText(db, me.id, runs, icuSplitsText);
+    return json({ ok: true, reps: handLaps(b.reps) });
   }
   if (path === '/api/log/tag') {
     await setRunTag(db, me.id, str(b.strava_id, 80), b.tag);
@@ -2450,7 +2452,10 @@ async function route(request, env, url) {
     const date = str(b.date, 10);
     for (const t of (Array.isArray(b.tags) ? b.tags : []).slice(0, 20)) await setRunTag(db, me.id, str(t?.strava_id, 80), t?.tag);
     const person = await loadPerson(db, me.id);
-    const runs = await editRuns(db, person, (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && typeof e === 'object'));
+    const edited = await editRuns(db, person, (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && typeof e === 'object'));
+    // Corrected laps: the day's splits line was written from the old ones.
+    await followSplitsText(db, me.id, edited.filter((r) => r.laps_before !== undefined), icuSplitsText);
+    const runs = edited.map(({ laps_before, laps_after, track, ...r }) => r);
     const fields = { ...(b.fields && typeof b.fields === 'object' ? b.fields : {}) };
     if (await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND date = ? LIMIT 1').bind(me.id, date).first()) ['manual_miles', 'minutes', 'runs', 'difficulty'].forEach((k) => delete fields[k]);
     if (Object.keys(fields).length) {
@@ -2460,7 +2465,9 @@ async function route(request, env, url) {
     // A PR Kestrel found from a run whose distance or time was just corrected came from the old numbers: search again.
     const timed = (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && (e.distance_mi !== undefined || e.moving_sec !== undefined)).map((e) => str(e.strava_id, 80));
     for (const id of timed) await dropAutoPrsFrom(db, me.id, id);
-    const fitness = timed.length || (Array.isArray(b.tags) && b.tags.length) ? await recomputeFitness(db, me.id, today).catch(() => null) : null;
+    // New laps can make a run a workout, and the reps feed the race estimates: those count too.
+    const lapped = edited.some((r) => r.laps_before !== undefined);
+    const fitness = timed.length || lapped || (Array.isArray(b.tags) && b.tags.length) ? await recomputeFitness(db, me.id, today).catch(() => null) : null;
     return json({ ok: true, runs, new_prs: fitness?.new_prs || [] });
   }
   if (path === '/api/log/day') {
