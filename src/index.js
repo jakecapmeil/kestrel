@@ -2426,7 +2426,9 @@ async function route(request, env, url) {
   if (path === '/api/log/session-splits') {
     const id = str(b.strava_id, 60);
     if (!(await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND strava_id = ?').bind(me.id, id).first())) throw new NotFound('Unknown session.');
-    const runs = await editRuns(db, await loadPerson(db, me.id), [{ strava_id: id, laps: Array.isArray(b.reps) ? b.reps : [] }]);
+    // An empty list clears the splits; anything that isn't a list is a mistake, not a request to clear them.
+    if (!Array.isArray(b.reps)) throw new BadRequest('reps must be a list of splits');
+    const runs = await editRuns(db, await loadPerson(db, me.id), [{ strava_id: id, laps: b.reps }]);
     await followSplitsText(db, me.id, runs, icuSplitsText);
     for (const r of runs.filter((x) => x.moved)) await rewriteFromFacts(db, me.id, r.date, [r]);
     return json({ ok: true, reps: handLaps(b.reps) });
@@ -2472,12 +2474,15 @@ async function route(request, env, url) {
   // fields, saved together. A hand-logged day's miles and minutes go in fields as on /api/log/day.
   if (path === '/api/log/edit') {
     const date = str(b.date, 10);
+    // Checked before anything is written, so a bad request changes nothing.
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BadRequest('date must be YYYY-MM-DD');
     for (const t of (Array.isArray(b.tags) ? b.tags : []).slice(0, 20)) await setRunTag(db, me.id, str(t?.strava_id, 80), t?.tag);
     const person = await loadPerson(db, me.id);
     const edited = await editRuns(db, person, (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && typeof e === 'object'));
     // Corrected laps: the day's splits line was written from the old ones.
     await followSplitsText(db, me.id, edited.filter((r) => r.laps_before !== undefined), icuSplitsText);
-    await rewriteFromFacts(db, me.id, date, edited.filter((r) => r.moved && r.date === date));
+    // Each run's own day (a run edited from another day's page still has its report written again).
+    for (const d of new Set(edited.filter((r) => r.moved).map((r) => r.date))) await rewriteFromFacts(db, me.id, d, edited.filter((r) => r.moved && r.date === d));
     const runs = edited.map(({ laps_before, laps_after, track, moved, timed, ...r }) => r);
     const fields = { ...(b.fields && typeof b.fields === 'object' ? b.fields : {}) };
     if (await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND date = ? LIMIT 1').bind(me.id, date).first()) ['manual_miles', 'minutes', 'runs', 'difficulty'].forEach((k) => delete fields[k]);

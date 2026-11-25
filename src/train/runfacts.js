@@ -42,6 +42,27 @@ TRACK: a session on a track (facts.on_track, or reps on 200/400/800/1600 marks o
 
 // ---------------------------------------------------------------- facts
 
+// A set of reps of different lengths, by name: "3 × (600 m + 200 m)", "4 × 1000 m + 4 × 200 m". null when the reps
+// are all one length (the count and average say it) or follow no pattern. The session page names them the same way
+// (public/dayview.js cycleLabel).
+const distWord = (m, track) => (Math.abs(m - MILE) <= 40 ? '1 mi' : `${track || m >= 150 ? Math.round(m / 100) * 100 : Math.round(m / 10) * 10} m`);
+export function setLabel(work, track = false) {
+  const tol = track ? 0.06 : 0.12;
+  const groups = [];
+  for (const l of work) {
+    const g = groups[groups.length - 1];
+    if (g && Math.abs(l.m - g.m) <= Math.max(25, g.m * tol)) { g.m = (g.m * g.n + l.m) / (g.n + 1); g.n++; } else groups.push({ m: l.m, n: 1 });
+  }
+  if (groups.length < 2) return null;
+  const word = (g) => (g.n > 1 ? `${g.n} × ${distWord(g.m, track)}` : distWord(g.m, track));
+  for (const c of [2, 3]) {
+    if (groups.length < c * 2 || groups.length % c) continue;
+    const head = groups.slice(0, c);
+    if (groups.every((g, i) => g.n === head[i % c].n && Math.abs(g.m - head[i % c].m) <= Math.max(25, head[i % c].m * tol))) return `${groups.length / c} × (${head.map(word).join(' + ')})`;
+  }
+  return groups.length <= 3 && groups.some((g) => g.n > 1) ? groups.map(word).join(' + ') : null;
+}
+
 // One activity. x: { id, name, type, category (Kestrel's rule label), miles, sec (moving seconds), avg_hr, max_hr,
 // elev_ft, laps: [{ m, s, hr }], paceInfo (paceStructure() result), track, gps (1 | 0 | null), note }, ctx: { maxHr, vo2r }.
 export function activityFacts(x, { maxHr }) {
@@ -76,7 +97,12 @@ export function activityFacts(x, { maxHr }) {
   }
   if (work.length >= 2) {
     const secPerMile = (l) => (l.s / l.m) * MILE;
-    const paces = work.map(secPerMile);
+    // Fade and evenness compare like with like: in a mixed set, the reps as long as the first (the 600s, not a 600
+    // against the last 200).
+    const set = setLabel(work, x.track);
+    const like = set ? work.filter((l) => Math.abs(l.m - work[0].m) <= Math.max(25, work[0].m * 0.12)) : work;
+    const one = set && like.length >= 2 ? `${distWord(work[0].m, x.track)} rep` : lapWord;
+    const paces = (like.length >= 2 ? like : work).map(secPerMile);
     const totalM = work.reduce((a, l) => a + l.m, 0), totalS = work.reduce((a, l) => a + l.s, 0);
     const avgM = Math.round(totalM / work.length / 50) * 50;
     const avgPace = (totalS / totalM) * MILE;
@@ -84,10 +110,13 @@ export function activityFacts(x, { maxHr }) {
     const spread = Math.round(Math.max(...paces) - Math.min(...paces));
     const hrs = work.map((l) => l.hr).filter(Boolean);
     f.reps = { n: work.length, avg_m: avgM, avg_pace: pace(avgPace), zone: p.rep_zone || null, pct_of_race_vo2max: p.rep_pct != null ? Math.round(p.rep_pct * 100) : null, fade_s_per_mile: fade, spread_s_per_mile: spread, first_hr: hrs[0] ?? null, last_hr: hrs.length ? hrs[hrs.length - 1] : null };
-    f.findings.push(`${work.length} ${lapWord}s averaging ${avgM} m at ${pace(avgPace)}/mi${p.rep_zone ? `, ${ZONE_WORD[p.rep_zone]} for this runner (${f.reps.pct_of_race_vo2max}% of race VO2max)` : ''}.`);
-    if (fade >= 5) { f.findings.push(`The last ${lapWord} was ${fade} s/mi slower than the first.`); f.flags.push('fade'); }
-    else if (fade <= -5) f.findings.push(`The ${lapWord}s got quicker: the last was ${-fade} s/mi faster than the first.`);
-    else if (spread <= 6) f.findings.push(spread === 0 ? `The ${lapWord}s were all the same pace.` : `The ${lapWord}s were even (within ${spread} s/mi of each other).`);
+    // Reps of different lengths ("3 × (600 m + 200 m)") are named as a set: their average length would read as 400s.
+    if (set) f.reps.set = set;
+    const zone = p.rep_zone ? `, ${ZONE_WORD[p.rep_zone]} for this runner (${f.reps.pct_of_race_vo2max}% of race VO2max)` : '';
+    f.findings.push(set ? `${set}: ${work.length} ${lapWord}s at ${pace(avgPace)}/mi on average${zone}.` : `${work.length} ${lapWord}s averaging ${avgM} m at ${pace(avgPace)}/mi${zone}.`);
+    if (fade >= 5) { f.findings.push(`The last ${one} was ${fade} s/mi slower than the first.`); f.flags.push('fade'); }
+    else if (fade <= -5) f.findings.push(`The ${one}s got quicker: the last was ${-fade} s/mi faster than the first.`);
+    else if (spread <= 6) f.findings.push(spread === 0 ? `The ${one}s were all the same pace.` : `The ${one}s were even (within ${spread} s/mi of each other).`);
     if (hrs.length >= 3 && hrs[hrs.length - 1] - hrs[0] >= 8) { f.findings.push(`Heart rate rose from ${hrs[0]} to ${hrs[hrs.length - 1]} bpm across the ${lapWord}s.`); f.flags.push('hr_drift'); }
   } else if (p.kind === 'tempo' || p.kind === 'steady') {
     f.findings.push('Most of the run was at tempo pace or quicker.');

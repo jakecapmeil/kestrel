@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { paceStructure } from '../src/train/grade.js';
 import { COACH_RUBRIC } from '../src/train/coach.js';
-import { activityFacts, needsModel, templateReport, templateDayLine, SUMMARY_RUBRIC, allowedNumbers, ungroundedNumbers } from '../src/train/runfacts.js';
+import { activityFacts, needsModel, templateReport, templateDayLine, setLabel, SUMMARY_RUBRIC, allowedNumbers, ungroundedNumbers } from '../src/train/runfacts.js';
 import { summarizeRuns } from '../src/train/intervals.js';
 
 let failed = 0;
@@ -47,6 +47,29 @@ ok(fw.flags.includes('fade') && needsModel(sessOf(wk)), 'a workout goes to the m
 ok(/Workout, 7 mi/.test(templateReport(sessOf(wk))) && /fast laps/.test(templateReport(sessOf(wk))), 'a workout still gets a written note if the model is unavailable');
 const even = factsOf(run({ id: 3, miles: 7, pace: 480, name: 'Tempo', category: 'workout', laps: reps(5, 1000, 360) }));
 ok(even.findings.some((s) => /even|same pace/.test(s)), 'even reps are called even');
+
+// ---- 2026-11-24: 3 x (600 m + 200 m) the runner typed (the watch read 0.87 mi indoors). The 200s are reps, not
+// strides or jogs, and the set is named, not averaged into "400s".
+const typed24 = [[600, 102.9, 145], [200, 31.5, 148], [600, 99, 140], [200, 30.7, 137], [600, 97.4, 151], [200, 29, 167]].map(([m, s, hr]) => ({ m, s, hr, rest: '', f: 2 }));
+const pi24 = paceStructure({ distance_mi: 1.49, moving_sec: 403, avg_hr: 144, laps: typed24, elev_gain_ft: 12 }, { vo2r: 61.7 });
+ok(pi24.kind === 'reps' && pi24.fast_laps === 6 && pi24.fast_m === 2400, `typed 600s and 200s are six reps: ${JSON.stringify({ kind: pi24.kind, n: pi24.fast_laps, m: pi24.fast_m })}`);
+const watch24 = paceStructure({ distance_mi: 1.49, moving_sec: 403, avg_hr: 144, laps: typed24.map(({ f, ...l }) => l), elev_gain_ft: 12 }, { vo2r: 61.7 });
+ok(watch24.fast_laps === 3, "a watch's 200 m laps still aren't counted (strides, lap-button laps)");
+const f24 = activityFacts({ id: 24, name: 'New York Running', type: 'Run', category: 'workout', miles: 1.49, sec: 403, avg_hr: 144, max_hr: 175, elev_ft: 12, laps: typed24, paceInfo: pi24 }, { maxHr: 206 });
+ok(f24.reps?.n === 6 && f24.reps.set === '3 × (600 m + 200 m)', `the set is named: ${JSON.stringify(f24.reps)}`);
+ok(f24.findings.some((s) => s.startsWith('3 × (600 m + 200 m): 6 fast laps at 4:22/mi on average')), `finding names the set: ${f24.findings[0]}`);
+ok(!ungroundedNumbers('Your 3 × (600 m + 200 m) averaged 4:22/mi.', allowedNumbers([f24])).length, "the set's numbers are the model's to use");
+ok(f24.findings.some((s) => s === 'The 600 m reps got quicker: the last was 15 s/mi faster than the first.'), `fade compares the 600s: ${f24.findings.join(' | ')}`);
+for (const [laps, want] of [
+  [[[1000, 220], [1000, 221], [1000, 219], [200, 34], [200, 33]], '3 × 1000 m + 2 × 200 m'],
+  [[[400, 75], [400, 76], [400, 74]], null],
+  [[[1609, 330], [1200, 240], [800, 155], [400, 74]], null],
+  [[[800, 150], [400, 72], [800, 151], [400, 71]], '2 × (800 m + 400 m)'],
+  [[[1609, 330], [400, 70], [1609, 332], [400, 71]], '2 × (1 mi + 400 m)'],
+]) {
+  const got = setLabel(laps.map(([m, s]) => ({ m, s })));
+  ok(got === want, `set label ${JSON.stringify(laps.map((l) => l[0]))}: ${got}`);
+}
 
 // ---- what sends a run to the model
 const hot = run({ id: 4, miles: 4, pace: 530, hr: 172 });

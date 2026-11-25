@@ -604,7 +604,12 @@ export async function editRuns(db, person, edits) {
     }
     const lapsBefore = w.laps || '';
     const was = { category: w.category, mi: row0(rows, w).distance_mi, sec: row0(rows, w).moving_sec };
-    if (e.laps !== undefined) { const laps = handLaps(e.laps); w.laps = laps.length ? JSON.stringify(laps) : ''; }
+    if (e.laps !== undefined) {
+      const laps = handLaps(e.laps);
+      // Splits sent but none readable: a mistake, not a request to clear them (that is an empty list).
+      if (!laps.length && Array.isArray(e.laps) && e.laps.length) throw new CoachError('Every split needs a distance (50 m or more) and a time.');
+      w.laps = laps.length ? JSON.stringify(laps) : '';
+    }
     // Laps the runner typed (now or before) are what was run, so they can make it a workout on their own.
     let typed = false, lapList = [];
     try { lapList = JSON.parse(w.laps || '[]') || []; typed = lapList.some((l) => l?.f === 2); } catch { /* none */ }
@@ -647,9 +652,10 @@ export async function followSplitsText(db, personId, changed, text) {
   for (const c of changed) {
     const before = parse(c.laps_before), after = parse(c.laps_after);
     const day = await db.prepare('SELECT splits FROM training_days WHERE person_id = ? AND date = ?').bind(personId, c.date).first();
-    if (!day?.splits) continue;
-    const fromOld = before.length && (day.splits === text(before, c.track) || day.splits === text(before, !c.track));
-    const synced = SYNC_SPLITS.test(day.splits) && (c.category === 'workout' || c.category === 'race') && after.length;
+    if (!day) continue;
+    const fromOld = day.splits && before.length && (day.splits === text(before, c.track) || day.splits === text(before, !c.track));
+    // An empty line counts as the sync's: splits cleared and typed again bring it back.
+    const synced = (!day.splits || SYNC_SPLITS.test(day.splits)) && (c.category === 'workout' || c.category === 'race') && after.length;
     if (!fromOld && !synced) continue;
     await db.prepare('UPDATE training_days SET splits = ? WHERE person_id = ? AND date = ?').bind(after.length ? text(after, c.track) : '', personId, c.date).run();
   }

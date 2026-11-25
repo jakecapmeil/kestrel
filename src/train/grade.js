@@ -64,8 +64,10 @@ export const WORKOUT_WORDS = /\d\s*x\s*\d|\bhills?\b|fartlek|tempo|threshold|int
 
 export function paceStructure(w, { vo2r }) {
   const all = repsOf(w.laps);
-  // Strides and tiny lap-button laps aren't work.
-  const laps = all.filter((l) => l.m >= 250);
+  // Laps the runner typed (f: 2) are what was run: their 200s are reps. They type the reps and leave the jogs out.
+  const hand = all.some((l) => l.f === 2);
+  // Strides and tiny lap-button laps aren't work (a watch's laps under 250 m; typed ones under 100 m).
+  const laps = all.filter((l) => l.m >= (hand ? 100 : 250));
   const mi = w.raw_distance_mi || w.distance_mi;
   const factor = conditionsOf({ ...w, distance_mi: w.distance_mi || mi }, [], { reps: false }).factor || 1;
   const runPace = mi > 0.3 && w.moving_sec > 0 ? w.moving_sec / mi : null;
@@ -83,7 +85,9 @@ export function paceStructure(w, { vo2r }) {
   const fast_m = fast.reduce((a, l) => a + l.m, 0);
   const rep_pace = fast_m ? (fast.reduce((a, l) => a + l.s, 0) / fast_m) * MILE : null;
   const rep_pct = pctAt(rep_pace);
-  const reps = fast.length >= 2 && fast.length < laps.length && fast_m >= 800;
+  // Reps need slower laps between them, except typed ones shorter than a mile (the jogs weren't typed): 3 x (600 m +
+  // 200 m) typed as six fast laps is a rep session, not a tempo.
+  const reps = fast.length >= 2 && (fast.length < laps.length || (hand && fast.every((l) => l.m < 1500))) && fast_m >= 800;
   const tempo = !reps && fast_m >= 1600;
   // A whole run at tempo pace for a mile or more (the same 1600 m a stretch of fast laps needs), or a short one at
   // threshold or faster (a rep saved as its own activity). A 1.5 mi piece at 5:52 is a workout even when its laps
