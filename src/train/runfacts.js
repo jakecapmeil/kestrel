@@ -210,7 +210,9 @@ export function templateDayLine(sessions) {
     if (!m) return '';
     if (m.rule_category === 'crosstrain') return `${wordsOf(m.type)} for ${m.minutes} min`;
     const { miles, parts } = totals(s);
-    return `${(KIND[m.rule_category] || 'Run').toLowerCase()}, ${miles} mi${paceOf(m, parts)}`;
+    // A workout says what it was: "workout, 5 mi with 3 × (600 m + 200 m)".
+    const what = m.reps && ['workout', 'race'].includes(m.rule_category) ? ` with ${m.reps.set || `${m.reps.n} × ${m.reps.avg_m} m`}` : '';
+    return `${(KIND[m.rule_category] || 'Run').toLowerCase()}, ${miles} mi${paceOf(m, parts)}${what}`;
   }).filter(Boolean);
   if (!parts.length) return '';
   const text = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
