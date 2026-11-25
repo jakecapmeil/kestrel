@@ -210,7 +210,7 @@
       <div class="k-notif-top"><img class="k-notif-app" src="/favicon.svg" alt="" width="22" height="22"><span class="k-notif-src">Kestrel AI</span><span class="k-notif-when">now</span>
         <button type="button" class="k-notif-x" data-r="no" aria-label="Not now">×</button></div>
       <b class="k-notif-t" id="kdReassessT">${r.splits ? 'Splits changed' : 'Run changed'}</b>
-      <p class="k-notif-b" id="kdReassessMsg" aria-live="polite">Have Kestrel AI reassess ${what} with your new ${r.splits ? 'splits' : 'distance and time'}? It rewrites the report${n > 1 ? 's' : ''} using ${esc(r.label)}.</p>
+      <p class="k-notif-b" id="kdReassessMsg" aria-live="polite">Have Kestrel AI reassess ${what} with your new ${r.splits ? 'splits' : 'numbers'}? It rewrites the report${n > 1 ? 's' : ''} using ${esc(r.label)}.</p>
       <div class="k-notif-btns"><button type="button" class="pri" data-r="go">Reassess</button><button type="button" data-r="no">Not now</button></div>`;
   }
   function popAway(el){

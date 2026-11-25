@@ -14,7 +14,7 @@ import { PLANS, plansOf, rankOf, milesOfRank, rankForMiles, libraryRank, validat
 import { getLog, sessionsOf, setRunTag, addCustomTag, removeCustomTag, saveDay, setDayTrack, libraryMeta, setFiveK, fiveKFor, setPrs, getPrs, LogError } from './train/log.js';
 import { WORKOUTS, WORKOUT_GROUPS, workoutGroup, workoutTargets, personalWorkout } from './train/workouts.js';
 import { maxHrFor, vo2rFor, editRuns, handLaps, bodyStatus, followSplitsText } from './train/coach.js';
-import { SUMMARY_RUBRIC, activityFacts, templateReport, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
+import { SUMMARY_RUBRIC, activityFacts, templateReport, templateDayLine, allowedNumbers, ungroundedNumbers } from './train/runfacts.js';
 import { paceStructure } from './train/grade.js';
 import { todayInTz, weekStartOf, weekKindOf, meetDates, WEEK_KINDS, getCoachContext, compactFitness, loadPerson, planFor, COACH_TOOLS, callCoachTool, personForToken, workoutsForApp, issueCoachToken, CoachError } from './train/coach.js';
 import { connect as icuConnect, disconnect as icuDisconnect, status as icuStatus, syncPerson, importHistory, syncDue, IntervalsError, SYNC_CRON, splitsText as icuSplitsText } from './train/intervals.js';
@@ -353,6 +353,27 @@ async function sessionFacts(db, personId, sess) {
     avg_hr: a.avg_hr, max_hr: a.max_hr, elev_ft: a.elev_ft, laps: a.laps, track: a.track,
     paceInfo: paceStructure({ distance_mi: a.miles, moving_sec: a.moving_sec, avg_hr: a.avg_hr, laps: a.laps, elev_gain_ft: a.elev_ft, name: a.name }, ctx),
   }, ctx));
+}
+
+// After an edit changes a run's type, distance or time, its session's report and the day's line were written from the
+// old numbers ("Recovery run, 4.4 mi" over what is now a workout). Write them again from the new facts, the way a
+// sync does when the model is unavailable; Kestrel AI can then write them in full (the reassess prompt).
+async function rewriteFromFacts(db, personId, date, changed) {
+  if (!changed.length || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
+  const ids = new Set(changed.map((r) => String(r.strava_id)));
+  const day = (await getDays(db, personId, date, date))[0];
+  const sessions = (day?.sessions || []).filter((s) => s.main_id && !s.manual);
+  if (!sessions.some((s) => (s.activities || []).some((a) => ids.has(String(a.id))))) return;
+  const all = [];
+  for (const s of sessions) {
+    const one = { main_id: String(s.main_id), facts: await sessionFacts(db, personId, s) };
+    all.push(one);
+    if (!(s.activities || []).some((a) => ids.has(String(a.id)))) continue;
+    const report = templateReport(one);
+    if (report) await db.prepare('UPDATE workouts SET summary = ? WHERE person_id = ? AND strava_id = ?').bind(report, personId, one.main_id).run();
+  }
+  const line = day.day_line ? templateDayLine(all) : '';
+  if (line) await saveDay(db, personId, date, { day_line: line });
 }
 
 // ------------------------------------------------------------------ teams
@@ -2407,6 +2428,7 @@ async function route(request, env, url) {
     if (!(await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND strava_id = ?').bind(me.id, id).first())) throw new NotFound('Unknown session.');
     const runs = await editRuns(db, await loadPerson(db, me.id), [{ strava_id: id, laps: Array.isArray(b.reps) ? b.reps : [] }]);
     await followSplitsText(db, me.id, runs, icuSplitsText);
+    for (const r of runs.filter((x) => x.moved)) await rewriteFromFacts(db, me.id, r.date, [r]);
     return json({ ok: true, reps: handLaps(b.reps) });
   }
   if (path === '/api/log/tag') {
@@ -2455,7 +2477,8 @@ async function route(request, env, url) {
     const edited = await editRuns(db, person, (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && typeof e === 'object'));
     // Corrected laps: the day's splits line was written from the old ones.
     await followSplitsText(db, me.id, edited.filter((r) => r.laps_before !== undefined), icuSplitsText);
-    const runs = edited.map(({ laps_before, laps_after, track, ...r }) => r);
+    await rewriteFromFacts(db, me.id, date, edited.filter((r) => r.moved && r.date === date));
+    const runs = edited.map(({ laps_before, laps_after, track, moved, timed, ...r }) => r);
     const fields = { ...(b.fields && typeof b.fields === 'object' ? b.fields : {}) };
     if (await db.prepare('SELECT 1 FROM workouts WHERE person_id = ? AND date = ? LIMIT 1').bind(me.id, date).first()) ['manual_miles', 'minutes', 'runs', 'difficulty'].forEach((k) => delete fields[k]);
     if (Object.keys(fields).length) {
@@ -2463,7 +2486,7 @@ async function route(request, env, url) {
       if ('split_reps' in fields || 'manual_miles' in fields) await db.prepare('UPDATE fitness_states SET computed_at = 0 WHERE person_id = ?').bind(me.id).run();
     }
     // A PR Kestrel found from a run whose distance or time was just corrected came from the old numbers: search again.
-    const timed = (Array.isArray(b.runs) ? b.runs : []).filter((e) => e && (e.distance_mi !== undefined || e.moving_sec !== undefined)).map((e) => str(e.strava_id, 80));
+    const timed = edited.filter((r) => r.timed).map((r) => r.strava_id);
     for (const id of timed) await dropAutoPrsFrom(db, me.id, id);
     // New laps can make a run a workout, and the reps feed the race estimates: those count too.
     const lapped = edited.some((r) => r.laps_before !== undefined);

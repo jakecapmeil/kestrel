@@ -143,6 +143,9 @@ function totals(sess) {
   return { miles, parts: sess.facts.length };
 }
 const mainOf = (sess) => sess.facts.find((f) => f.id === String(sess.main_id)) || sess.facts[0];
+// The main part's pace stands for the session, except for a workout or race with a warm-up and cool-down: "5 mi at
+// 4:30/mi" would be the reps' pace over the whole day's miles (the reps' own paces follow in the findings).
+const paceOf = (m, parts) => (m.pace && !(parts > 1 && ['workout', 'race'].includes(m.rule_category)) ? ` at ${m.pace}/mi` : '');
 
 // The note for one session, from the facts. Never invents: every number comes from them.
 export function templateReport(sess) {
@@ -151,7 +154,7 @@ export function templateReport(sess) {
   const { miles, parts } = totals(sess);
   if (m.rule_category === 'crosstrain') return `${cap(wordsOf(m.type))} for ${m.minutes} min${m.avg_hr ? `, heart rate averaging ${m.avg_hr}` : ''}. Cross-training counts toward your week and rests your legs from the pounding of running.`;
   const kind = KIND[m.rule_category] || 'Run';
-  const head = `${kind}, ${miles} mi${parts > 1 ? ` in ${parts} parts` : ''}${m.pace ? ` at ${m.pace}/mi` : ''}.`;
+  const head = `${kind}, ${miles} mi${parts > 1 ? ` in ${parts} parts` : ''}${paceOf(m, parts)}.`;
   // Workouts, races and long runs (or a flagged run when the model was unavailable): lead with the findings.
   if (['workout', 'race', 'long'].includes(m.rule_category) || m.reps || m.flags.length) {
     const lines = m.findings.filter((s) => !s.startsWith('Heart rate averaged') || !m.reps).slice(0, 4);
@@ -177,8 +180,8 @@ export function templateDayLine(sessions) {
     const m = mainOf(s);
     if (!m) return '';
     if (m.rule_category === 'crosstrain') return `${wordsOf(m.type)} for ${m.minutes} min`;
-    const { miles } = totals(s);
-    return `${(KIND[m.rule_category] || 'Run').toLowerCase()}, ${miles} mi${m.pace ? ` at ${m.pace}/mi` : ''}`;
+    const { miles, parts } = totals(s);
+    return `${(KIND[m.rule_category] || 'Run').toLowerCase()}, ${miles} mi${paceOf(m, parts)}`;
   }).filter(Boolean);
   if (!parts.length) return '';
   const text = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;

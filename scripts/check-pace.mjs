@@ -2,6 +2,7 @@
 // node scripts/check-pace.mjs
 import assert from 'node:assert/strict';
 import { checkedCategory } from '../src/train/grade.js';
+import { lapsMiles } from '../src/train/coach.js';
 
 const ctx = { vo2r: 61.4, maxHr: 196 }; // a 4:51 miler
 const lap = (m, s, hr) => ({ m, s, hr });
@@ -39,4 +40,12 @@ const typedCases = [
   ['typed mile laps at recovery pace stay recovery', { category: 'recovery', distance_mi: 3, moving_sec: 1590, avg_hr: 130, laps: Array.from({ length: 3 }, () => lap(1609, 530, 130)) }, { handLaps: true }, 'recovery'],
 ];
 for (const [name, w, opts, want] of typedCases) assert.equal(checkedCategory({ ...w, laps: JSON.stringify(w.laps) }, ctx2, opts).category, want, name);
-console.log(`pace: ${cases.length + typedCases.length} categories as expected`);
+// The run's miles follow typed laps that take as long as it (src/train/coach.js lapsMiles; the editor applies the same).
+const milesCases = [
+  ['0.87 mi GPS, laps 2400 m in 6:31 of a 6:43 run: 1.49 mi', typed, { distance_mi: 0.87, moving_sec: 403 }, 1.49],
+  ['laps that are only part of the run leave it', typed, { distance_mi: 3, moving_sec: 1200 }, null],
+  ['laps that already match the distance leave it', typed, { distance_mi: 1.47, moving_sec: 403 }, null],
+  ['a lap still missing its time leaves it', [...typed, { m: 200, s: 0 }], { distance_mi: 0.87, moving_sec: 403 }, null],
+];
+for (const [name, laps, w, want] of milesCases) assert.equal(lapsMiles(laps, w), want, name);
+console.log(`pace: ${cases.length + typedCases.length} categories as expected, ${milesCases.length} lap-distance cases`);

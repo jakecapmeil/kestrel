@@ -559,6 +559,18 @@ export function handLaps(v) {
 // then scored again the way a sync scores it: the pace check on its category (unless the runner tagged it),
 // difficulty, load and plan score. The edited distance is also the run's GPS distance from now on, so grading and the
 // track toggle both start from it. Returns [{ strava_id, category, effort }].
+const row0 = (rows, w) => rows.find((x) => x.strava_id === w.strava_id) || {};
+const off = (a, b, floor) => Math.abs((a || 0) - (b || 0)) > Math.max(floor, Math.abs(b || 0) * 0.03);
+// The miles a run's laps add up to, when they cover its moving time (within 10%, or 15 s) and its distance doesn't
+// (more than 10%, or 80 m, apart). null when the run's own distance stands.
+export function lapsMiles(laps, w) {
+  const ok = (Array.isArray(laps) ? laps : []).filter((l) => l?.m > 0 && l?.s > 0);
+  if (!ok.length || ok.length !== laps.length || !(w.moving_sec > 0)) return null;
+  const m = ok.reduce((a, l) => a + l.m, 0), s = ok.reduce((a, l) => a + l.s, 0), had = (w.distance_mi || 0) * 1609.344;
+  if (Math.abs(s - w.moving_sec) > Math.max(15, w.moving_sec * 0.1) || Math.abs(m - had) <= Math.max(80, had * 0.1)) return null;
+  return Math.round(m / 16.09344) / 100;
+}
+
 export async function editRuns(db, person, edits) {
   if (!Array.isArray(edits) || !edits.length) return [];
   if (edits.length > 20) throw new CoachError('Edit at most 20 runs at once');
@@ -591,14 +603,23 @@ export async function editRuns(db, person, edits) {
       if (!(w.elapsed_sec >= w.moving_sec)) w.elapsed_sec = w.moving_sec;
     }
     const lapsBefore = w.laps || '';
+    const was = { category: w.category, mi: row0(rows, w).distance_mi, sec: row0(rows, w).moving_sec };
     if (e.laps !== undefined) { const laps = handLaps(e.laps); w.laps = laps.length ? JSON.stringify(laps) : ''; }
     // Laps the runner typed (now or before) are what was run, so they can make it a workout on their own.
-    let typed = false;
-    try { typed = (JSON.parse(w.laps || '[]') || []).some((l) => l?.f === 2); } catch { /* none */ }
+    let typed = false, lapList = [];
+    try { lapList = JSON.parse(w.laps || '[]') || []; typed = lapList.some((l) => l?.f === 2); } catch { /* none */ }
+    // Typed laps that take as long as the run are the run: a watch indoors reads 0.87 mi for 2400 m of reps, and the
+    // miles count what was run. A distance the runner typed wins.
+    const fromLaps = typed && e.distance_mi === undefined ? lapsMiles(lapList, w) : null;
+    if (fromLaps != null) { w.distance_mi = fromLaps; w.raw_distance_mi = fromLaps; }
     if (!w.tag) w.category = checkedCategory(w, gctx, { meetDay: meets.includes(w.date), handLaps: typed }).category;
     const g = gradeOfRun(w, gctx);
     const plan_score = planScoreOf(w, g.hr_effort, plannedFor(plan, w.date, meets));
     out.push({ strava_id: w.strava_id, date: w.date, category: w.category, effort: g.effort,
+      // What a report written from the old numbers would now get wrong: the run type, the distance or the time
+      // (a tweak of a few hundredths leaves it standing).
+      ...(w.category !== was.category || off(w.distance_mi, was.mi, 0.05) || off(w.moving_sec, was.sec, 10) ? { moved: true } : {}),
+      ...(w.distance_mi !== was.mi || w.moving_sec !== was.sec ? { timed: true } : {}),
       // The laps' record for the day's splits line: when they changed, or when they are the runner's own (a run whose
       // distance was just made to match its typed laps can only now become the day's workout).
       ...(e.laps !== undefined || typed ? { laps_before: lapsBefore, laps_after: w.laps || '', track: w.surface === 'track' } : {}) });

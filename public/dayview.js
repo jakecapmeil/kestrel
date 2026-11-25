@@ -633,8 +633,16 @@
     const handReps = !x.locked || x.split_source === 'hand';
     const day = { mi: x.locked ? null : x.miles ?? null, sec: x.locked ? null : x.minutes != null ? Math.round(x.minutes * 60) : null, difficulty: x.locked ? null : x.difficulty ?? null,
       laps: handReps ? lapCopy(x.split_reps) : null, feel: x.feel ?? null, sleep_hours: x.sleep_hours ?? null, strength: !!x.strength, notes: x.notes || '', track: !!x.track, library_id: x.library_id || '' };
-    E = { date: x.date, locked: !!x.locked, acts, day, bad: new Set(), typed: new Set(), base: {} };
-    for(const id of Object.keys(acts)) E.base[id] = baseOf(acts[id]);
+    // watch: each run's distance as saved, what a save compares against. hand: runs whose laps the runner typed.
+    // auto: runs whose distance was set from those laps (lapsRule) rather than typed.
+    E = { date: x.date, locked: !!x.locked, acts, day, bad: new Set(), typed: new Set(), base: {}, watch: {}, hand: new Set(), auto: new Set() };
+    for(const s of x.sessions || []) for(const a of runActs(s)){ E.watch[a.id] = acts[a.id].mi; if((a.laps || []).some((l)=> l?.f === 2)) E.hand.add(a.id); }
+    // A run whose typed laps already say otherwise opens at their distance, and saving keeps it (editPayload).
+    for(const id of Object.keys(acts)){
+      const v = lapsRule(id);
+      if(v != null){ acts[id].mi = v; E.auto.add(id); }
+      E.base[id] = baseOf(acts[id]);
+    }
     E.orig = JSON.stringify({ acts, day });
   }
   // What a run's laps add up to (complete laps only: a split still missing its time doesn't count yet).
@@ -657,10 +665,30 @@
   // After a split changes: the run's distance and time move by as much as its laps did, unless the runner typed them.
   function follow(k){
     const a = E.acts[k], b = E.base[k];
-    if(!a || !b?.cover) return;
+    if(!a) return;
+    E.hand.add(k);
+    // Laps that didn't cover the run before: once they take as long as it, the run is what they add up to.
+    if(!b?.cover){
+      if(E.typed.has(k + '|mi')) return;
+      const v = lapsRule(k);
+      if(v != null){ a.mi = v; E.auto.add(k); setBox('mi', k, v); }
+      else if(E.auto.delete(k)){ a.mi = E.watch[k]; setBox('mi', k, a.mi); }
+      return;
+    }
     const t = lapTotals(a.laps);
     if(!E.typed.has(k + '|mi')){ a.mi = Math.max(0.01, Math.round((b.mi + (t.m - b.m) / MI) * 100) / 100); setBox('mi', k, a.mi); }
     if(!E.typed.has(k + '|sec')){ a.sec = Math.max(1, Math.round(b.sec + (t.s - b.s))); setBox('sec', k, a.sec); }
+  }
+  // Laps the runner typed that take as long as the run (within 10%, or 15 s) are the run: a watch indoors reads
+  // 0.87 mi for 2400 m of reps. The miles they add up to when the saved distance is more than 10% (or 80 m) off, or
+  // null. The server applies the same rule (coach.js lapsMiles).
+  function lapsRule(k){
+    const a = E.acts[k];
+    if(!a || !E.hand.has(k) || E.typed.has(k + '|mi')) return null;
+    const t = lapTotals(a.laps); if(!t.n || !t.all || !(a.sec > 0)) return null;
+    const m = (E.watch[k] || 0) * MI;
+    if(Math.abs(t.s - a.sec) > Math.max(15, a.sec * 0.1) || Math.abs(t.m - m) <= Math.max(80, m * 0.1)) return null;
+    return Math.round(t.m / MI * 100) / 100;
   }
   // The laps and the run disagree (the GPS read 0.87 mi for 2400 m of reps): make the run what its laps add up to.
   function useLaps(k){
@@ -789,6 +817,7 @@
     if(!t.n) return '';
     const sum = `Splits add up to ${r2(t.m / MI)} mi in ${clock(t.s)}.`;
     const a = E.acts[k];
+    if(k !== 'day' && E.auto.has(k) && !E.typed.has(k + '|mi')) return esc(`${sum} The watch read ${r2(E.watch[k])} mi, so the run counts your splits’ ${r2(a.mi)} mi.`);
     if(k === 'day' || !lapsDisagree(k)) return esc(sum);
     return `${esc(sum)} This run reads ${r2(a.mi)} mi in ${clock(a.sec)}. <button type="button" class="sm-btn kde-use" data-a="kdeUseLaps" data-v="${esc(k)}">Use ${r2(t.m / MI)} mi · ${clock(t.s)}</button>`;
   }
@@ -917,7 +946,8 @@
     const half = (ls)=> (ls || []).some((l)=> !(l.m > 0) || !(l.s > 0));
     for(const [id, a] of Object.entries(E.acts)){
       const b = o.acts[id], e = { strava_id: id };
-      if(a.mi !== b.mi) e.distance_mi = a.mi;
+      // Against the distance as saved: a run that opened at its typed laps' distance (lapsRule) saves it.
+      if(a.mi !== (id in E.watch ? E.watch[id] : b.mi)) e.distance_mi = a.mi;
       if(a.sec !== b.sec) e.moving_sec = a.sec;
       if(JSON.stringify(a.laps) !== JSON.stringify(b.laps)){ if(half(a.laps)) return { error: 'Every split needs a distance and a time (or remove it).' }; e.laps = lapsOut(a.laps); }
       if(e.distance_mi === null || e.moving_sec === null) return { error: 'A run needs a distance and a time.' };
